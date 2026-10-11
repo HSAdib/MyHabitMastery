@@ -208,7 +208,7 @@ export default function App() {
 
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      if (auth) await signOut(auth);
     } catch (error) {
       console.error('Logout Failed', error);
     }
@@ -2086,7 +2086,7 @@ export default function App() {
                   <span className="text-3xl">🌱</span>
                 </div>
                 <h3 className={`text-2xl font-black mb-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
-                  Welcome to Habit Mastery!
+                  Welcome to My Habit Mastery!
                 </h3>
                 <p className={`text-sm font-medium mb-8 max-w-sm mx-auto leading-relaxed ${getTextMuted()}`}>
                   Start tracking your habits by clicking the cells in the table below.

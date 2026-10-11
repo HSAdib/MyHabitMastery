@@ -10,8 +10,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['vite.svg'],
       manifest: {
-        name: 'Habit Mastery',
-        short_name: 'HabitMastery',
+        name: 'My Habit Mastery',
+        short_name: 'MyHabitMastery',
         description: 'Track your habits, master your life.',
         theme_color: '#0f172a', // Matches your Slate-900 background
         background_color: '#0f172a',

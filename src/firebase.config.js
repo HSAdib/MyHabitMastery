@@ -1,8 +1,12 @@
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
-import { initializeFirestore, persistentLocalCache } from "firebase/firestore";
-import { getAnalytics } from "firebase/analytics";
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  getFirestore,
+} from "firebase/firestore";
+import { getAnalytics, isSupported } from "firebase/analytics";
 
 // Credentials are loaded from .env (VITE_ prefix is required by Vite)
 // Copy .env.example → .env and paste your Firebase project values there.
@@ -16,30 +20,62 @@ const firebaseConfig = {
   measurementId:     import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
-// Warn in dev if any key is missing (helps catch misconfigured .env early)
-if (import.meta.env.DEV) {
+const hasFirebaseConfig = Boolean(
+  firebaseConfig.apiKey &&
+  firebaseConfig.projectId &&
+  firebaseConfig.appId
+);
+
+if (import.meta.env.DEV && !hasFirebaseConfig) {
   const missing = Object.entries(firebaseConfig)
-    .filter(([, v]) => !v || v.startsWith('YOUR_'))
+    .filter(([, v]) => !v || String(v).startsWith('YOUR_'))
     .map(([k]) => k);
-  if (missing.length > 0) {
-    console.warn(
-      `[Firebase] Missing env vars: ${missing.join(', ')}.\n` +
-      'Copy .env.example → .env and fill in your Firebase project credentials.'
-    );
+  console.warn(
+    `[Firebase] Missing env vars: ${missing.join(', ')}.\n` +
+    'Copy .env.example → .env and fill in your Firebase project credentials.\n' +
+    'Running in local-only mode so the app can still load.'
+  );
+}
+
+export const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: 'select_account' });
+
+let app = null;
+let auth = null;
+let db = null;
+let analytics = null;
+
+if (hasFirebaseConfig) {
+  try {
+    app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+    auth = getAuth(app);
+
+    try {
+      db = initializeFirestore(app, {
+        localCache: persistentLocalCache({
+          tabManager: persistentMultipleTabManager(),
+        }),
+      });
+    } catch {
+      // Already initialized (HMR) or persistence unavailable — use the existing instance.
+      db = getFirestore(app);
+    }
+
+    if (firebaseConfig.measurementId) {
+      isSupported()
+        .then((yes) => {
+          if (yes) analytics = getAnalytics(app);
+        })
+        .catch(() => {});
+    }
+  } catch (e) {
+    console.error('[Firebase] Init failed, running local-only:', e);
+    app = null;
+    auth = null;
+    db = null;
+    analytics = null;
   }
 }
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-
-// Export services
-export const auth = getAuth(app);
-export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache()
-});
-
-export const analytics = getAnalytics(app);
-export const googleProvider = new GoogleAuthProvider();
-
-// Always show Google's account picker (useful if the user has multiple accounts)
-googleProvider.setCustomParameters({ prompt: 'select_account' });
+export { auth, db, analytics };
+export const isFirebaseConfigured = Boolean(auth && db);

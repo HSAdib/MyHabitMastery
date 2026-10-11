@@ -4,6 +4,18 @@ import { auth, db } from '../firebase.config';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 
+// Module-level unsubscribe handles.
+// Kept outside the store so that if init() is ever called more than once
+// (e.g. HMR, strict-mode double-invoke) the OLD listeners are torn down
+// before new ones are registered, preventing duplicate snapshot callbacks.
+let _unsubAuthState = null;
+let _unsubSnapshot  = null;
+
+// Prevents a write-back race: while we are applying fresh remote data to the
+// store + IDB, any concurrent onSnapshot firing must not push the (stale)
+// local state back to Firestore.
+let _isApplyingRemote = false;
+
 // Fields that live ONLY in the UI layer — never persisted to IDB or Firestore
 const UI_ONLY_FIELDS = [
   'isHydrating', 'user', 'isAuthenticated', 'authInitialized',
@@ -104,17 +116,19 @@ export const useHabitStore = create((setStore, getStore) => ({
           let dynamicConfigs = DEFAULT_CONFIGS;
           let dynamicCategories = ["all", "health", "academic", "dev", "lifestyle"];
           
-          try {
-            const globalRef = doc(db, 'settings', 'globalDefaults');
-            const globalSnap = await getDoc(globalRef);
-            if (globalSnap.exists()) {
-              const globalData = globalSnap.data();
-              if (globalData.habits) dynamicHabits = globalData.habits;
-              if (globalData.habitConfigs) dynamicConfigs = globalData.habitConfigs;
-              if (globalData.categories) dynamicCategories = globalData.categories;
+          if (db) {
+            try {
+              const globalRef = doc(db, 'settings', 'globalDefaults');
+              const globalSnap = await getDoc(globalRef);
+              if (globalSnap.exists()) {
+                const globalData = globalSnap.data();
+                if (globalData.habits) dynamicHabits = globalData.habits;
+                if (globalData.habitConfigs) dynamicConfigs = globalData.habitConfigs;
+                if (globalData.categories) dynamicCategories = globalData.categories;
+              }
+            } catch (e) {
+              console.warn("Failed to fetch global defaults, using hardcoded.", e);
             }
-          } catch (e) {
-            console.warn("Failed to fetch global defaults, using hardcoded.", e);
           }
 
           data = {
@@ -139,7 +153,13 @@ export const useHabitStore = create((setStore, getStore) => ({
       const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(window.navigator.userAgent) || window.innerWidth <= 768;
 
       if (data) {
-        data.currentDate = data.currentDate ? new Date(data.currentDate) : new Date();
+        const parsedDate = data.currentDate ? new Date(data.currentDate) : new Date();
+        data.currentDate = Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
+        if (!Array.isArray(data.habits)) data.habits = DEFAULT_HABITS;
+        if (!Array.isArray(data.archivedHabits)) data.archivedHabits = [];
+        if (!Array.isArray(data.categories)) data.categories = ["all", "health", "academic", "dev", "lifestyle"];
+        if (!data.trackerData || typeof data.trackerData !== 'object') data.trackerData = {};
+        if (!data.habitConfigs || typeof data.habitConfigs !== 'object') data.habitConfigs = DEFAULT_CONFIGS;
         // Clear default 'Guest User' to enforce new name picking
         if (data.guestName === "Guest User") {
           data.guestName = "";
@@ -162,43 +182,58 @@ export const useHabitStore = create((setStore, getStore) => ({
       }
 
       // Firebase Sync
-      let unsubSnapshot = null;
-      onAuthStateChanged(auth, async (user) => {
+      // Tear down any listeners left over from a previous init() call.
+      if (_unsubSnapshot)  { _unsubSnapshot();  _unsubSnapshot  = null; }
+      if (_unsubAuthState) { _unsubAuthState(); _unsubAuthState = null; }
+
+      if (!auth || !db) {
+        setStore({ authInitialized: true });
+        return;
+      }
+
+      _unsubAuthState = onAuthStateChanged(auth, async (user) => {
         if (user) {
           setStore({ user, isAuthenticated: true, authInitialized: true });
           try {
             const userDocRef = doc(db, 'users', user.uid);
-            unsubSnapshot = onSnapshot(userDocRef, async (docSnap) => {
+            _unsubSnapshot = onSnapshot(userDocRef, async (docSnap) => {
+              // Skip if we are already in the middle of applying remote data
+              // to avoid a concurrent snapshot pushing stale local state back.
+              if (_isApplyingRemote) return;
+
               const localLastUpdated = getStore().lastUpdated || 0;
-              
+
               if (docSnap.exists()) {
                 const remoteData = docSnap.data();
                 const remoteLastUpdated = remoteData.lastUpdated || 0;
-                
+
                 if (remoteLastUpdated > localLastUpdated) {
-                  // Remote is newer — apply only persisted fields, never overwrite UI-only state
-                  const safeRemote = {};
-                  Object.keys(remoteData).forEach(k => {
-                    if (!UI_ONLY_FIELDS.includes(k)) safeRemote[k] = remoteData[k];
-                  });
-                  // currentDate is stored as a Firestore timestamp string
-                  if (safeRemote.currentDate) {
-                    safeRemote.currentDate = new Date(safeRemote.currentDate);
-                    if (isNaN(safeRemote.currentDate)) safeRemote.currentDate = new Date();
+                  // Remote is newer — apply only persisted fields, never overwrite UI-only state.
+                  // Note: currentDate is already excluded by UI_ONLY_FIELDS, no extra guard needed.
+                  _isApplyingRemote = true;
+                  try {
+                    const safeRemote = {};
+                    Object.keys(remoteData).forEach(k => {
+                      if (!UI_ONLY_FIELDS.includes(k)) safeRemote[k] = remoteData[k];
+                    });
+                    // setStore is synchronous — getStore() below already reflects safeRemote.
+                    setStore(safeRemote);
+                    await set('adib_habit_data', toPersistedData(getStore()));
+                  } finally {
+                    _isApplyingRemote = false;
                   }
-                  setStore(safeRemote);
-                  await set('adib_habit_data', { ...toPersistedData(getStore()), ...safeRemote });
                 } else if (localLastUpdated > remoteLastUpdated) {
-                  // Local is newer, push to remote
+                  // Local is newer — push to remote.
                   const localPersisted = toPersistedData(getStore());
                   await setDoc(userDocRef, { ...localPersisted, displayName: user.displayName || '' }, { merge: true });
                 }
               } else {
-                // No remote data, push local data
+                // No remote document yet — push local data to bootstrap the cloud record.
                 const localPersisted = toPersistedData(getStore());
                 await setDoc(userDocRef, { ...localPersisted, displayName: user.displayName || '' }, { merge: true });
               }
             }, (syncErr) => {
+              _isApplyingRemote = false;
               console.error("Firebase sync failed, degrading to local only:", syncErr);
             });
           } catch (syncErr) {
@@ -206,9 +241,9 @@ export const useHabitStore = create((setStore, getStore) => ({
           }
         } else {
           setStore({ user: null, isAuthenticated: false, authInitialized: true });
-          if (unsubSnapshot) {
-            unsubSnapshot();
-            unsubSnapshot = null;
+          if (_unsubSnapshot) {
+            _unsubSnapshot();
+            _unsubSnapshot = null;
           }
         }
       });
@@ -223,7 +258,7 @@ export const useHabitStore = create((setStore, getStore) => ({
   syncToCloud: async () => {
     const state = getStore();
     const { user, isAuthenticated, isImpersonating, impersonatedUserName } = state;
-    if (!isAuthenticated || !user) return;
+    if (!db || !isAuthenticated || !user) return;
 
     try {
       const targetUid = isImpersonating || user.uid;
@@ -310,7 +345,7 @@ export const useHabitStore = create((setStore, getStore) => ({
     const dataToSave = { ...toPersistedData(state), lastUpdated: now };
 
     if (state.isImpersonating) {
-      if (state.isAuthenticated && state.user) {
+      if (db && state.isAuthenticated && state.user) {
         try {
           await setDoc(doc(db, 'users', state.isImpersonating), { ...dataToSave, displayName: state.impersonatedUserName }, { merge: true });
         } catch (err) {
@@ -323,7 +358,7 @@ export const useHabitStore = create((setStore, getStore) => ({
     await set('adib_habit_data', dataToSave);
     
     // Background Firebase Sync
-    if (state.isAuthenticated && state.user) {
+    if (db && state.isAuthenticated && state.user) {
       try {
         await setDoc(doc(db, 'users', state.user.uid), { ...dataToSave, displayName: state.user.displayName || "" }, { merge: true });
       } catch (err) {
