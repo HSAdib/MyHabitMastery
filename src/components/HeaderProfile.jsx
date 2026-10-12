@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { useHabitStore } from '../store/useHabitStore';
 
-import { updateProfile, deleteUser } from 'firebase/auth';
+import { updateProfile, deleteUser, signOut } from 'firebase/auth';
 import { doc, deleteDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase.config';
 
@@ -18,6 +18,14 @@ const CheckIcon = () => (
 
 const SyncIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21v-5h5"/></svg>
+);
+
+const SwitchUserIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+);
+
+const GuestIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
 );
 
 const ExportIcon = () => (
@@ -124,6 +132,32 @@ export default function HeaderProfile({ totalXP, bestStreak, handleLogin, handle
     setIsEditingName(false);
   };
 
+  const handleSwitchProfile = async () => {
+    try {
+      if (auth.currentUser) {
+        await signOut(auth);
+      }
+    } catch (err) {
+      console.error("Sign out failed:", err);
+    }
+    setStorePartial({ user: null, isAuthenticated: false, guestName: "" });
+    await savePartialToIDB({ guestName: "" });
+    setIsOpen(false);
+  };
+
+  const handleSwitchToGuest = async () => {
+    try {
+      if (auth.currentUser) {
+        await signOut(auth);
+      }
+    } catch (err) {
+      console.error("Sign out failed:", err);
+    }
+    setStorePartial({ user: null, isAuthenticated: false, guestName: "" });
+    await savePartialToIDB({ guestName: "" });
+    setIsOpen(false);
+  };
+
   const handleDeleteAccount = async () => {
     if (!isAuthenticated || !auth.currentUser) return;
     setIsDeleting(true);
@@ -182,10 +216,34 @@ export default function HeaderProfile({ totalXP, bestStreak, handleLogin, handle
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
             transition={{ duration: 0.15 }}
-            className={`absolute right-0 top-16 w-72 z-50 border shadow-2xl rounded-2xl ${theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}
+            className={`absolute right-0 top-16 w-72 z-50 border shadow-2xl rounded-2xl p-4 ${theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}
           >
+            {/* Top Bar: Mode Badge & Quick Switch/Logout Icon Button */}
+            <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-800/40">
+              <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                isAuthenticated 
+                  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' 
+                  : 'bg-blue-500/15 text-blue-400 border-blue-500/30'
+              }`}>
+                {isAuthenticated ? 'Cloud Account' : 'Guest Mode'}
+              </span>
+
+              <button
+                onClick={handleSwitchProfile}
+                title={isAuthenticated ? "Switch to Guest Mode" : "Switch Profile / Log Out"}
+                className={`p-1.5 rounded-lg transition-all flex items-center gap-1.5 text-[10px] font-black border active:scale-95 ${
+                  theme === 'dark' 
+                    ? 'bg-slate-800/80 hover:bg-slate-700 border-slate-700 text-slate-300 hover:text-white' 
+                    : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <SwitchUserIcon />
+                <span>Switch</span>
+              </button>
+            </div>
+
             {/* User Info */}
-            <div className="flex flex-col items-center mb-5">
+            <div className="flex flex-col items-center mb-4">
               <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-3 shadow-inner ${theme === 'dark' ? 'bg-slate-800' : 'bg-slate-100'}`}>
                 {user?.photoURL ? (
                   <img src={user.photoURL} alt="Profile" className="w-full h-full rounded-full object-cover shadow-md" />
@@ -225,7 +283,7 @@ export default function HeaderProfile({ totalXP, bestStreak, handleLogin, handle
             </div>
 
             {/* Stats Row */}
-            <div className={`flex justify-between items-center py-3 mb-5 border-y ${theme === 'dark' ? 'border-slate-800/50' : 'border-slate-100'}`}>
+            <div className={`flex justify-between items-center py-3 mb-4 border-y ${theme === 'dark' ? 'border-slate-800/50' : 'border-slate-100'}`}>
               <div className="flex flex-col items-center flex-1">
                 <span className={`text-xl font-black ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>{totalXP}</span>
                 <span className={`text-[9px] uppercase tracking-widest font-black ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>Total XP</span>
@@ -277,12 +335,32 @@ export default function HeaderProfile({ totalXP, bestStreak, handleLogin, handle
                 <input type="file" accept=".json" onChange={handleFileChange} className="hidden" />
               </label>
 
+              {!isAuthenticated && (
+                <button 
+                  onClick={handleSwitchProfile}
+                  title="Switch to another account or change guest name"
+                  className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-xl font-black text-xs border transition-colors active:scale-95 mt-1 ${theme === 'dark' ? 'border-slate-700/80 hover:bg-slate-800 text-slate-300' : 'border-slate-200 hover:bg-slate-100 text-slate-600'}`}
+                >
+                  <SwitchUserIcon />
+                  Switch Profile / Log Out
+                </button>
+              )}
+
               {isAuthenticated && (
                 <>
                   <button 
+                    onClick={handleSwitchToGuest}
+                    title="Switch to local guest mode without cloud sync"
+                    className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-xl font-black text-xs border transition-colors active:scale-95 mt-1 ${theme === 'dark' ? 'border-slate-700 hover:bg-slate-800 text-slate-300' : 'border-slate-200 hover:bg-slate-100 text-slate-600'}`}
+                  >
+                    <GuestIcon />
+                    Switch to Guest Mode
+                  </button>
+
+                  <button 
                     onClick={() => { handleLogout(); setIsOpen(false); }}
                     title="Sign out of your account"
-                    className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-xl font-black text-xs border transition-colors active:scale-95 mt-2 ${theme === 'dark' ? 'border-orange-900/30 text-orange-400 hover:bg-orange-900/20' : 'border-orange-100 text-orange-600 hover:bg-orange-50'}`}
+                    className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-xl font-black text-xs border transition-colors active:scale-95 mt-1 ${theme === 'dark' ? 'border-orange-900/30 text-orange-400 hover:bg-orange-900/20' : 'border-orange-100 text-orange-600 hover:bg-orange-50'}`}
                   >
                     <LogoutIcon />
                     Sign Out

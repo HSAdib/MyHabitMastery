@@ -209,6 +209,8 @@ export default function App() {
   const handleLogout = async () => {
     try {
       if (auth) await signOut(auth);
+      setStorePartial({ user: null, isAuthenticated: false, guestName: "" });
+      await savePartialToIDB({ guestName: "" });
     } catch (error) {
       console.error('Logout Failed', error);
     }
@@ -3250,7 +3252,7 @@ export default function App() {
       />
 
       {!isHydrating && authInitialized && !isAuthenticated && !guestName && (
-        <NamePromptModal />
+        <NamePromptModal onOpenAuthModal={() => setShowAuthModal(true)} />
       )}
 
       <style dangerouslySetInnerHTML={{ __html: `

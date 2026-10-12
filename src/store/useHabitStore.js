@@ -31,7 +31,7 @@ const toPersistedData = (state) => {
   const PERSIST_KEYS = [
     'trackerData', 'habits', 'habitConfigs', 'categories', 'archivedHabits',
     'theme', 'tableOrientation', 'textSizes', 'isMobileMode', 'savedLevel',
-    'guestName', 'manualXPOffset', 'manualStreakOffset', 'lastUpdated',
+    'guestName', 'manualXPOffset', 'manualStreakOffset', 'lastUpdated', 'currentUid',
   ];
   PERSIST_KEYS.forEach(k => { d[k] = state[k]; });
   return d;
@@ -54,6 +54,7 @@ export const useHabitStore = create((setStore, getStore) => ({
   isAuthenticated: false,
   authInitialized: false,
   lastUpdated: 0,
+  currentUid: null,
   
   // Data State
   trackerData: {},
@@ -201,36 +202,47 @@ export const useHabitStore = create((setStore, getStore) => ({
               // to avoid a concurrent snapshot pushing stale local state back.
               if (_isApplyingRemote) return;
 
-              const localLastUpdated = getStore().lastUpdated || 0;
+              const currentStore = getStore();
+              const isFirstSyncForUser = currentStore.currentUid !== user.uid;
+              const localLastUpdated = currentStore.lastUpdated || 0;
+              const localTracker = currentStore.trackerData || {};
+              const hasLocalData = Object.keys(localTracker).length > 0;
 
               if (docSnap.exists()) {
                 const remoteData = docSnap.data();
                 const remoteLastUpdated = remoteData.lastUpdated || 0;
+                const remoteTracker = remoteData.trackerData || {};
+                const hasRemoteData = Object.keys(remoteTracker).length > 0;
 
-                if (remoteLastUpdated > localLastUpdated) {
-                  // Remote is newer — apply only persisted fields, never overwrite UI-only state.
-                  // Note: currentDate is already excluded by UI_ONLY_FIELDS, no extra guard needed.
+                // Pull remote data if:
+                // 1) This is a fresh login to this account (first sync on this device)
+                // 2) Remote timestamp is newer than local timestamp
+                // 3) Local has 0 tracked days while remote has actual data (safeguards against overwriting cloud with empty local state)
+                if (isFirstSyncForUser || remoteLastUpdated > localLastUpdated || (hasRemoteData && !hasLocalData)) {
                   _isApplyingRemote = true;
                   try {
                     const safeRemote = {};
                     Object.keys(remoteData).forEach(k => {
                       if (!UI_ONLY_FIELDS.includes(k)) safeRemote[k] = remoteData[k];
                     });
-                    // setStore is synchronous — getStore() below already reflects safeRemote.
+                    safeRemote.currentUid = user.uid;
                     setStore(safeRemote);
                     await set('adib_habit_data', toPersistedData(getStore()));
                   } finally {
                     _isApplyingRemote = false;
                   }
                 } else if (localLastUpdated > remoteLastUpdated) {
-                  // Local is newer — push to remote.
-                  const localPersisted = toPersistedData(getStore());
-                  await setDoc(userDocRef, { ...localPersisted, displayName: user.displayName || '' }, { merge: true });
+                  // Same authenticated user made offline changes on this device while disconnected -> push to cloud
+                  const localPersisted = { ...toPersistedData(getStore()), currentUid: user.uid };
+                  await setDoc(userDocRef, { ...localPersisted, displayName: user.displayName || currentStore.guestName || '' }, { merge: true });
+                  setStore({ currentUid: user.uid });
                 }
               } else {
-                // No remote document yet — push local data to bootstrap the cloud record.
-                const localPersisted = toPersistedData(getStore());
-                await setDoc(userDocRef, { ...localPersisted, displayName: user.displayName || '' }, { merge: true });
+                // Brand new cloud account (no document in Firestore yet)
+                // Bootstrap the remote document with the local setup
+                const localPersisted = { ...toPersistedData(getStore()), currentUid: user.uid };
+                await setDoc(userDocRef, { ...localPersisted, displayName: user.displayName || currentStore.guestName || '' }, { merge: true });
+                setStore({ currentUid: user.uid });
               }
             }, (syncErr) => {
               _isApplyingRemote = false;
@@ -261,12 +273,14 @@ export const useHabitStore = create((setStore, getStore) => ({
     if (!db || !isAuthenticated || !user) return;
 
     try {
+      const now = Math.max(Date.now(), (state.lastUpdated || 0) + 1);
+      setStore({ lastUpdated: now });
       const targetUid = isImpersonating || user.uid;
-      const targetDisplayName = isImpersonating ? impersonatedUserName : (user.displayName || "");
+      const targetDisplayName = isImpersonating ? impersonatedUserName : (user.displayName || state.guestName || "");
       const userDocRef = doc(db, 'users', targetUid);
-      await setDoc(userDocRef, {
-        ...toPersistedData(state), displayName: targetDisplayName
-      }, { merge: true });
+      const dataToSave = { ...toPersistedData(getStore()), displayName: targetDisplayName, currentUid: targetUid };
+      await setDoc(userDocRef, dataToSave, { merge: true });
+      await set('adib_habit_data', toPersistedData(getStore()));
     } catch (err) {
       console.warn("Background cloud sync deferred:", err);
     }
@@ -336,7 +350,8 @@ export const useHabitStore = create((setStore, getStore) => ({
   },
 
   saveToIDB: async (updates) => {
-    const now = Date.now();
+    const stateBefore = getStore();
+    const now = Math.max(Date.now(), (stateBefore.lastUpdated || 0) + 1);
     // Batch both the updates and the new lastUpdated into a single store write
     setStore({ ...updates, lastUpdated: now });
 
@@ -360,7 +375,7 @@ export const useHabitStore = create((setStore, getStore) => ({
     // Background Firebase Sync
     if (db && state.isAuthenticated && state.user) {
       try {
-        await setDoc(doc(db, 'users', state.user.uid), { ...dataToSave, displayName: state.user.displayName || "" }, { merge: true });
+        await setDoc(doc(db, 'users', state.user.uid), { ...dataToSave, displayName: state.user.displayName || state.guestName || "" }, { merge: true });
       } catch (err) {
         console.error("Background sync failed:", err);
       }

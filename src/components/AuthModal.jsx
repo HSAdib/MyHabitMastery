@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, updateProfile } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase.config';
 import { useHabitStore } from '../store/useHabitStore';
 
@@ -23,6 +23,7 @@ const GoogleIcon = () =>
 
 export default function AuthModal({ isOpen, onClose }) {
   const [isSignUp, setIsSignUp] = useState(false);
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -33,6 +34,7 @@ export default function AuthModal({ isOpen, onClose }) {
 
   useEffect(() => {
     if (isOpen) {
+      setName('');
       setEmail('');
       setPassword('');
       setConfirmPassword('');
@@ -57,7 +59,11 @@ export default function AuthModal({ isOpen, onClose }) {
 
     try {
       if (isSignUp) {
-        await createUserWithEmailAndPassword(auth, email, password);
+        const userCred = await createUserWithEmailAndPassword(auth, email, password);
+        if (name.trim()) {
+          await updateProfile(userCred.user, { displayName: name.trim() });
+          useHabitStore.getState().setStorePartial({ user: { ...userCred.user, displayName: name.trim() } });
+        }
       } else {
         await signInWithEmailAndPassword(auth, email, password);
       }
@@ -92,7 +98,7 @@ export default function AuthModal({ isOpen, onClose }) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[500] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+        className="fixed inset-0 z-[10000] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
         onClick={onClose}>
         
         <motion.div
@@ -138,6 +144,26 @@ export default function AuthModal({ isOpen, onClose }) {
           </div>
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            {isSignUp && (
+              <div>
+                <label className={`block text-xs font-bold mb-1.5 uppercase tracking-wide ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
+                  Your Name / Nickname
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className={`w-full px-4 py-3 rounded-xl border text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 ${
+                    theme === 'dark'
+                      ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500'
+                      : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400'
+                  }`}
+                  placeholder="e.g. Alex"
+                />
+              </div>
+            )}
+
             <div>
               <label className={`block text-xs font-bold mb-1.5 uppercase tracking-wide ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
                 Email
