@@ -1,192 +1,232 @@
 <div align="center">
 
-# 🔥 My Habit Mastery
-### *Track Your Habits. Level Up Your Life.*
+# ⚡ MY HABIT MASTERY
+### *The High-Performance, Gamified Habit Operating System*
 
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-%E2%96%B6%20Open%20App-10b981?style=for-the-badge&logo=vercel&logoColor=white)](https://my-habit-mastery.vercel.app)
-[![PWA](https://img.shields.io/badge/PWA-Installable-7c3aed?style=for-the-badge&logo=googlechrome&logoColor=white)](https://web.dev/progressive-web-apps/)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-%E2%96%B6%20Launch%20App-10b981?style=for-the-badge&logo=vercel&logoColor=white)](https://my-habit-mastery.vercel.app)
+[![React](https://img.shields.io/badge/React-18-61dafb?style=for-the-badge&logo=react&logoColor=black)](https://react.dev)
+[![Vite](https://img.shields.io/badge/Vite-6-646cff?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev)
+[![PWA Ready](https://img.shields.io/badge/PWA-Installable-8b5cf6?style=for-the-badge&logo=pwa&logoColor=white)](https://web.dev/progressive-web-apps/)
 [![Storage](https://img.shields.io/badge/Offline%20First-IndexedDB-3b82f6?style=for-the-badge)](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API)
-[![Sync](https://img.shields.io/badge/Cloud%20Sync-Firebase-ff9800?style=for-the-badge&logo=firebase&logoColor=white)](https://firebase.google.com)
+[![Cloud Sync](https://img.shields.io/badge/Cloud%20Sync-Firebase-ff9800?style=for-the-badge&logo=firebase&logoColor=white)](https://firebase.google.com)
 [![License](https://img.shields.io/badge/License-MIT-gray?style=for-the-badge)](./LICENSE)
 
-**My Habit Mastery** is an ultra-fast, gamified, offline-first habit tracker designed like a productive workspace.  
-Turn your daily disciplines into an RPG — complete habits, earn XP, maintain streaks, and watch your consistency grow on interactive heatmaps.
+<br/>
 
-[🚀 Quick Start](#-quick-start-in-30-seconds) • [📖 Complete User Guide](#-complete-user-guide--how-to-use) • [🎮 Gamification & XP](#-gamification--progression-system) • [📊 Analytics & Visuals](#-analytics--insights) • [💡 Pro Tips](#-pro-tips--shortcuts)
+**Transform your daily disciplines into an addictive RPG.**  
+Build momentum, earn XP, maintain streaks, and visualize your personal growth with interactive heatmaps, graphs, and zero-latency offline persistence.
+
+[⚡ 30s Quickstart](#-quickstart-in-30-seconds) • [🎮 How It Works](#-how-to-use-the-complete-walkthrough) • [🏆 Gamification Mechanics](#-gamification--progression) • [📊 Data & Analytics](#-analytics--insights) • [⌨️ Shortcuts & Tricks](#%EF%B8%8F-pro-tips--shortcuts)
 
 </div>
 
 ---
 
-## 🚀 Quick Start in 30 Seconds
-
-1. **Open the App** 👉 [my-habit-mastery.vercel.app](https://my-habit-mastery.vercel.app) (or run locally).
-2. **Enter Your Name**: Pick a guest nickname or log in with Google to enable multi-device sync.
-3. **Log Today's Habits**: Click on today's column/row to check off habits.
-4. **Hit 100%**: Complete all daily habits to unlock confetti 🎉, stack streak days, and gain bonus XP!
-
----
-
-## 📖 Complete User Guide / How to Use
-
-Everything in My Habit Mastery is built to be fast, intuitive, and frictionless. Here is how each part of the app works:
-
-### 1. 📋 The Main Tracking Table
-The centerpiece is a flexible, spreadsheet-style interactive grid.
-
-- **Checking Off a Habit**:
-  - **Single-step habits** (e.g., *Meditation, 7h Sleep*): Click a cell to toggle between completed (100%) and pending.
-  - **Multi-step habits** (e.g., *Read 15 pages, 20 Pushups*): Click to increment progress step-by-step or use the step slider for quick adjustments.
-- **Orientation Switch (Horizontal ↔ Vertical)**:
-  - Click the **Rotate Layout** icon in the header.
-  - **Horizontal View**: Days stretch across columns (like a timeline).
-  - **Vertical View**: Days stack in rows (great for compact vertical reading).
-- **Smooth Drag-to-Scroll**:
-  - Don't bother with tiny scrollbars! Simply click and drag anywhere inside the table body with your mouse to pan around smoothly.
-- **Auto-Scroll to Today**:
-  - Whenever you load the page or switch views, the table automatically centers right on **today's date**.
-
----
-
-### 2. 🗂️ Categories & Habit Organization
-Keep your work, fitness, and personal routines neatly organized:
-
-- **Filter Tabs**: Click on categories like **All**, **Health**, **Academic**, **Dev**, or **Lifestyle** to focus only on relevant habits.
-- **Add New Habit**:
-  - Type a habit name into the quick-add input and press `Enter` or click `+`.
-  - The new habit is automatically linked to your currently selected category.
-- **Add / Edit Categories**:
-  - Open the **Manage** modal to create custom category tabs, rename existing ones, or reorder their position.
-- **Archive Habits**:
-  - Done with a temporary challenge or taking a break? Archive the habit instead of deleting it. All your past tracking data remains 100% intact, and you can unarchive it anytime!
-
----
-
-### 3. 🎮 Gamification & Progression System
-Self-improvement is an RPG. Every action you take pays out tangible rewards:
+## ⚡ Quickstart in 30 Seconds
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  ⭐ Daily Habits Done  ➜  Gain XP  ➜  Level Up (with sound) │
-│  🔥 100% Days in a Row ➜  Build Streaks  ➜  Earn Trophies   │
-└─────────────────────────────────────────────────────────────┘
+1. Open App ➜ 2. Check Daily Cells ➜ 3. Hit 100% ➜ 4. Trigger Confetti & Level Up!
 ```
 
-- **XP Engine**:
-  - Every checked habit rewards you with experience points (XP).
-  - The header features a live XP progress bar showing how close you are to your next level.
-- **Level-Up Celebrations**:
-  - Crossing an XP threshold triggers an animated level-up modal celebrating your progress.
-- **Streak Multipliers**:
-  - Finish 100% of your active habits for the day to advance your **Flame Streak** 🔥.
-  - Missed a day? Don't get discouraged — start building your next streak immediately!
-- **Trophy Showcase 🏆**:
-  - Click the trophy icon in your profile header to view unlockable achievement badges (First Habit, 7-Day Streak, 30-Day Master, Perfect Week, and more).
-- **Instant Confetti 🎉**:
-  - Hitting 100% completion for any day triggers celebratory particle confetti!
+1. **Launch the Web App** at **[my-habit-mastery.vercel.app](https://my-habit-mastery.vercel.app)**.
+2. **Choose Your Identity**:
+   - **Guest Mode**: Type any nickname and hit start immediately (saved privately in your browser's IndexedDB).
+   - **Cloud Mode**: Sign in with Google to enable real-time multi-device sync across desktop and mobile.
+3. **Check Today's Habits**: Click on any habit cell in today's column to log completion.
+4. **Hit 100%**: Finish all daily habits to pop **Confetti 🎉**, bank **XP ⭐**, and extend your **Streak 🔥**!
 
 ---
 
-### 4. 📝 Daily Notes & Journaling
-Track context behind your numbers — why you succeeded or why you missed a goal:
+## 🎮 How to Use (The Complete Walkthrough)
 
-- **Adding a Note**:
-  - Click the small **Note 📝** icon located next to any day's date header.
-  - Type your reflection (e.g., *"Felt high energy after workout"*, *"Travel day, studied on train"*).
-  - Notes automatically save with an automatic timestamp.
-- **Browsing Past Notes**:
-  - Open the **All Notes** panel to review a chronological journal of all your reflections over time.
+### 1. 📋 The Interactive Habit Matrix
+The core of My Habit Mastery is a smooth, high-density spreadsheet grid designed for rapid daily logging without friction.
+
+```
+┌──────────────┬──────┬──────┬──────┬──────┬───────────────┐
+│ Habits       │ Mon  │ Tue  │ Wed  │ Today│ Goal / Status │
+├──────────────┼──────┼──────┼──────┼──────┼───────────────┤
+│ 🏃 5km Run   │ 100% │ 100% │  -   │ [✓]  │ Single Step   │
+│ 📚 Read Book │ 5/15 │ 15/15│ 10/15│ [15] │ Multi Step    │
+│ 💧 Drink 3L  │ 100% │ 100% │ 100% │ [✓]  │ Streak Active │
+└──────────────┴──────┴──────┴──────┴──────┴───────────────┘
+```
+
+- **Single-Step Habits** *(e.g., Workout, Meditation)*:
+  - Click a cell once to mark it as **Done (100%)**.
+  - Click again to reset if checked accidentally.
+- **Multi-Step Habits** *(e.g., Read 15 pages, 20 pull-ups, solve 5 LeetCode problems)*:
+  - Click to increment steps one by one.
+  - Hover or click the **step slider** to jump directly to any step count.
+- **Orientation Toggle (Horizontal ↔ Vertical)**:
+  - Click the **Rotate Layout** icon in the header toolbar anytime.
+  - **Horizontal Mode**: Days flow from left to right along a timeline.
+  - **Vertical Mode**: Days stack row-by-row for ultra-clean vertical scrolling.
+- **🖱️ Grab-to-Pan (Drag-to-Scroll)**:
+  - No need to hunt for narrow scrollbars! Click and hold anywhere inside the table body to grab and pan across days like a digital canvas.
+- **Auto-Snap to Today**:
+  - The table automatically calculates today's local date and centers directly onto it the moment you open the app.
+
+---
+
+### 2. 🗂️ Categories & Habit Management
+
+Keep your life balanced without cluttering your workspace:
+
+- **Category Filtering**: Switch between **All**, **Health**, **Academic**, **Dev**, or **Lifestyle** tabs to isolate specific areas of your life.
+- **Add Custom Habits**:
+  - Type the habit title into the quick-add bar at the bottom and press `Enter`.
+  - It automatically assigns itself to your active category.
+- **Custom Goal Steps**:
+  - Set custom target steps (e.g., `15` pages, `3` meditation sessions, `10000` steps) per habit.
+- **Archive Instead of Delete**:
+  - Completed a 30-day challenge or pausing a routine? **Archive** the habit. It disappears from your active daily table, but your past history, heatmap scores, and lifetime XP remain 100% intact.
+- **Reorganize & Rename**:
+  - Reorder habit positions, edit habit names inline, or create and delete categories on the fly.
+
+---
+
+### 3. 🏆 Gamification & Progression
+
+Treating self-improvement like a game makes consistency automatic.
+
+<div align="center">
+
+```
+  [ 🎯 Daily Actions ] ──▶ [ ⭐ Earn XP ] ──▶ [ 🆙 Level Up ] ──▶ [ 🏆 Unlock Trophies ]
+```
+
+</div>
+
+- **⭐ XP System**:
+  - Every checked cell deposits experience points directly into your profile.
+  - Watch your header XP bar fill up in real time.
+- **🆙 Level Up Celebrations**:
+  - Breaking through your XP threshold triggers an animated level-up modal celebrating your newly reached milestone.
+- **🔥 Streak Multiplier**:
+  - Completing **100% of your habits for a day** counts towards your active streak.
+  - See your flame counter rise day after day.
+- **🎉 Confetti Explosion**:
+  - The moment you finish your last remaining habit for today, celebratory particle confetti rains down on your screen.
+- **🏆 Trophy Cabinet**:
+  - Click your profile badge to open the achievements showcase: unlock badges for hitting 7-day streaks, 30-day masteries, century milestones, and perfect weeks.
+
+---
+
+### 4. 📝 Daily Journaling & Reflections
+
+Data tells you *what* happened; journaling tells you *why*.
+
+- **Attach a Note to Any Date**:
+  - Click the small **Note 📝** icon in any date column header.
+  - Jot down your thoughts, workout notes, energy levels, or why a habit was missed.
+  - Notes automatically record an automatic time badge (e.g., `10:45 PM`).
+- **All-Notes Archive**:
+  - Click the **Notes** icon in the navigation bar to read through a scrollable chronological diary of your entire habit journey.
 
 ---
 
 ### 5. 📊 Analytics & Insights
-Turn raw clicks into actionable visual intelligence:
 
-- **GitHub-Style Contribution Heatmap**:
-  - View an entire year's density map at a glance.
-  - Filter the heatmap for **All Habits** or isolate a single habit to see where your consistency peaked.
-- **Weekly Progress Graph**:
-  - Beautiful Area chart showing your day-by-day completion percentages throughout the week.
-- **Monthly Performance Bar Chart**:
-  - Compare completion consistency month-by-month to evaluate long-term momentum.
-- **Per-Habit Deep Dive**:
-  - Click on any habit's title to open its personal detail modal: includes a dedicated mini heatmap, current & best streaks, and total completion count.
+Uncover patterns and eliminate blind spots with automated data visualization:
 
----
-
-### 6. ☁️ Sync, Storage & Data Freedom
-
-| Feature | How It Works |
+| Analytics Tool | What It Reveals |
 |---|---|
-| **Guest / Offline Mode** | Works out of the box with **IndexedDB**. Zero signup required. Fast, private, and works completely offline without internet. |
-| **Google Cloud Sync** | Click **Login with Google** to back up your habits to Firebase Firestore. Changes sync in real-time across your laptop, phone, and tablet. |
-| **Smart Conflict Handling** | If you make edits offline on your phone and later connect to Wi-Fi, the app merges changes intelligently by timestamp so nothing is lost. |
-| **JSON Export & Backup** | Head to settings and download a complete `.json` file backup of all habits, configs, notes, and history. |
-| **JSON Import** | Restore data on any device with your choice of **Merge** (combine with existing) or **Overwrite** (fresh restore). |
+| **🟩 GitHub-Style Heatmap** | High-level 365-day visual density map of your consistency. Filterable by category or individual habit. |
+| **📈 Weekly Performance Area Chart** | Day-by-day percentage curve revealing your strongest and weakest days of the week. |
+| **📊 Monthly Comparison Bar Chart** | Month-over-month trend analysis to measure long-term trajectory. |
+| **🔍 Per-Habit Deep Dive** | Click on any habit name to inspect its dedicated streak, total completions, and isolated annual heatmap. |
 
 ---
 
-### 7. 📱 Mobile Friendly & PWA Support
+### 6. ☁️ Offline First + Real-Time Cloud Sync
 
-- **Install as an App (PWA)**:
-  - On Chrome/Edge: Click the **Install** icon in your browser address bar.
-  - On iPhone / Safari: Tap **Share** ➜ **Add to Home Screen**.
-  - On Android: Tap the menu ➜ **Install app**.
-  - Opens in full-screen standalone mode with zero browser chrome!
-- **Mobile Mode**:
-  - Auto-detected on phones or toggleable manually.
-  - Scales cell padding and font sizes for effortless one-thumb tracking on small screens.
-- **Adjustable Text Sizes**:
-  - Customize habit label size, cell text size, and tab dimensions to suit your eyesight and screen size.
+Your data belongs to you — accessible anywhere, with or without Wi-Fi:
 
----
-
-## 💡 Pro Tips & Shortcuts
-
-- ⌨️ **`ESC` Key**: Instantly closes any active modal or popup window.
-- 🖱️ **Grab & Pan**: Click and hold the mouse button inside the table to flick and scroll effortlessly through weeks of history.
-- 🌓 **Theme Toggle**: Switch between sleek OLED Dark Mode and clean Minimal Light Mode using the Sun/Moon icon.
-- ⚡ **Multi-step Goals**: Learning a language or reading books? Set steps to `10` or `15` in the habit settings so you can record incremental progress throughout the day.
-- 📦 **Don't Delete, Archive!**: Always prefer archiving old habits over deleting them so your past year's heatmap retains its colors.
+- **100% Offline-First Architecture**:
+  - Powered by **IndexedDB** (`idb-keyval`). You can track habits on a flight, off-grid, or on subway commutes without a connection.
+- **Seamless Cloud Sync**:
+  - Sign in with Google to back up your database to **Firebase Firestore**.
+  - Open the app on your laptop and your phone — changes sync across tabs and devices in real time.
+- **Smart Conflict Resolution**:
+  - Offline changes are safely merged via timestamp timestamps so local offline work is never overwritten.
+- **Export & Import (Data Sovereignty)**:
+  - Download a complete `.json` export of your habits, configs, notes, and history at any time.
+  - Restore on any device with **Merge** (combine with existing) or **Overwrite** (clean slate).
 
 ---
 
-## 🛠️ Tech Stack & Architecture
+### 7. 📱 Mobile Ready & PWA Installation
 
-- **Core**: React 18, Vite 6, Tailwind CSS
-- **State Management**: [Zustand](https://github.com/pmndrs/zustand) with reactive selectors
-- **Persistence**: [idb-keyval](https://github.com/jakearchibald/idb-keyval) (IndexedDB) + Firebase Firestore
-- **Animations**: [Framer Motion](https://www.framer.com/motion/) + Canvas Confetti
-- **Charts**: [Recharts](https://recharts.org/)
-- **PWA**: `vite-plugin-pwa` with Workbox caching
+Turn My Habit Mastery into a native app on your phone or desktop:
+
+- **Desktop (Chrome / Edge / Brave)**: Click the **Install Icon (⊕)** in your browser URL bar.
+- **iOS (Safari)**: Tap `Share` ➜ `Add to Home Screen`.
+- **Android**: Tap `More (...)` ➜ `Install App`.
+- **Adaptive Mobile View**:
+  - Auto-scales typography, button hitboxes, and table sizing for effortless one-handed thumb interaction on mobile screens.
+
+---
+
+## ⌨️ Pro Tips & Shortcuts
+
+> [!TIP]
+> **Hit `ESC` Anytime**: Close any active modal, chart, or settings pane instantly without clicking the `X` button.
+
+> [!TIP]
+> **Mouse Dragging**: Left-click and hold anywhere inside the grid to pan smoothly across weeks of history without using scrollbars.
+
+> [!TIP]
+> **OLED Dark Mode**: Toggle between crisp Dark Mode and clean Light Mode in one click using the sun/moon icon.
+
+> [!TIP]
+> **Keep Your Heatmap Alive**: Always **Archive** inactive habits instead of deleting them. Deleting removes history; archiving preserves your lifetime visual streak!
+
+---
+
+## 🛠️ Tech Stack
+
+```
+Frontend    │ React 18, Vite 6, Tailwind CSS
+State       │ Zustand (Reactive State & Selectors)
+Storage     │ IndexedDB (idb-keyval) + Firebase Firestore
+Visuals     │ Framer Motion, Recharts, Canvas Confetti
+PWA Engine  │ Vite PWA Plugin + Workbox Cache
+Hosting     │ Vercel + Vercel Analytics
+```
 
 ---
 
 ## 💻 Local Setup & Development
 
 ```bash
-# 1. Clone repository
+# 1. Clone the repo
 git clone https://github.com/HSAdib/MyHabitMastery.git
 cd MyHabitMastery
 
 # 2. Install dependencies
 npm install
 
-# 3. Environment variables (Optional for local guest mode)
+# 3. Environment Setup (Optional for local guest mode)
 cp .env.example .env
 
-# 4. Start local development server
+# 4. Start the dev server
 npm run dev
 ```
 
-App will be available at `http://localhost:3000`.
+Visit `http://localhost:3000` in your browser.
 
 ---
 
+## 📄 License & Credits
+
+Built with ❤️ by **[Hasan Shahriar Adib](https://github.com/HSAdib)**  
+Distributed under the **MIT License**. See [`LICENSE`](./LICENSE) for details.
+
 <div align="center">
 
-Made with dedication by **[Hasan Shahriar Adib](https://github.com/HSAdib)** 🇧🇩
+*"We are what we repeatedly do. Excellence, then, is not an act, but a habit." — Will Durant*
 
-*"Success is the product of daily habits—not once-in-a-lifetime transformations." — James Clear*
+⭐ **Star this repository if My Habit Mastery helps you stay consistent!**
 
 </div>
