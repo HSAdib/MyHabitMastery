@@ -527,6 +527,13 @@ export default function App() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
   const [manageModalTab, setManageModalTab] = useState('categories');
+  const [seenManageTip, setSeenManageTip] = useState(() => {
+    try {
+      return !!localStorage.getItem('adib_seen_manage_tip');
+    } catch (e) {
+      return false;
+    }
+  });
   const [showTextSizeModal, setShowTextSizeModal] = useState(false);
   const [showLevelUpModal, setShowLevelUpModal] = useState(false);
   const [showLevelDetailsModal, setShowLevelDetailsModal] = useState(false);
@@ -1809,6 +1816,35 @@ export default function App() {
                   </motion.button>
                 </div>
               </div>
+
+              {/* Heatmap Visual Guide Onboarding Banner */}
+              {welcomeCardStatus !== 'gone' && (
+                <ThanosDisintegrate
+                  shouldDisintegrate={welcomeCardStatus === 'snapping'}
+                  onDone={() => setWelcomeCardStatus('gone')}
+                >
+                  <div className={`mb-3 p-3 rounded-2xl border ${theme === 'dark' ? 'bg-slate-800/70 border-slate-700' : 'bg-emerald-50/80 border-emerald-200'} flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-sm`}>
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-500 flex items-center justify-center shrink-0 text-sm">
+                        🌱
+                      </div>
+                      <div>
+                        <p className={`text-[10px] font-black uppercase tracking-wider ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-700'}`}>Heatmap Visual Guide</p>
+                        <p className={`text-[11px] font-medium leading-tight ${getTextMuted()}`}>Each square is a day. Color intensifies from light to deep emerald as you log habits.</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 self-start md:self-auto shrink-0 text-[9px] font-black uppercase tracking-wider">
+                      <span className={getTextMuted()}>Key:</span>
+                      <span className={`w-3.5 h-3.5 rounded-[2px] ${theme === 'dark' ? 'bg-slate-800' : 'bg-slate-200'}`} title="0% Empty" />
+                      <span className={`w-3.5 h-3.5 rounded-[2px] ${theme === 'dark' ? 'bg-emerald-900/60' : 'bg-emerald-200'}`} title="25% Light" />
+                      <span className={`w-3.5 h-3.5 rounded-[2px] ${theme === 'dark' ? 'bg-emerald-700' : 'bg-emerald-400'}`} title="50% Medium" />
+                      <span className={`w-3.5 h-3.5 rounded-[2px] ${theme === 'dark' ? 'bg-emerald-500' : 'bg-emerald-600'}`} title="75% Strong" />
+                      <span className={`w-3.5 h-3.5 rounded-[2px] ${theme === 'dark' ? 'bg-emerald-400' : 'bg-emerald-700'}`} title="100% Perfect" />
+                      <span className="text-[8px] font-bold text-emerald-500 ml-1">More Active</span>
+                    </div>
+                  </div>
+                </ThanosDisintegrate>
+              )}
               
               <div className={`overflow-x-auto custom-scrollbar pb-2 ${isMobileMode ? 'whitespace-nowrap' : ''}`}>
                 <div className="inline-block min-w-full">
@@ -2091,6 +2127,19 @@ export default function App() {
                 </select>
               </div>
 
+              {/* Monthly Trend Onboarding Guide */}
+              {!hasAnyData && (
+                <div className={`mb-4 p-3.5 rounded-2xl border ${theme === 'dark' ? 'bg-slate-800/60 border-slate-700' : 'bg-emerald-50/80 border-emerald-200'} flex items-center gap-3`}>
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-500 flex items-center justify-center shrink-0 text-base">
+                    📈
+                  </div>
+                  <div>
+                    <p className={`text-[10px] font-black uppercase tracking-wider ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-700'}`}>Monthly Trend Curve</p>
+                    <p className={`text-xs font-medium leading-relaxed ${getTextMuted()}`}>As you check off habits across the month, this graph forms a smooth consistency curve showing your daily trajectory.</p>
+                  </div>
+                </div>
+              )}
+
               <div className={`w-full h-[60vh] rounded-3xl border p-4 md:p-6 ${theme === 'dark' ? 'bg-slate-800/30 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={monthlyGraphData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -2158,6 +2207,19 @@ export default function App() {
                 <p className={`text-[10px] font-black ${getTextMuted()} uppercase tracking-[0.2em] mb-1`}>Performance Overview</p>
                 <h3 className={`text-3xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Weekly Summary</h3>
               </div>
+
+              {/* Weekly Summary Onboarding Guide */}
+              {weeklySummary.avgScore === 0 && !hasAnyData && (
+                <div className={`mb-6 p-4 rounded-2xl border ${theme === 'dark' ? 'bg-slate-800/60 border-slate-700' : 'bg-emerald-50/80 border-emerald-200'} flex items-center gap-3.5`}>
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-500 flex items-center justify-center shrink-0 text-lg">
+                    📊
+                  </div>
+                  <div>
+                    <p className={`text-[10px] font-black uppercase tracking-wider ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-700'}`}>Weekly Performance Report</p>
+                    <p className={`text-xs font-medium leading-relaxed ${getTextMuted()}`}>Track habits across 3 or more days to generate your 7-day rolling score and top habit achievements ranking.</p>
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className={`p-6 rounded-3xl border ${theme === 'dark' ? 'bg-emerald-900/20 border-emerald-500/20' : 'bg-emerald-50 border-emerald-100'} flex flex-col items-center justify-center`}>
@@ -2307,9 +2369,33 @@ export default function App() {
                       </div>
                     ))
                 ) : (
-                  <div className="text-center py-20 opacity-30 flex flex-col items-center">
-                    <NoteIcon />
-                    <p className="font-black uppercase text-xs mt-4">No entries yet</p>
+                  <div className={`text-center py-10 px-6 rounded-3xl border ${theme === 'dark' ? 'bg-slate-800/30 border-slate-800' : 'bg-slate-50 border-slate-200'} flex flex-col items-center max-w-md mx-auto my-4`}>
+                    <div className="w-14 h-14 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-500 flex items-center justify-center text-2xl mb-4 shadow-lg shadow-blue-500/10">
+                      📝
+                    </div>
+                    <h4 className={`text-base font-black mb-1.5 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                      Start Your Daily Reflection Journal
+                    </h4>
+                    <p className={`text-xs font-medium mb-5 leading-relaxed max-w-xs ${getTextMuted()}`}>
+                      Log how your day went, workout notes, or reasons behind a missed habit. Every date in the tracker has a note icon.
+                    </p>
+                    <div className={`w-full p-3.5 rounded-xl border text-left mb-5 text-[11px] leading-relaxed ${theme === 'dark' ? 'bg-slate-900/60 border-slate-700/60 text-slate-400' : 'bg-white border-slate-200 text-slate-500'}`}>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded">Example Entry</span>
+                      </div>
+                      &ldquo;Completed calisthenics & 7h sleep. Energy level 9/10. Felt focused throughout study time.&rdquo;
+                    </div>
+                    <button
+                      onClick={() => {
+                        const todayKey = getSafeKey(new Date());
+                        setEditingNoteDate(todayKey);
+                        setShowAllNotes(false);
+                      }}
+                      className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-black uppercase tracking-wider transition-all shadow-lg shadow-blue-500/25 flex items-center gap-2"
+                    >
+                      <span>Write Today&apos;s Note</span>
+                      <EditIcon />
+                    </button>
                   </div>
                 )}
               </div>
@@ -3010,6 +3096,36 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Habits Management Pro-Tip Banner */}
+              {!seenManageTip && (
+                <div className={`mb-4 p-3 rounded-2xl border transition-all ${theme === 'dark' ? 'bg-amber-500/10 border-amber-500/30' : 'bg-amber-50 border-amber-200'} flex items-center justify-between gap-3`}>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="text-base shrink-0">💡</span>
+                    <div className="min-w-0">
+                      <p className={`text-[10px] font-black uppercase tracking-wider ${theme === 'dark' ? 'text-amber-400' : 'text-amber-700'}`}>
+                        Pro-Tip: Archive vs Delete
+                      </p>
+                      <p className={`text-[11px] font-medium leading-tight ${getTextMuted()}`}>
+                        Archive paused habits to hide them while keeping all streaks, history, and XP safe!
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setSeenManageTip(true);
+                      try { localStorage.setItem('adib_seen_manage_tip', 'true'); } catch (e) {}
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider shrink-0 border transition-all ${
+                      theme === 'dark'
+                        ? 'bg-amber-500/20 hover:bg-amber-500/30 border-amber-500/40 text-amber-300'
+                        : 'bg-amber-100 hover:bg-amber-200 border-amber-300 text-amber-800'
+                    }`}
+                  >
+                    Got It
+                  </button>
+                </div>
+              )}
+
               {manageModalTab === 'habits' ? (
                 <div className="flex flex-col flex-1 min-h-0">
                   <div className="flex gap-2 mb-4 shrink-0">
@@ -3381,6 +3497,19 @@ export default function App() {
                 <p className={`text-[10px] font-black ${getTextMuted()} uppercase tracking-[0.2em] mb-1`}>Monthly Activity</p>
                 <h3 className={`text-2xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Win Milestones</h3>
               </div>
+
+              {/* Win Milestones Onboarding Guide */}
+              {analytics.totalDone === 0 && (
+                <div className={`mb-6 p-3.5 rounded-2xl border ${theme === 'dark' ? 'bg-yellow-500/10 border-yellow-500/30' : 'bg-yellow-50 border-yellow-200'} flex items-center gap-3`}>
+                  <div className="w-8 h-8 rounded-xl bg-yellow-500/20 text-yellow-500 flex items-center justify-center shrink-0 text-base">
+                    🏆
+                  </div>
+                  <div>
+                    <p className={`text-[10px] font-black uppercase tracking-wider ${theme === 'dark' ? 'text-yellow-400' : 'text-yellow-700'}`}>Win Milestones Roadmap</p>
+                    <p className={`text-xs font-medium leading-relaxed ${getTextMuted()}`}>Every completed habit increases your total win count. Reach Milestone 1 (5 completions) to earn bonus rank XP!</p>
+                  </div>
+                </div>
+              )}
 
               <div className="flex flex-col items-center mb-8">
                 <div className={`w-24 h-24 rounded-full flex items-center justify-center mb-4 border-4 shadow-xl bg-yellow-500/10 border-yellow-500/40 text-yellow-500`}>
