@@ -136,6 +136,291 @@ const AnimatedNumber = ({ value }) => {
   );
 };
 
+// ─── Thanos Snap Disintegration Component ───────────────────────────────────
+// Authentic Avengers: Infinity War disintegration effect:
+// 1. A crumbling disintegration wave sweeps across the element (left to right).
+// 2. Ash, cinder, and dust particles break off along the glowing wave front.
+// 3. Ash particles catch the wind, billowing upward and to the right while fading.
+// 4. Smooth height collapse after disintegration completes so layout transitions cleanly.
+const ThanosDisintegrate = ({ children, shouldDisintegrate, onDone }) => {
+  const containerRef = React.useRef(null);
+  const cardRef = React.useRef(null);
+  const canvasRef = React.useRef(null);
+  const animFrameRef = React.useRef(null);
+  const collapsingRef = React.useRef(false);
+  const [phase, setPhase] = React.useState('idle'); // 'idle' | 'snapping' | 'collapsing' | 'done'
+  const [collapseHeight, setCollapseHeight] = React.useState(null);
+  const [dimensions, setDimensions] = React.useState({ w: 0, h: 0 });
+
+  React.useEffect(() => {
+    if (!shouldDisintegrate || phase !== 'idle') return;
+
+    const el = cardRef.current;
+    if (!el) {
+      if (onDone) onDone();
+      return;
+    }
+
+    const rect = el.getBoundingClientRect();
+    const W = Math.round(rect.width);
+    const H = Math.round(rect.height);
+
+    if (W <= 0 || H <= 0) {
+      if (onDone) onDone();
+      return;
+    }
+
+    // Extra padding around canvas so ash particles can billow upward and right without clipping
+    const PADDING_TOP = 60;
+    const PADDING_RIGHT = 80;
+    const CANVAS_W = W + PADDING_RIGHT;
+    const CANVAS_H = H + PADDING_TOP;
+
+    setDimensions({ w: CANVAS_W, h: CANVAS_H });
+    setCollapseHeight(H);
+    setPhase('snapping');
+
+    const DURATION = 2200; // total cinematic experience
+
+    const startSnapAnimation = (snapshotCanvas) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      canvas.width = CANVAS_W;
+      canvas.height = CANVAS_H;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      // Extract colors from snapshot or use rich ash & ember palette
+      let sampleColors = [
+        'rgba(71, 85, 105, 0.95)',   // slate-600
+        'rgba(51, 65, 85, 0.95)',   // slate-700
+        'rgba(30, 41, 59, 1.0)',    // slate-800
+        'rgba(148, 163, 184, 0.85)', // slate-400
+        'rgba(245, 158, 11, 0.95)',  // amber ember
+        'rgba(251, 191, 36, 0.95)',  // glowing cinder
+        'rgba(16, 185, 129, 0.85)',  // emerald speck
+      ];
+
+      if (snapshotCanvas) {
+        try {
+          const sCtx = snapshotCanvas.getContext('2d');
+          const sW = snapshotCanvas.width;
+          const sH = snapshotCanvas.height;
+          const imgData = sCtx.getImageData(0, 0, Math.min(W, sW), Math.min(H, sH));
+          const data = imgData.data;
+          const extracted = [];
+          for (let i = 0; i < data.length; i += 4 * 120) {
+            if (data[i + 3] > 40) {
+              extracted.push(`rgba(${data[i]},${data[i + 1]},${data[i + 2]},${data[i + 3] / 255})`);
+            }
+          }
+          if (extracted.length > 20) sampleColors = extracted;
+        } catch (e) {
+          // fallback palette preserved
+        }
+      }
+
+      // Generate ash & dust particles along the sweep
+      const PARTICLE_COUNT = 850;
+      const particles = [];
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        const originX = Math.random() * W;
+        const originY = Math.random() * H;
+        // Wave sweeps from left to right: wave front reaches x over 0 to 1100ms
+        const waveDelay = (originX / W) * (DURATION * 0.50) + (Math.random() - 0.5) * 160;
+        const color = sampleColors[Math.floor(Math.random() * sampleColors.length)];
+        const size = 1.8 + Math.random() * 4.2;
+
+        // Upward-right drift (like ash caught in the wind)
+        const angle = -Math.PI * 0.28 + (Math.random() - 0.5) * 0.5;
+        const speed = 1.3 + Math.random() * 3.4;
+
+        particles.push({
+          x: originX,
+          y: originY + PADDING_TOP, // offset for top padding
+          vx: Math.cos(angle) * speed + (Math.random() * 0.7),
+          vy: Math.sin(angle) * speed - (0.7 + Math.random() * 1.8),
+          curl: (Math.random() - 0.5) * 0.08,
+          size,
+          color,
+          delay: Math.max(0, waveDelay),
+          life: 700 + Math.random() * 850,
+        });
+      }
+
+      const startTime = performance.now();
+
+      const render = (now) => {
+        const elapsed = now - startTime;
+        ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+
+        const waveProgress = Math.min(1, elapsed / (DURATION * 0.52));
+        const waveX = waveProgress * (W + 40);
+
+        // Draw remaining solid portion with jagged crumbling edge if snapshot exists
+        if (snapshotCanvas && waveProgress < 1) {
+          ctx.save();
+          ctx.translate(0, PADDING_TOP);
+          ctx.beginPath();
+          ctx.moveTo(waveX, 0);
+          const steps = 18;
+          for (let s = 0; s <= steps; s++) {
+            const py = (H / steps) * s;
+            const jitter = Math.sin(s * 1.9 + elapsed * 0.012) * 14 + Math.cos(s * 2.8) * 8;
+            ctx.lineTo(waveX + jitter, py);
+          }
+          ctx.lineTo(W, H);
+          ctx.lineTo(W, 0);
+          ctx.closePath();
+          ctx.clip();
+          ctx.drawImage(snapshotCanvas, 0, 0, snapshotCanvas.width, snapshotCanvas.height, 0, 0, W, H);
+          ctx.restore();
+
+          // Draw glowing ember disintegration seam
+          ctx.save();
+          ctx.translate(0, PADDING_TOP);
+          ctx.strokeStyle = 'rgba(251, 191, 36, 0.8)';
+          ctx.lineWidth = 3.5;
+          ctx.shadowColor = '#f59e0b';
+          ctx.shadowBlur = 14;
+          ctx.beginPath();
+          for (let s = 0; s <= steps; s++) {
+            const py = (H / steps) * s;
+            const jitter = Math.sin(s * 1.9 + elapsed * 0.012) * 14 + Math.cos(s * 2.8) * 8;
+            if (s === 0) ctx.moveTo(waveX + jitter, py);
+            else ctx.lineTo(waveX + jitter, py);
+          }
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // Fast batch rendering of ash particles
+        for (let i = 0; i < particles.length; i++) {
+          const p = particles[i];
+          if (elapsed < p.delay) continue;
+
+          const age = elapsed - p.delay;
+          if (age > p.life) continue;
+
+          const prog = age / p.life;
+          const alpha = (1 - prog) * (1 - Math.pow(prog, 1.8));
+
+          p.vx += p.curl;
+          p.vy -= 0.03; // thermal lift upward
+          p.x += p.vx;
+          p.y += p.vy;
+
+          ctx.globalAlpha = Math.max(0, alpha);
+          ctx.fillStyle = p.color;
+          const s = p.size * (1 - prog * 0.45);
+          ctx.fillRect(p.x, p.y, s, s);
+        }
+
+        // Trigger smooth height & margin collapse as the wave finishes so the space slides closed naturally
+        if (elapsed > DURATION * 0.48 && !collapsingRef.current) {
+          collapsingRef.current = true;
+          setPhase('collapsing');
+        }
+
+        if (elapsed < DURATION) {
+          animFrameRef.current = requestAnimationFrame(render);
+        } else {
+          setPhase('done');
+          if (onDone) onDone();
+        }
+      };
+
+      animFrameRef.current = requestAnimationFrame(render);
+    };
+
+    // Load html2canvas with fail-safe timeout
+    let started = false;
+    const fallbackTimer = setTimeout(() => {
+      if (!started) {
+        started = true;
+        startSnapAnimation(null);
+      }
+    }, 350);
+
+    import('html2canvas')
+      .then(({ default: html2canvas }) => {
+        return html2canvas(el, {
+          backgroundColor: null,
+          scale: Math.min(window.devicePixelRatio || 1, 2),
+          useCORS: true,
+          logging: false,
+        });
+      })
+      .then(snap => {
+        if (!started) {
+          started = true;
+          clearTimeout(fallbackTimer);
+          startSnapAnimation(snap);
+        }
+      })
+      .catch(() => {
+        if (!started) {
+          started = true;
+          clearTimeout(fallbackTimer);
+          startSnapAnimation(null);
+        }
+      });
+
+    return () => {
+      clearTimeout(fallbackTimer);
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shouldDisintegrate]);
+
+  if (phase === 'done') return null;
+
+  return (
+    <div
+      ref={containerRef}
+      style={{
+        position: 'relative',
+        overflow: phase === 'collapsing' ? 'hidden' : 'visible',
+        height: phase === 'collapsing' ? 0 : (collapseHeight !== null ? `${collapseHeight}px` : 'auto'),
+        opacity: phase === 'collapsing' ? 0 : 1,
+        marginBottom: phase === 'collapsing' ? 0 : '2rem',
+        transition: phase === 'collapsing' ? 'height 650ms cubic-bezier(0.4, 0, 0.2, 1), margin-bottom 650ms cubic-bezier(0.4, 0, 0.2, 1), opacity 650ms ease' : 'none',
+      }}
+    >
+      {/* Real element - completely hidden during snapping & collapsing so it NEVER flashes back */}
+      <div
+        ref={cardRef}
+        style={{
+          visibility: phase === 'idle' ? 'visible' : 'hidden',
+          display: phase === 'collapsing' ? 'none' : 'block',
+        }}
+      >
+        {children}
+      </div>
+
+      {/* Disintegration Canvas - remains active and visible across snapping AND collapsing */}
+      {phase !== 'idle' && (
+        <canvas
+          ref={canvasRef}
+          width={dimensions.w}
+          height={dimensions.h}
+          style={{
+            position: 'absolute',
+            top: -60, // matches PADDING_TOP so particles float above the card naturally
+            left: 0,
+            width: dimensions.w ? `${dimensions.w}px` : '100%',
+            height: dimensions.h ? `${dimensions.h}px` : '100%',
+            pointerEvents: 'none',
+            zIndex: 40,
+          }}
+        />
+      )}
+    </div>
+  );
+};
+// ────────────────────────────────────────────────────────────────────────────
+
 
 const DEFAULT_HABITS = ["sleep 7h", "calisthenics", "meditation", "dept study", "coding", "vocab", "audiobook"];
 const DEFAULT_CONFIGS = {
@@ -216,6 +501,19 @@ export default function App() {
     }
   };
 
+  // Welcome card status: 'visible' | 'snapping' | 'gone'
+  const [welcomeCardStatus, setWelcomeCardStatus] = useState(() => {
+    try {
+      const saved = localStorage.getItem('habit_tracker_master_v9_data');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Object.values(parsed).some(day => Object.values(day).some(v => typeof v === 'number' ? v > 0 : !!v))) {
+          return 'gone';
+        }
+      }
+    } catch (e) {}
+    return 'visible';
+  });
   const [editingHabitName, setEditingHabitName] = useState(null);
   const [editingManageListHabitName, setEditingManageListHabitName] = useState(null);
   const [tempHabitName, setTempHabitName] = useState("");
@@ -997,6 +1295,27 @@ export default function App() {
     Object.values(trackerData).some(day =>
       habits.some(h => { const v = day[h]; return typeof v === 'number' ? v > 0 : !!v; })
     ), [trackerData, habits]);
+
+  // Track initial hydration: if returning user has data, ensure card is gone
+  const initialDataCheckedRef = useRef(false);
+  useEffect(() => {
+    if (isHydrating) return;
+    if (!initialDataCheckedRef.current) {
+      initialDataCheckedRef.current = true;
+      if (hasAnyData) {
+        setWelcomeCardStatus('gone');
+      }
+    }
+  }, [isHydrating, hasAnyData]);
+
+  // When user logs their first habit (transitions from empty to having data), trigger the Thanos snap!
+  useEffect(() => {
+    if (!isHydrating && initialDataCheckedRef.current) {
+      if (hasAnyData && welcomeCardStatus === 'visible') {
+        setWelcomeCardStatus('snapping');
+      }
+    }
+  }, [hasAnyData, welcomeCardStatus, isHydrating]);
 
   const habitInsights = useMemo(() => {
     if (!viewingHabitMap) return null;
@@ -2073,45 +2392,63 @@ export default function App() {
             </motion.div>
           </motion.div>
         )}
-          {/* Empty State Onboarding — only shown when no habit data exists */}
-          {!hasAnyData && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`${getCardStyle()} border rounded-[2.5rem] mb-8 relative overflow-hidden transition-colors`}
+          {/* Empty State Onboarding — Thanos snap out when first habit is logged */}
+          {welcomeCardStatus !== 'gone' && (
+            <ThanosDisintegrate
+              shouldDisintegrate={welcomeCardStatus === 'snapping'}
+              onDone={() => setWelcomeCardStatus('gone')}
             >
-              <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-blue-500/5 pointer-events-none" />
-              <div className="relative z-10 py-12 px-8 text-center">
-                <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 border-2 ${
-                  theme === 'dark' ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-emerald-50 border-emerald-200'
-                }`}>
-                  <span className="text-3xl">🌱</span>
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={`${getCardStyle()} border rounded-[2.5rem] relative overflow-hidden transition-colors`}
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-blue-500/5 pointer-events-none" />
+                <div className="relative z-10 py-12 px-8 text-center">
+                  <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 border-2 ${
+                    theme === 'dark' ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-emerald-50 border-emerald-200'
+                  }`}>
+                    <span className="text-3xl">🌱</span>
+                  </div>
+                  <h3 className={`text-2xl font-black mb-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                    Welcome to My Habit Mastery!
+                  </h3>
+                  <p className={`text-sm font-medium mb-6 max-w-sm mx-auto leading-relaxed ${getTextMuted()}`}>
+                    Start tracking your habits by clicking the cells in the table below.
+                    Long-press for partial completion, tap for full completion.
+                  </p>
+                  <div className={`flex items-center justify-center gap-6 text-[10px] font-black uppercase tracking-widest ${getTextMuted()} mb-6`}>
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="w-10 h-10 rounded-2xl bg-emerald-500 text-white flex items-center justify-center text-base shadow-lg shadow-emerald-500/30">✔</div>
+                      <span>Complete</span>
+                    </div>
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center text-xs font-black shadow-lg shadow-blue-500/30">50%</div>
+                      <span>Partial</span>
+                    </div>
+                    <div className="flex flex-col items-center gap-2">
+                      <div className={`w-10 h-10 rounded-2xl border-2 flex items-center justify-center text-red-500 ${
+                        theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'
+                      }`}>✘</div>
+                      <span>Missed</span>
+                    </div>
+                  </div>
+                  <div className="flex justify-center">
+                    <button
+                      type="button"
+                      onClick={() => setWelcomeCardStatus('snapping')}
+                      className={`text-xs font-bold px-4 py-2 rounded-xl transition-all border ${
+                        theme === 'dark'
+                          ? 'bg-slate-800/80 hover:bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
+                          : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Got it, dismiss ✨
+                    </button>
+                  </div>
                 </div>
-                <h3 className={`text-2xl font-black mb-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
-                  Welcome to My Habit Mastery!
-                </h3>
-                <p className={`text-sm font-medium mb-8 max-w-sm mx-auto leading-relaxed ${getTextMuted()}`}>
-                  Start tracking your habits by clicking the cells in the table below.
-                  Long-press for partial completion, tap for full completion.
-                </p>
-                <div className={`flex items-center justify-center gap-6 text-[10px] font-black uppercase tracking-widest ${getTextMuted()}`}>
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="w-10 h-10 rounded-2xl bg-emerald-500 text-white flex items-center justify-center text-base shadow-lg shadow-emerald-500/30">✔</div>
-                    <span>Complete</span>
-                  </div>
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center text-xs font-black shadow-lg shadow-blue-500/30">50%</div>
-                    <span>Partial</span>
-                  </div>
-                  <div className="flex flex-col items-center gap-2">
-                    <div className={`w-10 h-10 rounded-2xl border-2 flex items-center justify-center text-red-500 ${
-                      theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'
-                    }`}>✘</div>
-                    <span>Missed</span>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
+              </motion.div>
+            </ThanosDisintegrate>
           )}
           {/* Table Log */}
 <motion.div variants={itemVariants} className={`${getCardStyle()} ${isMobileMode ? 'rounded-2xl' : 'rounded-[2.5rem]'} overflow-hidden mb-8 relative transition-colors`}>
