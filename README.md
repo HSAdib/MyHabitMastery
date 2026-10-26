@@ -3,7 +3,7 @@
 # ⚡ MY HABIT MASTERY
 ### *The High-Performance, Gamified Habit Operating System*
 
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-%E2%96%B6%20Launch%20App-10b981?style=for-the-badge&logo=vercel&logoColor=white)](https://my-habit-mastery.vercel.app)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-%E2%96%B6%20Launch%20App-10b981?style=for-the-badge&logo=vercel&logoColor=white)](https://myhabitmastery.vercel.app)
 [![React](https://img.shields.io/badge/React-18-61dafb?style=for-the-badge&logo=react&logoColor=black)](https://react.dev)
 [![Vite](https://img.shields.io/badge/Vite-6-646cff?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev)
 [![PWA Ready](https://img.shields.io/badge/PWA-Installable-8b5cf6?style=for-the-badge&logo=pwa&logoColor=white)](https://web.dev/progressive-web-apps/)
@@ -28,7 +28,7 @@ Build momentum, earn XP, maintain streaks, and visualize your personal growth wi
 1. Open App ➜ 2. Check Daily Cells ➜ 3. Hit 100% ➜ 4. Trigger Confetti & Level Up!
 ```
 
-1. **Launch the Web App** at **[my-habit-mastery.vercel.app](https://my-habit-mastery.vercel.app)**.
+1. **Launch the Web App** at **[myhabitmastery.vercel.app](https://myhabitmastery.vercel.app)**.
 2. **Choose Your Identity**:
    - **Guest Mode**: Type any nickname and hit start immediately (saved privately in your browser's IndexedDB).
    - **Cloud Mode**: Sign in with Google to enable real-time multi-device sync across desktop and mobile.
