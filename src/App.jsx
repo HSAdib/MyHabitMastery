@@ -16,6 +16,13 @@ import {
   XAxis, YAxis, Area, Bar, Tooltip as RechartsTooltip, Cell
 } from 'recharts';
 // --- Icons ---
+const CheckIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+);
+const ShieldIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+);
+
 const RefreshIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>
 );
@@ -469,6 +476,10 @@ export default function App() {
   const selectedCategory = useHabitStore(state => state.selectedCategory);
   const setSelectedCategory = useHabitStore(state => state.setSelectedCategory);
   const savedLevel = useHabitStore(state => state.savedLevel);
+  const shieldedDates = useHabitStore(state => state.shieldedDates || []);
+  const toggleShieldDate = useHabitStore(state => state.toggleShieldDate);
+  const importStatus = useHabitStore(state => state.importStatus);
+  const setImportStatus = useHabitStore(state => state.setImportStatus);
   
   const updateHabitValueStore = useHabitStore(state => state.updateHabitValue);
   const setTheme = useHabitStore(state => state.setTheme);
@@ -547,7 +558,8 @@ export default function App() {
   const [tableHeight, setTableHeight] = useState(484);
   const [tempGoalVal, setTempGoalVal] = useState("");
   const [categoryToDelete, setCategoryToDelete] = useState(null);
-  const [importStatus, setImportStatus] = useState(null); // Fix #5
+  const [hoveredHeatmapCell, setHoveredHeatmapCell] = useState(null);
+  const [selectedHeatmapDay, setSelectedHeatmapDay] = useState(null);
   const noteSaveTimer = useRef(null); // Fix #15
 
   const prevLevelRef = useRef(savedLevel);
@@ -672,15 +684,22 @@ export default function App() {
 
   const handleAddHabitFromInput = () => {
     const name = newHabitInput.trim();
-    if (name && !habits.includes(name) && !archivedHabits.includes(name)) {
-      const categoryToAssign = selectedCategory === 'all' ? 'all' : selectedCategory; 
-      const newHabits = [...habits, name]; 
-      const newConfigs = {...habitConfigs, [name]: { steps: 1, category: categoryToAssign }};
-      setHabits(newHabits); 
-      setHabitConfigs(newConfigs); 
-      save(trackerData, newHabits, newConfigs); 
-      setNewHabitInput("");
+    if (!name) return;
+    if (habits.some(h => h.toLowerCase() === name.toLowerCase())) {
+      alert(`A habit named "${name}" already exists.`);
+      return;
     }
+    if (archivedHabits.some(h => h.toLowerCase() === name.toLowerCase())) {
+      alert(`A habit named "${name}" is archived. Please unarchive it from Manage.`);
+      return;
+    }
+    const categoryToAssign = selectedCategory === 'all' ? 'all' : selectedCategory; 
+    const newHabits = [...habits, name]; 
+    const newConfigs = {...habitConfigs, [name]: { steps: 1, category: categoryToAssign }};
+    setHabits(newHabits); 
+    setHabitConfigs(newConfigs); 
+    save(trackerData, newHabits, newConfigs); 
+    setNewHabitInput("");
   };
 
   useEffect(() => {
@@ -736,10 +755,13 @@ export default function App() {
         setTableHeight(targetHeight);
       }
     };
+    handleTableScroll();
+    window.addEventListener('resize', handleTableScroll);
     const container = scrollContainerRef.current;
     if (container) container.addEventListener('scroll', handleTableScroll);
     return () => {
       clearTimeout(timer);
+      window.removeEventListener('resize', handleTableScroll);
       if (container) container.removeEventListener('scroll', handleTableScroll);
     };
   }, [currentDate, habits, tableOrientation, isMobileMode]);
@@ -811,10 +833,11 @@ export default function App() {
       if (showTrophyDetailsModal) { setShowTrophyDetailsModal(false); return; }
       if (showLevelUpModal) { setShowLevelUpModal(false); return; }
       if (categoryToDelete) { setCategoryToDelete(null); return; }
+      if (selectedHeatmapDay) { setSelectedHeatmapDay(null); return; }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [viewingHabitMap, editingNoteDate, showDeleteConfirm, showWeeklyModal, showMonthlyGraphModal, showAllNotes, showInsightsModal, showManageModal, showTextSizeModal, showArchiveModal, showLevelDetailsModal, showTrophyDetailsModal, showLevelUpModal, categoryToDelete]);
+  }, [viewingHabitMap, editingNoteDate, showDeleteConfirm, showWeeklyModal, showMonthlyGraphModal, showAllNotes, showInsightsModal, showManageModal, showTextSizeModal, showArchiveModal, showLevelDetailsModal, showTrophyDetailsModal, showLevelUpModal, categoryToDelete, selectedHeatmapDay]);
 
   // Logic Handlers
   const handleDashboardRename = (oldName) => {
@@ -837,6 +860,10 @@ export default function App() {
   };
 
   const executeRename = (oldName, newName) => {
+    if (habits.some(h => h !== oldName && h.toLowerCase() === newName.toLowerCase())) {
+      alert(`A habit named "${newName}" already exists.`);
+      return;
+    }
     const newHabits = [...habits];
     const idx = newHabits.indexOf(oldName);
     if (idx === -1) return;
@@ -941,6 +968,7 @@ export default function App() {
       habitConfigs,
       categories,
       archivedHabits,
+      shieldedDates,
       version: 'v9',
       exportDate: new Date().toISOString()
     };
@@ -1042,6 +1070,11 @@ export default function App() {
     return cells;
   }, [viewingHabitMap, currentDate, daysInMonth]);
 
+  const activeHabitsList = useMemo(
+    () => habits.filter(h => !archivedHabits.includes(h)),
+    [habits, archivedHabits]
+  );
+
   const xpStats = useMemo(() => {
     let totalXP = manualXPOffset || 0;
     Object.keys(trackerData).forEach(dateKey => {
@@ -1135,19 +1168,24 @@ export default function App() {
     daysInMonth.forEach(day => {
       const key = getSafeKey(day); const dayData = trackerData[key] || {};
       if (dayData.note && dayData.note.trim() !== "") noteCount++;
-      habits.forEach(h => {
+      const isShielded = shieldedDates.includes(key);
+      activeHabitsList.forEach(h => {
         const raw = dayData[h] ?? 0; const val = typeof raw === 'number' ? raw : (raw ? 100 : 0);
         stats[h] = (stats[h] || 0) + val; 
         totalEarnedWeight += (val / 100);
-        totalPossibleWeight += 1;
+        if (isShielded && val < 100) {
+          // Grace day: exclude missed habit from penalizing totalPossibleWeight
+        } else {
+          totalPossibleWeight += 1;
+        }
       });
     });
-    const monthlyPct = totalPossibleWeight > 0 ? Math.round((totalEarnedWeight / totalPossibleWeight) * 100) : 0;
+    const monthlyPct = totalPossibleWeight > 0 ? Math.round((totalEarnedWeight / totalPossibleWeight) * 100) : (totalEarnedWeight > 0 ? 100 : 0);
     const habitPcts = {};
     habits.forEach(h => { habitPcts[h] = Math.round(((stats[h] || 0) / (daysInMonth.length * 100)) * 100) || 0; });
     const computedTotalDone = (manualStreakOffset || 0) + Math.round(totalEarnedWeight);
     return { habitPcts, monthlyPct, totalDone: computedTotalDone, noteCount };
-  }, [daysInMonth, trackerData, habits, manualStreakOffset]);
+  }, [daysInMonth, trackerData, activeHabitsList, manualStreakOffset, habits, shieldedDates]);
 
   // --- CATEGORY PROGRESS CALCULATION ---
   const categoryProgress = useMemo(() => {
@@ -1176,7 +1214,7 @@ export default function App() {
       last7Days.push(getSafeKey(d));
     }
 
-    const weeklyStats = habits.map(habit => {
+    const weeklyStats = activeHabitsList.map(habit => {
       let earned = 0;
       last7Days.forEach(date => {
         const val = trackerData[date]?.[habit] ?? 0;
@@ -1186,11 +1224,10 @@ export default function App() {
     });
 
     const topHabits = [...weeklyStats].sort((a, b) => b.score - a.score).slice(0, 3);
-    const avgScore = habits.length > 0 ? Math.round(weeklyStats.reduce((acc, h) => acc + h.score, 0) / habits.length) : 0;
+    const avgScore = activeHabitsList.length > 0 ? Math.round(weeklyStats.reduce((acc, h) => acc + h.score, 0) / activeHabitsList.length) : 0;
 
-    // Added weeklyStats to return object
     return { topHabits, avgScore, weeklyStats }; 
-  }, [trackerData, habits]);
+  }, [trackerData, activeHabitsList]);
   const weeklyGraphData = useMemo(() => {
     if (weeklyGraphFilter === 'all') return weeklySummary.weeklyStats;
     
@@ -1221,18 +1258,25 @@ export default function App() {
       const todayKey = getSafeKey(checkDate);
       const todayValRaw = trackerData[todayKey]?.[habit] ?? 0;
       const todayVal = typeof todayValRaw === 'number' ? todayValRaw : (todayValRaw ? 100 : 0);
-      if (Math.round(todayVal) < 100) checkDate.setDate(checkDate.getDate() - 1);
+      if (Math.round(todayVal) < 100 && !shieldedDates.includes(todayKey)) checkDate.setDate(checkDate.getDate() - 1);
       while (true) {
         const key = getSafeKey(checkDate);
         const valRaw = trackerData[key]?.[habit] ?? 0;
         const val = typeof valRaw === 'number' ? valRaw : (valRaw ? 100 : 0);
-        if (Math.round(val) >= 100) { streak++; checkDate.setDate(checkDate.getDate() - 1); }
-        else break;
+        if (Math.round(val) >= 100) { 
+          streak++; 
+          checkDate.setDate(checkDate.getDate() - 1); 
+        } else if (shieldedDates.includes(key)) {
+          // Grace day: preserve running streak across shielded date
+          checkDate.setDate(checkDate.getDate() - 1);
+        } else {
+          break;
+        }
       }
       streaks[habit] = streak;
     });
     return streaks;
-  }, [habits, trackerData]);
+  }, [habits, trackerData, shieldedDates]);
 
   const insightsData = useMemo(() => {
     const streaks = {};
@@ -1251,6 +1295,7 @@ export default function App() {
       
     sortedDates.forEach(d => {
       const dateStr = getSafeKey(d);
+      const isShielded = shieldedDates.includes(dateStr);
       const dayOfWeek = d.getDay();
       
       let dayScore = 0;
@@ -1272,6 +1317,8 @@ export default function App() {
           totalWins++;
           currentStreaks[h]++;
           if (currentStreaks[h] > streaks[h]) streaks[h] = currentStreaks[h];
+        } else if (isShielded) {
+          // Grace day: preserve running streak across shielded grace day
         } else {
           currentStreaks[h] = 0;
         }
@@ -1295,7 +1342,15 @@ export default function App() {
       .map(([h, s]) => ({ habit: h, max: s, current: currentStreaks[h] }));
 
     return { bestDay, bestDayScore, topStreaks: sortedStreaks, perfectDaysCount, totalWins };
-  }, [trackerData, habits, archivedHabits]);
+  }, [trackerData, habits, archivedHabits, shieldedDates]);
+
+  // Earn 1 Streak Shield on initial start + 1 per Level gained + 1 every 7 Perfect Days
+  const shieldStats = useMemo(() => {
+    const totalEarned = Math.max(1, (xpStats.level - 1) + Math.floor((insightsData?.perfectDaysCount || 0) / 7));
+    const usedCount = shieldedDates.length;
+    const availableCount = Math.max(0, totalEarned - usedCount);
+    return { totalEarned, usedCount, availableCount };
+  }, [xpStats.level, insightsData?.perfectDaysCount, shieldedDates]);
 
   // True if ANY habit has been logged at any point — used for empty state
   const hasAnyData = useMemo(() =>
@@ -1348,7 +1403,7 @@ export default function App() {
     const todayValRaw = trackerData[todayKey]?.[viewingHabitMap] ?? 0;
     const todayVal = typeof todayValRaw === 'number' ? todayValRaw : (todayValRaw ? 100 : 0);
 
-    if (Math.round(todayVal) < 100) {
+    if (Math.round(todayVal) < 100 && !shieldedDates.includes(todayKey)) {
       checkDate.setDate(checkDate.getDate() - 1);
     }
 
@@ -1359,6 +1414,9 @@ export default function App() {
 
       if (Math.round(val) >= 100) {
         currentStreak++;
+        checkDate.setDate(checkDate.getDate() - 1);
+      } else if (shieldedDates.includes(key)) {
+        // Shielded grace day: preserve currentStreak
         checkDate.setDate(checkDate.getDate() - 1);
       } else {
         break;
@@ -1380,6 +1438,8 @@ export default function App() {
         if (Math.round(val) >= 100) {
           tempStreak++;
           if (tempStreak > bestStreak) bestStreak = tempStreak;
+        } else if (shieldedDates.includes(key)) {
+          // Shielded grace day
         } else {
           tempStreak = 0;
         }
@@ -1412,7 +1472,7 @@ export default function App() {
       last7Days,
       level: score >= 90 ? "Grandmaster" : score >= 75 ? "Elite" : score >= 50 ? "Adept" : score >= 25 ? "Apprentice" : "Seed" 
     };
-  }, [viewingHabitMap, trackerData, daysInMonth]);
+  }, [viewingHabitMap, trackerData, daysInMonth, shieldedDates]);
 
   const heatmapConfig = useMemo(() => {
     const year = currentDate.getFullYear();
@@ -1423,22 +1483,32 @@ export default function App() {
     for (let i = 0; i < daysInYear; i++) {
       const d = new Date(year, 0, 1, 12); d.setDate(d.getDate() + i); const key = getSafeKey(d);
       let intensity = 0;
+      const isShielded = shieldedDates.includes(key);
+      const hasNote = Boolean(trackerData[key]?.note && trackerData[key].note.trim());
+      let pct = 0;
+      let doneCount = 0;
+      const totalCount = heatmapFilter === 'all' ? activeHabitsList.length : 1;
 
       if (heatmapFilter === 'all') {
         let totalPct = 0; 
-        habits.forEach(h => { 
+        activeHabitsList.forEach(h => { 
           const r = trackerData[key]?.[h] ?? 0; 
-          totalPct += typeof r === 'number' ? r : (r ? 100 : 0); 
+          const v = typeof r === 'number' ? r : (r ? 100 : 0);
+          totalPct += v;
+          if (v >= 100) doneCount++;
         });
-        const avg = habits.length > 0 ? totalPct / (habits.length * 100) : 0;
+        const avg = activeHabitsList.length > 0 ? totalPct / (activeHabitsList.length * 100) : 0;
+        pct = Math.round(avg * 100);
         intensity = avg === 0 ? 0 : avg <= 0.25 ? 1 : avg <= 0.5 ? 2 : avg <= 0.75 ? 3 : 4;
       } else {
         const r = trackerData[key]?.[heatmapFilter] ?? 0;
         const val = typeof r === 'number' ? r : (r ? 100 : 0);
+        pct = Math.round(val);
+        if (val >= 100) doneCount = 1;
         const ratio = val / 100;
         intensity = ratio === 0 ? 0 : ratio <= 0.25 ? 1 : ratio <= 0.5 ? 2 : ratio <= 0.75 ? 3 : 4;
       }
-      cells.push({ date: d, key, intensity });
+      cells.push({ date: d, key, intensity, pct, doneCount, totalCount, hasNote, isShielded });
     }
 
     const monthLabels = []; const addedMonths = new Set();
@@ -1453,7 +1523,7 @@ export default function App() {
       }
     });
     return { cells, monthLabels };
-  }, [currentDate, trackerData, habits, heatmapFilter]);
+  }, [currentDate, trackerData, activeHabitsList, heatmapFilter, shieldedDates]);
 
   const monthlyGraphData = useMemo(() => {
     return daysInMonth.map((day) => {
@@ -1462,8 +1532,8 @@ export default function App() {
 
       if (dashboardGraphFilter === 'all') {
          let totalPct = 0;
-         habits.forEach(h => { const r = trackerData[key]?.[h] ?? 0; totalPct += (typeof r === 'number' ? r : (r ? 100 : 0)); });
-         pct = habits.length > 0 ? totalPct / habits.length : 0;
+         activeHabitsList.forEach(h => { const r = trackerData[key]?.[h] ?? 0; totalPct += (typeof r === 'number' ? r : (r ? 100 : 0)); });
+         pct = activeHabitsList.length > 0 ? totalPct / activeHabitsList.length : 0;
       } else {
          const r = trackerData[key]?.[dashboardGraphFilter] ?? 0;
          pct = typeof r === 'number' ? r : (r ? 100 : 0);
@@ -1475,7 +1545,7 @@ export default function App() {
         score: Math.round(pct)
       };
     });
-  }, [daysInMonth, trackerData, habits, dashboardGraphFilter]);
+  }, [daysInMonth, trackerData, activeHabitsList, dashboardGraphFilter]);
 
   const trendPoints = useMemo(() => {
     if (daysInMonth.length < 2) return [];
@@ -1485,8 +1555,8 @@ export default function App() {
 
       if (dashboardGraphFilter === 'all') {
          let totalPct = 0;
-         habits.forEach(h => { const r = trackerData[key]?.[h] ?? 0; totalPct += (typeof r === 'number' ? r : (r ? 100 : 0)); });
-         pct = habits.length > 0 ? totalPct / habits.length : 0;
+         activeHabitsList.forEach(h => { const r = trackerData[key]?.[h] ?? 0; totalPct += (typeof r === 'number' ? r : (r ? 100 : 0)); });
+         pct = activeHabitsList.length > 0 ? totalPct / activeHabitsList.length : 0;
       } else {
          const r = trackerData[key]?.[dashboardGraphFilter] ?? 0;
          pct = typeof r === 'number' ? r : (r ? 100 : 0);
@@ -1494,7 +1564,7 @@ export default function App() {
       
       return { x: (idx / (daysInMonth.length - 1)) * 100, y: 100 - pct };
     }).filter(p => !isNaN(p.x));
-  }, [daysInMonth, trackerData, habits, dashboardGraphFilter]);
+  }, [daysInMonth, trackerData, activeHabitsList, dashboardGraphFilter]);
 
   // (solveFluidPath is imported from ./utils — local duplicate removed)
 
@@ -1666,6 +1736,14 @@ export default function App() {
                       <TrophyIcon className="w-2.5 h-2.5 text-yellow-500" />
                       <span className="text-[9px] font-black text-yellow-500">{analytics.totalDone}</span>
                     </button>
+                    <button
+                      onClick={() => setSelectedHeatmapDay(getSafeKey(new Date()))}
+                      className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.15)] cursor-pointer hover:scale-105 active:scale-95 transition-all"
+                      title={`Streak Shields: ${shieldStats.availableCount} available (${shieldStats.usedCount} used). Click to shield today or click any heatmap day!`}
+                    >
+                      <ShieldIcon/>
+                      <span className="text-[9px] font-black">{shieldStats.availableCount}</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1737,7 +1815,7 @@ export default function App() {
                 
                 <HeaderProfile 
                   totalXP={xpStats.totalXP} 
-                  bestStreak={analytics.totalDone} // Using total done as a fallback proxy for streak for the global profile, or we can use analytics
+                  bestStreak={insightsData.topStreaks[0]?.max || Math.max(0, ...Object.values(allHabitStreaks))}
                   handleLogin={handleLogin} 
                   handleLogout={handleLogout} 
                   handleExport={handleExport} 
@@ -1795,7 +1873,22 @@ export default function App() {
       </span>
     )}
   </motion.button>
-  
+
+  {hoveredHeatmapCell ? (
+    <div className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-bold ${theme === 'dark' ? 'bg-slate-800/90 border-slate-700 text-slate-200' : 'bg-slate-100 border-slate-200 text-slate-700'}`}>
+      <span className="font-mono text-emerald-400">{hoveredHeatmapCell.key}</span>
+      <span>•</span>
+      <span className="font-black text-emerald-500">{hoveredHeatmapCell.pct}%</span>
+      <span className="opacity-70 text-[9px]">({hoveredHeatmapCell.doneCount}/{hoveredHeatmapCell.totalCount})</span>
+      {hoveredHeatmapCell.isShielded && <span title="Streak Shield Active" className="text-cyan-400">🛡️</span>}
+      {hoveredHeatmapCell.hasNote && <span title="Has Journal Note" className="text-blue-400">📝</span>}
+    </div>
+  ) : (
+    <div className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-bold ${theme === 'dark' ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400' : 'bg-cyan-50 border-cyan-200 text-cyan-600'}`}>
+      <ShieldIcon />
+      <span>{shieldStats.availableCount} Shields</span>
+    </div>
+  )}
   </div>
                 </div>
                 
@@ -1864,10 +1957,27 @@ export default function App() {
                         const intensityStyles = theme === 'dark' 
                           ? ['bg-slate-800', 'bg-emerald-900/40', 'bg-emerald-800', 'bg-emerald-600', 'bg-emerald-400']
                           : ['bg-slate-100', 'bg-emerald-100', 'bg-emerald-300', 'bg-emerald-500', 'bg-emerald-700'];
-                        return cell ? (
-                          <motion.div key={cell.key} initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: idx * 0.001 }} style={{ width: `${CELL_SIZE}px`, height: `${CELL_SIZE}px` }} className={`rounded-[1px] md:rounded-[2px] border-[0.5px] border-black/5 shadow-sm transition-colors ${intensityStyles[cell.intensity]}`} title={`${cell.key}`} />
-                        ) : (
-                          <div key={`empty-${idx}`} style={{ width: `${CELL_SIZE}px`, height: `${CELL_SIZE}px` }} className={`opacity-0 pointer-events-none`}></div>
+                        if (!cell) {
+                          return <div key={`empty-${idx}`} style={{ width: `${CELL_SIZE}px`, height: `${CELL_SIZE}px` }} className="opacity-0 pointer-events-none"></div>;
+                        }
+                        const cellColor = (cell.isShielded && cell.intensity === 0)
+                          ? 'bg-cyan-500/30 ring-1 ring-cyan-400/60'
+                          : intensityStyles[cell.intensity];
+                        const noteHighlight = cell.hasNote ? 'ring-1 ring-blue-400/80' : '';
+
+                        return (
+                          <motion.div 
+                            key={cell.key} 
+                            initial={{ scale: 0.5, opacity: 0 }} 
+                            animate={{ scale: 1, opacity: 1 }} 
+                            transition={{ delay: idx * 0.001 }} 
+                            style={{ width: `${CELL_SIZE}px`, height: `${CELL_SIZE}px` }} 
+                            className={`rounded-[1px] md:rounded-[2px] border-[0.5px] border-black/5 shadow-sm transition-all cursor-pointer hover:scale-125 z-10 ${cellColor} ${noteHighlight}`} 
+                            title={`${cell.key}: ${cell.pct}% (${cell.doneCount}/${cell.totalCount})${cell.isShielded ? ' [Shielded 🛡️]' : ''}${cell.hasNote ? ' [Note 📝]' : ''} - Click to inspect`}
+                            onMouseEnter={() => setHoveredHeatmapCell(cell)}
+                            onMouseLeave={() => setHoveredHeatmapCell(null)}
+                            onClick={() => setSelectedHeatmapDay(cell.key)}
+                          />
                         );
                       })}
                     </div>
@@ -2608,7 +2718,7 @@ export default function App() {
                                                 {dayData.note ? `“${dayData.note.split('\n')[0].substring(0, 45)}${dayData.note.split('\n')[0].length > 45 ? '…' : ''}”` : 'Add reflection'}
                                               </span>
                                             </div>
-                                            <div className="flex flex-col text-center"><span className={`text-[8px] uppercase opacity-80 leading-none ${theme === 'dark' ? 'text-slate-500' : ''}`}>{day.toLocaleDateString(undefined, { weekday: 'short' })}</span><span className={`text-sm font-black mt-0.5 ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>{day.getDate()}</span></div>
+                                            <div className="flex flex-col text-center"><span className={`text-[8px] uppercase opacity-80 leading-none ${theme === 'dark' ? 'text-slate-500' : ''}`}>{day.toLocaleDateString(undefined, { weekday: 'short' })}</span><div className="flex items-center justify-center gap-1"><span className={`text-sm font-black mt-0.5 ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>{day.getDate()}</span>{shieldedDates.includes(key) && <span title="Streak Shield Active" className="text-cyan-400 text-xs">🛡️</span>}</div></div>
                                         </div>
                                     </td>
                                     
@@ -2684,7 +2794,7 @@ export default function App() {
                                               </span>
                                             </div>
                                             <span className={`text-[7px] uppercase font-black ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>{day.toLocaleDateString(undefined, { weekday: 'short' })}</span>
-                                            <span className={`text-xs font-black ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>{day.getDate()}</span>
+                                            <div className="flex items-center justify-center gap-0.5"><span className={`text-xs font-black ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>{day.getDate()}</span>{shieldedDates.includes(key) && <span title="Streak Shield Active" className="text-cyan-400 text-[10px]">🛡️</span>}</div>
                                         </div>
                                     </th>
                                 );
@@ -2762,96 +2872,313 @@ export default function App() {
 
       {/* --- Modals --- */}
       <AnimatePresence>
+        {/* Click-to-Inspect Day Inspector Modal */}
+        {selectedHeatmapDay && (() => {
+          const dayDate = parseLocalDate(selectedHeatmapDay);
+          const isShielded = shieldedDates.includes(selectedHeatmapDay);
+          const dayData = trackerData[selectedHeatmapDay] || {};
+          let totalPct = 0;
+          let doneCount = 0;
+          activeHabitsList.forEach(h => {
+            const r = dayData[h] ?? 0;
+            const v = typeof r === 'number' ? r : (r ? 100 : 0);
+            totalPct += v;
+            if (v >= 100) doneCount++;
+          });
+          const dayPct = activeHabitsList.length > 0 ? Math.round(totalPct / activeHabitsList.length) : 0;
+          const hasNote = Boolean(dayData.note && dayData.note.trim());
+          const canToggleShield = isShielded || shieldStats.availableCount > 0;
+
+          const handleJumpToMonth = () => {
+            setCurrentDate(new Date(dayDate.getFullYear(), dayDate.getMonth(), 1));
+            const targetKey = selectedHeatmapDay;
+            setSelectedHeatmapDay(null);
+            setTimeout(() => {
+              const container = scrollContainerRef.current;
+              if (!container) return;
+              if (tableOrientation === 'vertical') {
+                const el = document.getElementById(`row-${targetKey}`);
+                if (el) container.scrollTo({ top: el.offsetTop - 144, behavior: 'smooth' });
+              } else {
+                const el = document.getElementById(`col-${targetKey}`);
+                if (el) {
+                  const colWidth = el.offsetWidth;
+                  container.scrollTo({ left: el.offsetLeft - 120 - (colWidth * 2), behavior: 'smooth' });
+                }
+              }
+            }, 250);
+          };
+
+          return (
+            <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setSelectedHeatmapDay(null)}>
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                className={`w-full max-w-md rounded-3xl p-6 shadow-2xl border transition-colors ${theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'}`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-base font-black tracking-tight">
+                      {dayDate.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })}
+                    </h3>
+                    <p className={`text-xs font-semibold ${getTextMuted()}`}>
+                      Efficiency: <span className="text-emerald-500 font-black">{dayPct}%</span> ({doneCount}/{activeHabitsList.length} habits done)
+                    </p>
+                  </div>
+                  <button onClick={() => setSelectedHeatmapDay(null)} className={`p-1.5 rounded-xl ${getTextMuted()} hover:text-rose-500 transition-colors`} title="Close (ESC)">
+                    <XIcon />
+                  </button>
+                </div>
+
+                {/* Action Controls */}
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <button
+                    onClick={handleJumpToMonth}
+                    className={`flex-1 py-2 px-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 border transition-all ${
+                      theme === 'dark' ? 'bg-slate-800 border-slate-700 text-emerald-400 hover:bg-slate-700' : 'bg-slate-100 border-slate-200 text-emerald-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    <span>Jump to Month in Table</span>
+                    <ChevronRightIcon />
+                  </button>
+
+                  <button
+                    disabled={!canToggleShield}
+                    onClick={() => toggleShieldDate(selectedHeatmapDay)}
+                    className={`py-2 px-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 border transition-all ${
+                      isShielded
+                        ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.3)]'
+                        : canToggleShield
+                        ? (theme === 'dark' ? 'bg-slate-800/60 border-slate-700 text-slate-300 hover:border-cyan-500/40 hover:text-cyan-400' : 'bg-slate-100 border-slate-200 text-slate-700 hover:border-cyan-500/40 hover:text-cyan-600')
+                        : 'opacity-40 cursor-not-allowed border-slate-800 text-slate-500'
+                    }`}
+                    title={canToggleShield ? (isShielded ? 'Remove Streak Shield from this date' : 'Protect this date with a Streak Shield') : 'No streak shields available'}
+                  >
+                    <ShieldIcon />
+                    <span>{isShielded ? '🛡️ Shield Active' : '🛡️ Use Streak Shield'}</span>
+                  </button>
+                </div>
+
+                {/* Habits Checklist for that day */}
+                <div className="space-y-1.5 max-h-56 overflow-y-auto custom-scrollbar pr-1 mb-4">
+                  {activeHabitsList.map((h) => {
+                    const raw = dayData[h] ?? 0;
+                    const val = typeof raw === 'number' ? raw : (raw ? 100 : 0);
+                    const isDone = val >= 100;
+                    return (
+                      <div
+                        key={h}
+                        onClick={() => updateHabitValue(selectedHeatmapDay, h, isDone ? 0 : 100)}
+                        className={`flex items-center justify-between p-2.5 rounded-xl border cursor-pointer transition-all ${
+                          isDone
+                            ? (theme === 'dark' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-700')
+                            : (theme === 'dark' ? 'bg-slate-800/40 border-slate-800 text-slate-400 hover:bg-slate-800/80' : 'bg-slate-50 border-slate-100 text-slate-500 hover:bg-slate-100')
+                        }`}
+                      >
+                        <span className="text-xs font-bold uppercase tracking-wide truncate">{h}</span>
+                        <span className={`text-xs font-black px-2 py-0.5 rounded-md ${isDone ? 'bg-emerald-500 text-white' : (theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-200 text-slate-600')}`}>
+                          {val}%
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Reflection Note button */}
+                <div className={`pt-3 border-t ${theme === 'dark' ? 'border-slate-800' : 'border-slate-200'} flex items-center justify-between`}>
+                  <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
+                    <span className="text-sm">📝</span>
+                    <span className={`text-xs font-semibold ${getTextMuted()} truncate`}>
+                      {hasNote ? dayData.note : 'No note for this day'}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const targetDate = selectedHeatmapDay;
+                      setSelectedHeatmapDay(null);
+                      setEditingNoteDate(targetDate);
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all border shrink-0 ${
+                      theme === 'dark' ? 'bg-blue-900/20 text-blue-400 border-blue-500/30 hover:bg-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100'
+                    }`}
+                  >
+                    {hasNote ? 'Edit Note' : 'Add Note'}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          );
+        })()}
         {/* Habit Detail Modal Clean Version Below */}
         {viewingHabitMap && habitInsights && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => { setViewingHabitMap(null); setIsEditingTabName(false); }}>
               {/* Forced Horizontal Layout for all modes */}
 {/* Compact Locked Layout: 20% Smaller & No Sidebar Scroll */}
-<motion.div initial={{ scale: 0.9, opacity: 0, y: 50 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 50 }} className={`rounded-[1.2rem] md:rounded-[2rem] w-[98vw] md:w-full max-w-[720px] h-fit max-h-[85vh] overflow-hidden shadow-2xl flex flex-row transition-colors ${theme === 'dark' ? 'bg-slate-900' : 'bg-white'}`} onClick={(e) => e.stopPropagation()}>
-                
-                {/* Slim Sidebar - Forced Fit */}
-                <div className={`p-2 md:p-5 w-[105px] md:w-60 flex flex-col items-center border-r shrink-0 overflow-hidden ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-                  <div className="relative w-14 h-14 md:w-28 md:h-28 flex items-center justify-center mb-2 md:mb-5 shrink-0">
-                    <svg className="absolute w-full h-full -rotate-90" viewBox="0 0 144 144">
-                      <circle cx="72" cy="72" r="64" fill="none" stroke={theme==='dark'?'#334155':'#e2e8f0'} strokeWidth="10" />
-                      <motion.circle initial={{ strokeDashoffset: 402 }} animate={{ strokeDashoffset: 402 - (402 * habitInsights.score / 100) }} transition={{ duration: 1.5, ease: "easeOut" }} cx="72" cy="72" r="64" fill="none" stroke="#10b981" strokeWidth="10" strokeDasharray={402} strokeLinecap="round" />
-                    </svg>
-                    <div className="flex flex-col items-center"><span className={`text-sm md:text-3xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}><AnimatedNumber value={habitInsights.score} /></span><span className={`text-[5px] md:text-[8px] font-black ${getTextMuted()} uppercase tracking-widest`}>Score</span></div>
-                  </div>
-
-                  {/* Super Compact Goal Input */}
-                  <div className={`w-full mb-2 md:mb-5 p-1 md:p-3 rounded-xl border ${theme === 'dark' ? 'bg-slate-900/50 border-slate-700' : 'bg-white border-slate-200'} shadow-sm`}>
-                    <label className={`text-[5px] md:text-[7px] font-black uppercase ${getTextMuted()} block mb-0.5 text-center`}>Goal Steps</label>
-                    <input 
-                      type="number" 
-                      value={tempGoalVal} 
-                      onChange={(e) => setTempGoalVal(e.target.value)} 
-                      onBlur={() => {
-                        let val = parseInt(tempGoalVal);
-                        if (isNaN(val) || val < 1) val = 1;
-                        setTempGoalVal(val);
-                        const nc = {
-                          ...habitConfigs, 
-                          [viewingHabitMap]: {
-                            ...(habitConfigs[viewingHabitMap] || {priority: 1, steps: 1}), 
-                            steps: val
-                          }
-                        };
-                        setHabitConfigs(nc); 
-                        save(trackerData, habits, nc);
-                      }} 
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') e.currentTarget.blur();
-                      }}
-                      className={`w-full text-center text-xl font-black p-1 rounded bg-transparent focus:outline-none focus:text-emerald-500 transition-colors`} 
-                    />
-                  </div>
-
-                  {/* Priority slider removed from here to reduce clutter */}
+<motion.div
+  initial={{ scale: 0.9, opacity: 0, y: 50 }}
+  animate={{ scale: 1, opacity: 1, y: 0 }}
+  exit={{ scale: 0.9, opacity: 0, y: 50 }}
+  className={`rounded-[1.5rem] md:rounded-[2rem] w-[95vw] md:w-full max-w-[760px] max-h-[90vh] overflow-y-auto md:overflow-hidden shadow-2xl flex flex-col md:flex-row transition-colors border ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}
+  onClick={(e) => e.stopPropagation()}
+>
+                {/* Left Sidebar */}
+                <div className={`w-full md:w-60 border-b md:border-b-0 md:border-r p-4 md:p-5 flex flex-col shrink-0 ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
                   
-                  <div className="w-full space-y-1.5 md:space-y-4">
-                    {/* Unified Rank Card with Trophy Icon */}
-                    <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-sm' : 'bg-white border-slate-100 shadow-sm'} py-2 px-2 md:p-4 rounded-xl border flex flex-col items-center text-center transition-all relative overflow-hidden group/rank w-full`}>
-                      <div className={`mb-1 transition-all duration-500 ${
-                        habitInsights.level === "Grandmaster" ? "text-emerald-500 scale-110 drop-shadow-[0_0_8px_rgba(16,185,129,0.6)]" : 
-                        habitInsights.level === "Elite" ? "text-blue-500" : 
-                        habitInsights.level === "Adept" ? "text-purple-500" : 
-                        habitInsights.level === "Apprentice" ? "text-amber-500" : "text-slate-400 opacity-50"
-                      }`}>
-                        <TrophyIcon className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <span className={`text-[6px] md:text-[9px] block uppercase font-black ${getTextMuted()} leading-none mb-0.5`}>Rank</span>
-                        <span className={`text-[10px] md:text-xs font-black transition-colors ${
-                          habitInsights.level === "Grandmaster" ? "text-emerald-500" : (theme === 'dark' ? 'text-slate-200' : 'text-slate-800')
-                        }`}>{habitInsights.level}</span>
-                      </div>
-                      
-                      {/* Sub-indicator for Milestone Progress inside the card */}
-                      <div className="flex gap-0.5 mt-2 opacity-30 group-hover/rank:opacity-100 transition-opacity">
-                        {['Seed', 'Apprentice', 'Adept', 'Elite', 'Grandmaster'].map((r) => (
-                          <div key={r} className={`w-1 h-1 rounded-full ${habitInsights.level === r ? 'bg-emerald-500 scale-125' : 'bg-slate-600'}`} />
-                        ))}
+                  {/* Mobile Compact View (<768px): 2-row clean grid */}
+                  <div className="flex md:hidden items-center justify-between gap-3 w-full">
+                    {/* Score Ring */}
+                    <div className="relative w-16 h-16 flex items-center justify-center shrink-0">
+                      <svg className="absolute w-full h-full -rotate-90" viewBox="0 0 144 144">
+                        <circle cx="72" cy="72" r="64" fill="none" stroke={theme==='dark'?'#334155':'#e2e8f0'} strokeWidth="10" />
+                        <motion.circle initial={{ strokeDashoffset: 402 }} animate={{ strokeDashoffset: 402 - (402 * habitInsights.score / 100) }} transition={{ duration: 1.5, ease: "easeOut" }} cx="72" cy="72" r="64" fill="none" stroke="#10b981" strokeWidth="10" strokeDasharray={402} strokeLinecap="round" />
+                      </svg>
+                      <div className="flex flex-col items-center">
+                        <span className={`text-base font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}><AnimatedNumber value={habitInsights.score} /></span>
+                        <span className={`text-[7px] font-black ${getTextMuted()} uppercase tracking-widest`}>Score</span>
                       </div>
                     </div>
 
-                    <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-sm' : 'bg-white border-slate-100 shadow-sm'} py-2 px-2 md:p-3 rounded-xl border flex flex-col items-center text-center transition-colors w-full`}><div className="text-orange-600 scale-75 md:scale-90 mb-1"><FlameIcon /></div><div><span className={`text-[6px] md:text-[9px] block uppercase font-black ${getTextMuted()} leading-none`}>Streak</span><span className={`text-[10px] md:text-xs font-black ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>{habitInsights.currentStreak}d</span></div></div>
-                    <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-sm' : 'bg-white border-slate-100 shadow-sm'} py-2 px-2 md:p-3 rounded-xl border flex flex-col items-center text-center transition-colors ring-2 ring-emerald-500/10 w-full`}><div className="text-yellow-500 scale-75 md:scale-90 mb-1"><TrophyIcon /></div><div><span className={`text-[6px] md:text-[9px] block uppercase font-black ${getTextMuted()} leading-none`}>Best</span><span className={`text-[10px] md:text-xs font-black ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>{habitInsights.bestStreak}d</span></div></div>
-                    {/* Redundant Milestone grid removed */}
+                    {/* Stats 2x2 Grid */}
+                    <div className="grid grid-cols-2 gap-1.5 flex-1">
+                      <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} p-1.5 rounded-xl border flex flex-col items-center justify-center text-center`}>
+                        <span className={`text-[8px] uppercase font-black ${getTextMuted()} leading-none mb-0.5`}>Steps</span>
+                        <input 
+                          type="number" 
+                          value={tempGoalVal} 
+                          onChange={(e) => setTempGoalVal(e.target.value)} 
+                          onBlur={() => {
+                            let val = parseInt(tempGoalVal);
+                            if (isNaN(val) || val < 1) val = 1;
+                            setTempGoalVal(val);
+                            const nc = {
+                              ...habitConfigs, 
+                              [viewingHabitMap]: {
+                                ...(habitConfigs[viewingHabitMap] || {priority: 1, steps: 1}), 
+                                steps: val
+                              }
+                            };
+                            setHabitConfigs(nc); 
+                            save(trackerData, habits, nc);
+                          }} 
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') e.currentTarget.blur();
+                          }}
+                          className="w-full text-center text-xs font-black bg-transparent focus:outline-none focus:text-emerald-500" 
+                        />
+                      </div>
+
+                      <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} p-1.5 rounded-xl border flex flex-col items-center justify-center text-center`}>
+                        <span className={`text-[8px] uppercase font-black ${getTextMuted()} leading-none mb-0.5`}>Rank</span>
+                        <span className={`text-xs font-black truncate max-w-[70px] ${habitInsights.level === "Grandmaster" ? "text-emerald-500" : (theme === 'dark' ? 'text-slate-200' : 'text-slate-800')}`}>{habitInsights.level}</span>
+                      </div>
+
+                      <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} p-1.5 rounded-xl border flex flex-col items-center justify-center text-center`}>
+                        <span className={`text-[8px] uppercase font-black ${getTextMuted()} leading-none mb-0.5`}>Streak</span>
+                        <span className={`text-xs font-black ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>{habitInsights.currentStreak}d</span>
+                      </div>
+
+                      <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} p-1.5 rounded-xl border flex flex-col items-center justify-center text-center`}>
+                        <span className={`text-[8px] uppercase font-black ${getTextMuted()} leading-none mb-0.5`}>Best</span>
+                        <span className={`text-xs font-black ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>{habitInsights.bestStreak}d</span>
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Buttons Fix - Reduced Padding & Margin */}
-                  <div className="flex flex-col gap-1.5 w-full mt-4 md:mt-8">
-                    <motion.button whileTap={{ scale: 0.95 }} title="Archive habit" onClick={() => toggleArchiveHabit(viewingHabitMap)} className={`w-full md:flex-1 flex items-center justify-center gap-2 py-2.5 md:py-3 px-2 md:px-4 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all ${theme === 'dark' ? 'bg-amber-500/10 text-amber-500 hover:bg-amber-500 hover:text-white border border-amber-500/20' : 'bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-500 hover:text-white'}`}>
+                  {/* Desktop Layout (>=768px): Vertical Stack */}
+                  <div className="hidden md:flex flex-col items-center w-full">
+                    <div className="relative w-28 h-28 flex items-center justify-center mb-5 shrink-0">
+                      <svg className="absolute w-full h-full -rotate-90" viewBox="0 0 144 144">
+                        <circle cx="72" cy="72" r="64" fill="none" stroke={theme==='dark'?'#334155':'#e2e8f0'} strokeWidth="10" />
+                        <motion.circle initial={{ strokeDashoffset: 402 }} animate={{ strokeDashoffset: 402 - (402 * habitInsights.score / 100) }} transition={{ duration: 1.5, ease: "easeOut" }} cx="72" cy="72" r="64" fill="none" stroke="#10b981" strokeWidth="10" strokeDasharray={402} strokeLinecap="round" />
+                      </svg>
+                      <div className="flex flex-col items-center">
+                        <span className={`text-3xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}><AnimatedNumber value={habitInsights.score} /></span>
+                        <span className={`text-[8px] font-black ${getTextMuted()} uppercase tracking-widest`}>Score</span>
+                      </div>
+                    </div>
+
+                    {/* Goal Input Desktop */}
+                    <div className={`w-full mb-5 p-3 rounded-xl border ${theme === 'dark' ? 'bg-slate-900/50 border-slate-700' : 'bg-white border-slate-200'} shadow-sm`}>
+                      <label className={`text-[7px] font-black uppercase ${getTextMuted()} block mb-0.5 text-center`}>Goal Steps</label>
+                      <input 
+                        type="number" 
+                        value={tempGoalVal} 
+                        onChange={(e) => setTempGoalVal(e.target.value)} 
+                        onBlur={() => {
+                          let val = parseInt(tempGoalVal);
+                          if (isNaN(val) || val < 1) val = 1;
+                          setTempGoalVal(val);
+                          const nc = {
+                            ...habitConfigs, 
+                            [viewingHabitMap]: {
+                              ...(habitConfigs[viewingHabitMap] || {priority: 1, steps: 1}), 
+                              steps: val
+                            }
+                          };
+                          setHabitConfigs(nc); 
+                          save(trackerData, habits, nc);
+                        }} 
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') e.currentTarget.blur();
+                        }}
+                        className="w-full text-center text-xl font-black p-1 rounded bg-transparent focus:outline-none focus:text-emerald-500 transition-colors" 
+                      />
+                    </div>
+
+                    {/* Rank & Streaks Desktop */}
+                    <div className="w-full space-y-4">
+                      <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-sm' : 'bg-white border-slate-100 shadow-sm'} p-4 rounded-xl border flex flex-col items-center text-center transition-all relative overflow-hidden group/rank w-full`}>
+                        <div className={`mb-1 transition-all duration-500 ${
+                          habitInsights.level === "Grandmaster" ? "text-emerald-500 scale-110 drop-shadow-[0_0_8px_rgba(16,185,129,0.6)]" : 
+                          habitInsights.level === "Elite" ? "text-blue-500" : 
+                          habitInsights.level === "Adept" ? "text-purple-500" : 
+                          habitInsights.level === "Apprentice" ? "text-amber-500" : "text-slate-400 opacity-50"
+                        }`}>
+                          <TrophyIcon className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <span className={`text-[9px] block uppercase font-black ${getTextMuted()} leading-none mb-0.5`}>Rank</span>
+                          <span className={`text-xs font-black transition-colors ${
+                            habitInsights.level === "Grandmaster" ? "text-emerald-500" : (theme === 'dark' ? 'text-slate-200' : 'text-slate-800')
+                          }`}>{habitInsights.level}</span>
+                        </div>
+                        
+                        <div className="flex gap-0.5 mt-2 opacity-30 group-hover/rank:opacity-100 transition-opacity">
+                          {['Seed', 'Apprentice', 'Adept', 'Elite', 'Grandmaster'].map((r) => (
+                            <div key={r} className={`w-1 h-1 rounded-full ${habitInsights.level === r ? 'bg-emerald-500 scale-125' : 'bg-slate-600'}`} />
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-sm' : 'bg-white border-slate-100 shadow-sm'} p-3 rounded-xl border flex flex-col items-center text-center transition-colors w-full`}>
+                        <div className="text-orange-600 scale-90 mb-1"><FlameIcon /></div>
+                        <div><span className={`text-[9px] block uppercase font-black ${getTextMuted()} leading-none`}>Streak</span><span className={`text-xs font-black ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>{habitInsights.currentStreak}d</span></div>
+                      </div>
+
+                      <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-sm' : 'bg-white border-slate-100 shadow-sm'} p-3 rounded-xl border flex flex-col items-center text-center transition-colors ring-2 ring-emerald-500/10 w-full`}>
+                        <div className="text-yellow-500 scale-90 mb-1"><TrophyIcon /></div>
+                        <div><span className={`text-[9px] block uppercase font-black ${getTextMuted()} leading-none`}>Best</span><span className={`text-xs font-black ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>{habitInsights.bestStreak}d</span></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Archive and Delete buttons: side-by-side on mobile, stacked on desktop */}
+                  <div className="flex flex-row md:flex-col gap-2 w-full mt-3 md:mt-8">
+                    <motion.button whileTap={{ scale: 0.95 }} title="Archive habit" onClick={() => toggleArchiveHabit(viewingHabitMap)} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 md:py-3 px-3 md:px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${theme === 'dark' ? 'bg-amber-500/10 text-amber-500 hover:bg-amber-500 hover:text-white border border-amber-500/20' : 'bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-500 hover:text-white'}`}>
                       <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v3"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7"/><path d="M9 13v-3"/><path d="M15 13v-3"/></svg>
                       Archive
                     </motion.button>
-                    <motion.button whileTap={{ scale: 0.95 }} title="Delete habit" onClick={() => setShowDeleteConfirm(true)} className="w-full md:flex-1 flex items-center justify-center gap-2 py-2.5 md:py-3 px-2 md:px-4 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white border border-rose-500/20"><TrashIcon /> Delete</motion.button>
+                    <motion.button whileTap={{ scale: 0.95 }} title="Delete habit" onClick={() => setShowDeleteConfirm(true)} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 md:py-3 px-3 md:px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white border border-rose-500/20">
+                      <TrashIcon /> Delete
+                    </motion.button>
                   </div>
                 </div>
 
-                {/* MAIN CALENDAR SECTION - 20% Smaller Padding */}
-                <div className="flex-1 p-2 md:p-5 flex flex-col overflow-y-auto custom-scrollbar">
+                {/* MAIN CALENDAR SECTION */}
+                <div className="flex-1 p-4 md:p-6 flex flex-col md:overflow-y-auto custom-scrollbar">
                   <div className="flex items-start justify-between mb-6 gap-3">
                     <div className="flex-1 flex flex-col items-center text-center">
                       <div className="flex flex-col items-center gap-1.5 w-full">

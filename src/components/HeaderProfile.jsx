@@ -81,7 +81,7 @@ export default function HeaderProfile({ totalXP, bestStreak, handleLogin, handle
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-    const handleFileChange = (e) => {
+  const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
@@ -91,9 +91,13 @@ export default function HeaderProfile({ totalXP, bestStreak, handleLogin, handle
         if (parsed.trackerData && Array.isArray(parsed.habits)) {
           setImportPayload(parsed);
         } else {
+          useHabitStore.getState().setImportStatus('error');
+          setTimeout(() => useHabitStore.getState().setImportStatus(null), 3000);
           alert("Invalid backup file format.");
         }
       } catch (err) {
+        useHabitStore.getState().setImportStatus('error');
+        setTimeout(() => useHabitStore.getState().setImportStatus(null), 3000);
         alert("Invalid backup file.");
       }
       e.target.value = null;

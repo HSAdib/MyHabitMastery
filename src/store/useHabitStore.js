@@ -3,37 +3,29 @@ import { get, set } from 'idb-keyval';
 import { auth, db } from '../firebase.config';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { loadConfettiScript } from '../utils';
 
-// Module-level unsubscribe handles.
-// Kept outside the store so that if init() is ever called more than once
-// (e.g. HMR, strict-mode double-invoke) the OLD listeners are torn down
-// before new ones are registered, preventing duplicate snapshot callbacks.
 let _unsubAuthState = null;
 let _unsubSnapshot  = null;
-
-// Prevents a write-back race: while we are applying fresh remote data to the
-// store + IDB, any concurrent onSnapshot firing must not push the (stale)
-// local state back to Firestore.
 let _isApplyingRemote = false;
 
-// Fields that live ONLY in the UI layer — never persisted to IDB or Firestore
 const UI_ONLY_FIELDS = [
   'isHydrating', 'user', 'isAuthenticated', 'authInitialized',
   'isImpersonating', 'impersonatedUserName', 'adminSavedState',
   'currentDate', 'viewingHabitMap', 'heatmapFilter', 'weeklyGraphFilter',
   'dashboardGraphFilter', 'selectedCategory', 'editingHabitName',
-  'editingManageListHabitName',
+  'editingManageListHabitName', 'importStatus',
 ];
 
-// Returns a plain-data snapshot safe to write to IDB / Firestore
 const toPersistedData = (state) => {
   const d = {};
   const PERSIST_KEYS = [
     'trackerData', 'habits', 'habitConfigs', 'categories', 'archivedHabits',
-    'theme', 'tableOrientation', 'textSizes', 'isMobileMode', 'savedLevel',
-    'guestName', 'manualXPOffset', 'manualStreakOffset', 'lastUpdated', 'currentUid',
+    'shieldedDates', 'theme', 'tableOrientation', 'textSizes', 'isMobileMode',
+    'savedLevel', 'guestName', 'manualXPOffset', 'manualStreakOffset',
+    'lastUpdated', 'currentUid',
   ];
-  PERSIST_KEYS.forEach(k => { d[k] = state[k]; });
+  PERSIST_KEYS.forEach((k) => { d[k] = state[k]; });
   return d;
 };
 
@@ -43,7 +35,7 @@ const DEFAULT_CONFIGS = {
   "calisthenics": { steps: 1 },
   "meditation": { steps: 1 },
   "dept study": { steps: 1 },
-  "coding": { steps: 1},
+  "coding": { steps: 1 },
   "vocab": { steps: 15 },
   "audiobook": { steps: 1 }
 };
@@ -55,14 +47,15 @@ export const useHabitStore = create((setStore, getStore) => ({
   authInitialized: false,
   lastUpdated: 0,
   currentUid: null,
-  
+
   // Data State
   trackerData: {},
   habits: DEFAULT_HABITS,
   habitConfigs: DEFAULT_CONFIGS,
   categories: ["all", "health", "academic", "dev", "lifestyle"],
   archivedHabits: [],
-  
+  shieldedDates: [],
+
   // App Settings
   theme: 'dark',
   tableOrientation: 'horizontal',
@@ -85,14 +78,14 @@ export const useHabitStore = create((setStore, getStore) => ({
   selectedCategory: 'all',
   editingHabitName: null,
   editingManageListHabitName: null,
+  importStatus: null,
 
-  // Actions
+  setImportStatus: (status) => setStore({ importStatus: status }),
+
   init: async () => {
     try {
-      // 1. Try to load from IndexedDB
       let data = await get('adib_habit_data');
-      
-      // 2. Fallback to localStorage if IDB is empty (migration)
+
       if (!data) {
         const localData = localStorage.getItem('habit_tracker_master_v9_data');
         if (localData) {
@@ -102,6 +95,7 @@ export const useHabitStore = create((setStore, getStore) => ({
             habitConfigs: JSON.parse(localStorage.getItem('habit_tracker_master_v9_configs') || 'null') || DEFAULT_CONFIGS,
             categories: JSON.parse(localStorage.getItem('adib_habit_categories') || 'null') || ["all", "health", "academic", "dev", "lifestyle"],
             archivedHabits: JSON.parse(localStorage.getItem('adib_habit_archived') || 'null') || [],
+            shieldedDates: [],
             theme: localStorage.getItem('adib_habit_theme') || 'dark',
             tableOrientation: localStorage.getItem('adib_table_orientation') || 'horizontal',
             textSizes: JSON.parse(localStorage.getItem('adib_text_sizes') || 'null') || { habit: 14, table1: 12, table2: 11, tabSize: 110 },
@@ -109,14 +103,12 @@ export const useHabitStore = create((setStore, getStore) => ({
             savedLevel: parseInt(localStorage.getItem('adib_habit_saved_level')) || 1,
             lastUpdated: Date.now()
           };
-          // Save to IDB for future
           await set('adib_habit_data', data);
         } else {
-          // New user defaults
           let dynamicHabits = DEFAULT_HABITS;
           let dynamicConfigs = DEFAULT_CONFIGS;
           let dynamicCategories = ["all", "health", "academic", "dev", "lifestyle"];
-          
+
           if (db) {
             try {
               const globalRef = doc(db, 'settings', 'globalDefaults');
@@ -138,6 +130,7 @@ export const useHabitStore = create((setStore, getStore) => ({
             habitConfigs: dynamicConfigs,
             categories: dynamicCategories,
             archivedHabits: [],
+            shieldedDates: [],
             theme: 'dark',
             tableOrientation: 'horizontal',
             textSizes: { habit: 14, table1: 12, table2: 11, tabSize: 110 },
@@ -158,10 +151,10 @@ export const useHabitStore = create((setStore, getStore) => ({
         data.currentDate = Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
         if (!Array.isArray(data.habits)) data.habits = DEFAULT_HABITS;
         if (!Array.isArray(data.archivedHabits)) data.archivedHabits = [];
+        if (!Array.isArray(data.shieldedDates)) data.shieldedDates = [];
         if (!Array.isArray(data.categories)) data.categories = ["all", "health", "academic", "dev", "lifestyle"];
         if (!data.trackerData || typeof data.trackerData !== 'object') data.trackerData = {};
         if (!data.habitConfigs || typeof data.habitConfigs !== 'object') data.habitConfigs = DEFAULT_CONFIGS;
-        // Clear default 'Guest User' to enforce new name picking
         if (data.guestName === "Guest User") {
           data.guestName = "";
         }
@@ -172,8 +165,7 @@ export const useHabitStore = create((setStore, getStore) => ({
         isMobileMode: isMobileDevice,
         isHydrating: false
       });
-      
-      // Apply theme
+
       const root = window.document.documentElement;
       root.style.colorScheme = data.theme;
       if (data.theme === 'dark') {
@@ -182,8 +174,6 @@ export const useHabitStore = create((setStore, getStore) => ({
         root.classList.remove('dark');
       }
 
-      // Firebase Sync
-      // Tear down any listeners left over from a previous init() call.
       if (_unsubSnapshot)  { _unsubSnapshot();  _unsubSnapshot  = null; }
       if (_unsubAuthState) { _unsubAuthState(); _unsubAuthState = null; }
 
@@ -198,8 +188,6 @@ export const useHabitStore = create((setStore, getStore) => ({
           try {
             const userDocRef = doc(db, 'users', user.uid);
             _unsubSnapshot = onSnapshot(userDocRef, async (docSnap) => {
-              // Skip if we are already in the middle of applying remote data
-              // to avoid a concurrent snapshot pushing stale local state back.
               if (_isApplyingRemote) return;
 
               const currentStore = getStore();
@@ -214,17 +202,14 @@ export const useHabitStore = create((setStore, getStore) => ({
                 const remoteTracker = remoteData.trackerData || {};
                 const hasRemoteData = Object.keys(remoteTracker).length > 0;
 
-                // Pull remote data if:
-                // 1) This is a fresh login to this account (first sync on this device)
-                // 2) Remote timestamp is newer than local timestamp
-                // 3) Local has 0 tracked days while remote has actual data (safeguards against overwriting cloud with empty local state)
                 if (isFirstSyncForUser || remoteLastUpdated > localLastUpdated || (hasRemoteData && !hasLocalData)) {
                   _isApplyingRemote = true;
                   try {
                     const safeRemote = {};
-                    Object.keys(remoteData).forEach(k => {
+                    Object.keys(remoteData).forEach((k) => {
                       if (!UI_ONLY_FIELDS.includes(k)) safeRemote[k] = remoteData[k];
                     });
+                    if (!Array.isArray(safeRemote.shieldedDates)) safeRemote.shieldedDates = [];
                     safeRemote.currentUid = user.uid;
                     setStore(safeRemote);
                     await set('adib_habit_data', toPersistedData(getStore()));
@@ -232,14 +217,11 @@ export const useHabitStore = create((setStore, getStore) => ({
                     _isApplyingRemote = false;
                   }
                 } else if (localLastUpdated > remoteLastUpdated) {
-                  // Same authenticated user made offline changes on this device while disconnected -> push to cloud
                   const localPersisted = { ...toPersistedData(getStore()), currentUid: user.uid };
                   await setDoc(userDocRef, { ...localPersisted, displayName: user.displayName || currentStore.guestName || '' }, { merge: true });
                   setStore({ currentUid: user.uid });
                 }
               } else {
-                // Brand new cloud account (no document in Firestore yet)
-                // Bootstrap the remote document with the local setup
                 const localPersisted = { ...toPersistedData(getStore()), currentUid: user.uid };
                 await setDoc(userDocRef, { ...localPersisted, displayName: user.displayName || currentStore.guestName || '' }, { merge: true });
                 setStore({ currentUid: user.uid });
@@ -259,13 +241,11 @@ export const useHabitStore = create((setStore, getStore) => ({
           }
         }
       });
-      
     } catch (e) {
       console.error("Failed to hydrate store:", e);
       setStore({ isHydrating: false });
     }
   },
-
 
   syncToCloud: async () => {
     const state = getStore();
@@ -294,6 +274,7 @@ export const useHabitStore = create((setStore, getStore) => ({
     let newHabitConfigs = { ...state.habitConfigs };
     let newCategories = [...state.categories];
     let newArchivedHabits = [...state.archivedHabits];
+    let newShieldedDates = [...(state.shieldedDates || [])];
 
     if (strategy === 'overwrite') {
       newTrackerData = incomingPayload.trackerData || {};
@@ -301,37 +282,39 @@ export const useHabitStore = create((setStore, getStore) => ({
       newHabitConfigs = incomingPayload.habitConfigs || {};
       if (Array.isArray(incomingPayload.categories)) newCategories = incomingPayload.categories;
       if (Array.isArray(incomingPayload.archivedHabits)) newArchivedHabits = incomingPayload.archivedHabits;
+      if (Array.isArray(incomingPayload.shieldedDates)) newShieldedDates = incomingPayload.shieldedDates;
     } else if (strategy === 'merge') {
       const incomingHabits = incomingPayload.habits || [];
-      incomingHabits.forEach(h => {
+      incomingHabits.forEach((h) => {
         if (!newHabits.includes(h)) newHabits.push(h);
       });
 
-      // Bug fix: incoming configs should be the base, local overrides on top
-      // (local wins for habits that exist in both)
       const incomingConfigs = incomingPayload.habitConfigs || {};
       newHabitConfigs = { ...incomingConfigs, ...newHabitConfigs };
 
-      // Merge categories (add any new ones from incoming)
       if (Array.isArray(incomingPayload.categories)) {
-        incomingPayload.categories.forEach(cat => {
+        incomingPayload.categories.forEach((cat) => {
           if (!newCategories.includes(cat)) newCategories.push(cat);
         });
       }
 
-      // Merge archived habits
       if (Array.isArray(incomingPayload.archivedHabits)) {
-        incomingPayload.archivedHabits.forEach(h => {
+        incomingPayload.archivedHabits.forEach((h) => {
           if (!newArchivedHabits.includes(h)) newArchivedHabits.push(h);
         });
       }
 
+      if (Array.isArray(incomingPayload.shieldedDates)) {
+        incomingPayload.shieldedDates.forEach((d) => {
+          if (!newShieldedDates.includes(d)) newShieldedDates.push(d);
+        });
+      }
+
       const incomingTracker = incomingPayload.trackerData || {};
-      Object.keys(incomingTracker).forEach(dateKey => {
+      Object.keys(incomingTracker).forEach((dateKey) => {
         if (!newTrackerData[dateKey]) {
           newTrackerData[dateKey] = incomingTracker[dateKey];
         } else {
-          // Local data wins for existing day entries
           newTrackerData[dateKey] = { ...incomingTracker[dateKey], ...newTrackerData[dateKey] };
         }
       });
@@ -343,19 +326,20 @@ export const useHabitStore = create((setStore, getStore) => ({
       habitConfigs: newHabitConfigs,
       categories: newCategories,
       archivedHabits: newArchivedHabits,
+      shieldedDates: newShieldedDates,
       lastUpdated: timestamp,
     };
 
     await state.saveToIDB(updatedPayload);
+    setStore({ importStatus: 'success' });
+    setTimeout(() => setStore({ importStatus: null }), 3000);
   },
 
   saveToIDB: async (updates) => {
     const stateBefore = getStore();
     const now = Math.max(Date.now(), (stateBefore.lastUpdated || 0) + 1);
-    // Batch both the updates and the new lastUpdated into a single store write
     setStore({ ...updates, lastUpdated: now });
 
-    // Read state AFTER the store update so all fields are fresh
     const state = getStore();
     const dataToSave = { ...toPersistedData(state), lastUpdated: now };
 
@@ -371,8 +355,7 @@ export const useHabitStore = create((setStore, getStore) => ({
     }
 
     await set('adib_habit_data', dataToSave);
-    
-    // Background Firebase Sync
+
     if (db && state.isAuthenticated && state.user) {
       try {
         await setDoc(doc(db, 'users', state.user.uid), { ...dataToSave, displayName: state.user.displayName || state.guestName || "" }, { merge: true });
@@ -386,27 +369,36 @@ export const useHabitStore = create((setStore, getStore) => ({
     const state = getStore();
     const updatedDay = { ...(state.trackerData[dateKey] || {}), [habit]: val };
     const newTrackerData = { ...state.trackerData, [dateKey]: updatedDay };
-    
-    // Check for confetti
+
     let earned = 0;
-    const activeHabits = state.habits.filter(h => !state.archivedHabits.includes(h));
-    activeHabits.forEach(h => {
+    const activeHabits = state.habits.filter((h) => !state.archivedHabits.includes(h));
+    activeHabits.forEach((h) => {
       const v = typeof updatedDay[h] === 'number' ? updatedDay[h] : (updatedDay[h] ? 100 : 0);
       earned += (v / 100);
     });
-    
+
     if (activeHabits.length > 0 && Math.round((earned / activeHabits.length) * 100) === 100) {
-      if (window.confetti) {
-        window.confetti({ 
-          particleCount: 150, 
-          spread: 80, 
-          origin: { y: 0.6 }, 
-          colors: ['#10b981', '#3b82f6', '#10b981', '#ffffff'] 
-        });
-      }
+      loadConfettiScript(() => {
+        if (typeof window.confetti === 'function') {
+          window.confetti({
+            particleCount: 150,
+            spread: 80,
+            origin: { y: 0.6 },
+            colors: ['#10b981', '#3b82f6', '#10b981', '#ffffff']
+          });
+        }
+      });
     }
 
     await state.saveToIDB({ trackerData: newTrackerData });
+  },
+
+  toggleShieldDate: async (dateKey) => {
+    const state = getStore();
+    const current = Array.isArray(state.shieldedDates) ? state.shieldedDates : [];
+    const exists = current.includes(dateKey);
+    const next = exists ? current.filter((d) => d !== dateKey) : [...current, dateKey];
+    await state.saveToIDB({ shieldedDates: next });
   },
 
   setTheme: async (theme) => {
@@ -426,7 +418,7 @@ export const useHabitStore = create((setStore, getStore) => ({
   setDashboardGraphFilter: (filter) => setStore({ dashboardGraphFilter: filter }),
   setWeeklyGraphFilter: (filter) => setStore({ weeklyGraphFilter: filter }),
   setSelectedCategory: (cat) => setStore({ selectedCategory: cat }),
-  
+
   startImpersonation: (targetUser) => {
     const state = getStore();
     const adminStateBackup = {
@@ -435,6 +427,7 @@ export const useHabitStore = create((setStore, getStore) => ({
       habitConfigs: state.habitConfigs,
       categories: state.categories,
       archivedHabits: state.archivedHabits,
+      shieldedDates: state.shieldedDates,
       theme: state.theme,
       tableOrientation: state.tableOrientation,
       textSizes: state.textSizes,
@@ -444,7 +437,7 @@ export const useHabitStore = create((setStore, getStore) => ({
       manualXPOffset: state.manualXPOffset,
       manualStreakOffset: state.manualStreakOffset,
     };
-    
+
     setStore({
       isImpersonating: targetUser.id,
       impersonatedUserName: targetUser.displayName || targetUser.guestName || "Unknown User",
@@ -454,6 +447,7 @@ export const useHabitStore = create((setStore, getStore) => ({
       habitConfigs: targetUser.habitConfigs || {},
       categories: targetUser.categories || ["all", "health", "academic", "dev", "lifestyle"],
       archivedHabits: targetUser.archivedHabits || [],
+      shieldedDates: targetUser.shieldedDates || [],
       theme: targetUser.theme || 'dark',
       tableOrientation: targetUser.tableOrientation || 'horizontal',
       textSizes: targetUser.textSizes || { habit: 14, table1: 12, table2: 11, tabSize: 110 },
@@ -481,10 +475,8 @@ export const useHabitStore = create((setStore, getStore) => ({
     }
   },
 
-  // Other setters
   setStorePartial: (partial) => setStore(partial),
   savePartialToIDB: async (partial) => await getStore().saveToIDB(partial)
 }));
 
-// Initialize the store and auth listener immediately so it acts globally across all routes
 useHabitStore.getState().init();

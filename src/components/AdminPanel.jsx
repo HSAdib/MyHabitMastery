@@ -297,15 +297,22 @@ export default function AdminPanel() {
             {users.map((user) => {
               const isEditing = editingUserId === user.id;
 
-              // Calculate total XP visually
-              let xp = 0;
+              // Calculate total XP accurately matching App.jsx formula
+              let xp = user.manualXPOffset || 0;
+              const userHabits = Array.isArray(user.habits) ? user.habits : [];
+              const userConfigs = user.habitConfigs || {};
               if (user.trackerData) {
-                Object.values(user.trackerData).forEach((day) => {
-                  Object.values(day).forEach((val) => {
-                    if (val > 0) xp += val;
+                Object.keys(user.trackerData).forEach((dateKey) => {
+                  const dayObj = user.trackerData[dateKey] || {};
+                  userHabits.forEach((h) => {
+                    const raw = dayObj[h] ?? 0;
+                    const val = typeof raw === 'number' ? raw : (raw ? 100 : 0);
+                    const priority = userConfigs[h]?.priority || 1;
+                    xp += (val / 100) * 10 * priority;
                   });
                 });
               }
+              xp = Math.round(xp);
 
               return (
                 <div
