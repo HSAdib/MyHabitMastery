@@ -6,10 +6,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { signOut } from 'firebase/auth';
 import { auth, googleProvider } from './firebase.config';
 import { useHabitStore } from './store/useHabitStore';
-import { getSafeKey, parseLocalDate, loadConfettiScript, solveFluidPath } from './utils';
+import { getSafeKey, parseLocalDate, loadConfettiScript, solveFluidPath, findClosestSuggestion } from './utils';
 import { useNavigate } from 'react-router-dom';
 import HeaderProfile from './components/HeaderProfile';
-import AuthModal from './components/AuthModal';
 import NamePromptModal from './components/NamePromptModal';
 import {
   ResponsiveContainer, AreaChart, BarChart, CartesianGrid,
@@ -17,108 +16,108 @@ import {
 } from 'recharts';
 // --- Icons ---
 const CheckIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
 );
 const ShieldIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
 );
 
 const RefreshIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M3 21v-5h5" /></svg>
 );
 const ZapIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
 );
 const EditIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /><path d="m15 5 4 4" /></svg>
 );
 const TrashIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2m-6 5v6m4-6v6"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2m-6 5v6m4-6v6" /></svg>
 );
 const PlusIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
 );
 const ChevronLeftIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
 );
 
 const ChevronRightIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="m9 18 6-6-6-6"/> 
+    <path d="m9 18 6-6-6-6" />
   </svg>
 );
 
 const ArrowUpIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m5 15 7-7 7 7"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m5 15 7-7 7 7" /></svg>
 );
 
 const ArrowDownIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m19 9-7 7-7-7"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m19 9-7 7-7-7" /></svg>
 );
-    
+
 const XIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
 );
 const TrophyIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" /><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" /></svg>
 );
 const ActivityIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>
 );
 const NoteIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
 );
 const TargetIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" /></svg>
 );
 const SquareTargetIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="20" x="2" y="2" rx="2"/><rect width="12" height="12" x="6" y="6" rx="1.5"/><rect width="4" height="4" x="10" y="10" rx="1"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="20" x="2" y="2" rx="2" /><rect width="12" height="12" x="6" y="6" rx="1.5" /><rect width="4" height="4" x="10" y="10" rx="1" /></svg>
 );
 const FlameIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" /></svg>
 );
 const ExportIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" x2="12" y1="15" y2="3" /></svg>
 );
 const MaximizeIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3" /><path d="M21 8V5a2 2 0 0 0-2-2h-3" /><path d="M3 16v3a2 2 0 0 0 2 2h3" /><path d="M16 21h3a2 2 0 0 0 2-2v-3" /></svg>
 );
 const SunIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500"><circle cx="12" cy="12" r="4" /><path d="M12 2v2" /><path d="M12 20v2" /><path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="m6.34 17.66-1.41 1.41" /><path d="m19.07 4.93-1.41 1.41" /></svg>
 );
 
 const MoonIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-blue-300"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-blue-300"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" /></svg>
 );
 const TableRotateIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <rect width="10" height="14" x="3" y="5" rx="1.5" opacity="0.4"/>
+    <rect width="10" height="14" x="3" y="5" rx="1.5" opacity="0.4" />
     <rect width="14" height="10" x="7" y="11" rx="1.5" />
   </svg>
 );
 const TextSizeIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" x2="15" y1="20" y2="20"/><line x1="12" x2="12" y1="4" y2="20"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 7 4 4 20 4 20 7" /><line x1="9" x2="15" y1="20" y2="20" /><line x1="12" x2="12" y1="4" y2="20" /></svg>
 );
 const UserIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
 );
 const LogoutIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" x2="9" y1="12" y2="12" /></svg>
 );
 const ImportIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" x2="12" y1="3" y2="15" /></svg>
 );
 const OrderIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="10" x2="21" y1="6" y2="6"/><line x1="10" x2="21" y1="12" y2="12"/><line x1="10" x2="21" y1="18" y2="18"/><path d="M4 6h1v4"/><path d="M4 10h2"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="10" x2="21" y1="6" y2="6" /><line x1="10" x2="21" y1="12" y2="12" /><line x1="10" x2="21" y1="18" y2="18" /><path d="M4 6h1v4" /><path d="M4 10h2" /><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1" /></svg>
 );
 const ChevronUpIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6" /></svg>
 );
 const ArchiveIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="5" x="2" y="3" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /><path d="M10 12h4" /></svg>
 );
 const ChevronDownIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
 );
 const AnimatedNumber = ({ value }) => {
   const safe = (isNaN(value) || value === undefined || value === null) ? 0 : Math.round(value);
@@ -378,7 +377,7 @@ const ThanosDisintegrate = ({ children, shouldDisintegrate, onDone }) => {
       clearTimeout(fallbackTimer);
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shouldDisintegrate]);
 
   if (phase === 'done') return null;
@@ -435,7 +434,7 @@ const DEFAULT_CONFIGS = {
   "calisthenics": { steps: 1 },
   "meditation": { steps: 1 },
   "dept study": { steps: 1 },
-  "coding": { steps: 1},
+  "coding": { steps: 1 },
   "vocab": { steps: 15 },
   "audiobook": { steps: 1 }
 };
@@ -462,7 +461,7 @@ export default function App() {
   const tableOrientation = useHabitStore(state => state.tableOrientation);
   const textSizes = useHabitStore(state => state.textSizes);
   const isMobileMode = useHabitStore(state => state.isMobileMode);
-  
+
   const currentDate = useHabitStore(state => state.currentDate);
   const setCurrentDate = useHabitStore(state => state.setCurrentDate);
   const viewingHabitMap = useHabitStore(state => state.viewingHabitMap);
@@ -480,7 +479,7 @@ export default function App() {
   const toggleShieldDate = useHabitStore(state => state.toggleShieldDate);
   const importStatus = useHabitStore(state => state.importStatus);
   const setImportStatus = useHabitStore(state => state.setImportStatus);
-  
+
   const updateHabitValueStore = useHabitStore(state => state.updateHabitValue);
   const setTheme = useHabitStore(state => state.setTheme);
   const setStorePartial = useHabitStore(state => state.setStorePartial);
@@ -495,11 +494,24 @@ export default function App() {
   const isImpersonating = useHabitStore(state => state.isImpersonating);
   const impersonatedUserName = useHabitStore(state => state.impersonatedUserName);
   const stopImpersonation = useHabitStore(state => state.stopImpersonation);
+  const saveCurrentGuestAccount = useHabitStore(state => state.saveCurrentGuestAccount);
+  const activeProfileId = useHabitStore(state => state.activeProfileId || 'main');
+  const cloudProfiles = useHabitStore(state => state.cloudProfiles || {});
+  const isSuperAdmin = isAuthenticated && user?.email?.toLowerCase() === 'hasanshahriaradib@gmail.com';
 
   const navigate = useNavigate();
 
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  const [showGuestPicker, setShowGuestPicker] = useState(false);
+
   const handleLogin = () => {
-    setShowAuthModal(true);
+    setShowWelcomeModal(true);
+  };
+
+  // Opens the guest account picker (save current guest first if one is active)
+  const handleSwitchToGuestPicker = async () => {
+    if (guestName) await saveCurrentGuestAccount();
+    setShowGuestPicker(true);
   };
 
   const handleLogout = async () => {
@@ -522,7 +534,7 @@ export default function App() {
           return 'gone';
         }
       }
-    } catch (e) {}
+    } catch (e) { }
     return 'visible';
   });
   const [editingHabitName, setEditingHabitName] = useState(null);
@@ -531,6 +543,28 @@ export default function App() {
   const [editingNoteDate, setEditingNoteDate] = useState(null);
   const [confirmDeleteNoteDate, setConfirmDeleteNoteDate] = useState(null);
   const [showAllNotes, setShowAllNotes] = useState(false);
+
+  const actionToast = useHabitStore(state => state.actionToast);
+  const triggerActionToast = useHabitStore(state => state.triggerActionToast);
+  const dismissActionToast = useHabitStore(state => state.dismissActionToast);
+  const sessionExpiredModal = useHabitStore(state => state.sessionExpiredModal);
+  const setSessionExpiredModal = useHabitStore(state => state.setSessionExpiredModal);
+
+  // 04/10 Online / Offline Network State
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
+  const [reconnectedBanner, setReconnectedBanner] = useState(false);
+
+  // 09/10 Inline Validation errors for Manage Modal
+  const [habitInputError, setHabitInputError] = useState('');
+  const [catInputError, setCatInputError] = useState('');
+  const [manageSearchQuery, setManageSearchQuery] = useState('');
+
+  // Journal History Modal: 51-entry centered state, inline editing & search
+  const [journalSearchQuery, setJournalSearchQuery] = useState('');
+  const [inlineEditingJournalKey, setInlineEditingJournalKey] = useState(null);
+  const [inlineJournalDraft, setInlineJournalDraft] = useState('');
+  const todayJournalCardRef = useRef(null);
+  const journalListContainerRef = useRef(null);
   const [showInsightsModal, setShowInsightsModal] = useState(false);
   const [showWeeklyModal, setShowWeeklyModal] = useState(false);
   const [showMonthlyGraphModal, setShowMonthlyGraphModal] = useState(false);
@@ -553,7 +587,7 @@ export default function App() {
   const [editingCat, setEditingCat] = useState(null);
   const [newCatInput, setNewCatInput] = useState("");
   const [newHabitInput, setNewHabitInput] = useState("");
-  const [activeSlider, setActiveSlider] = useState(null); 
+  const [activeSlider, setActiveSlider] = useState(null);
   const [isEditingTabName, setIsEditingTabName] = useState(false);
   const [tableHeight, setTableHeight] = useState(484);
   const [tempGoalVal, setTempGoalVal] = useState("");
@@ -579,7 +613,7 @@ export default function App() {
   const updateHabitValue = (dateKey, habit, val) => {
     updateHabitValueStore(dateKey, habit, val);
   };
-  
+
   const setHabits = (newHabits) => setStorePartial({ habits: newHabits });
   const setHabitConfigs = (newConfigs) => setStorePartial({ habitConfigs: newConfigs });
   const setTrackerData = (newData) => setStorePartial({ trackerData: newData });
@@ -592,12 +626,12 @@ export default function App() {
   const setTextSizes = (newSizes) => {
     savePartialToIDB({ textSizes: newSizes });
   };
-  
+
   const toggleTheme = () => {
     const newTheme = theme === 'dark' ? 'light' : 'dark';
     setTheme(newTheme);
   };
-  
+
   const toggleTableOrientation = () => {
     const newOrientation = tableOrientation === 'horizontal' ? 'vertical' : 'horizontal';
     savePartialToIDB({ tableOrientation: newOrientation });
@@ -675,31 +709,46 @@ export default function App() {
 
   const handleManualAddCategory = () => {
     const name = newCatInput.toLowerCase().trim();
-    if (name && !categories.includes(name)) {
-      const newCats = [...categories, name];
-      setCategories(newCats);
-      setNewCatInput("");
+    if (!name) return;
+    if (categories.includes(name)) {
+      setCatInputError(`The category "${name}" already exists.`);
+      return;
     }
+    setCatInputError('');
+    const newCats = [...categories, name];
+    setCategories(newCats);
+    setNewCatInput("");
+    triggerActionToast({
+      type: 'success',
+      title: '📁 Category Created!',
+      subtitle: `Category "${name}" created successfully.`,
+    }, 3000);
   };
 
   const handleAddHabitFromInput = () => {
     const name = newHabitInput.trim();
     if (!name) return;
     if (habits.some(h => h.toLowerCase() === name.toLowerCase())) {
-      alert(`A habit named "${name}" already exists.`);
+      setHabitInputError(`A habit named "${name}" already exists. Try a distinct name.`);
       return;
     }
     if (archivedHabits.some(h => h.toLowerCase() === name.toLowerCase())) {
-      alert(`A habit named "${name}" is archived. Please unarchive it from Manage.`);
+      setHabitInputError(`A habit named "${name}" is archived. Please unarchive it below.`);
       return;
     }
-    const categoryToAssign = selectedCategory === 'all' ? 'all' : selectedCategory; 
-    const newHabits = [...habits, name]; 
-    const newConfigs = {...habitConfigs, [name]: { steps: 1, category: categoryToAssign }};
-    setHabits(newHabits); 
-    setHabitConfigs(newConfigs); 
-    save(trackerData, newHabits, newConfigs); 
+    setHabitInputError('');
+    const categoryToAssign = selectedCategory === 'all' ? 'all' : selectedCategory;
+    const newHabits = [...habits, name];
+    const newConfigs = { ...habitConfigs, [name]: { steps: 1, category: categoryToAssign } };
+    setHabits(newHabits);
+    setHabitConfigs(newConfigs);
+    save(trackerData, newHabits, newConfigs);
     setNewHabitInput("");
+    triggerActionToast({
+      type: 'success',
+      title: '✨ Habit Added!',
+      subtitle: `"${name}" added to ${categoryToAssign} category.`,
+    }, 3000);
   };
 
   useEffect(() => {
@@ -712,6 +761,110 @@ export default function App() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [setStorePartial]);
+
+  // 04/10 Online / Offline Network State Listener
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      setReconnectedBanner(true);
+      useHabitStore.getState().syncToCloud?.();
+      setTimeout(() => setReconnectedBanner(false), 4000);
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      setReconnectedBanner(false);
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  const todayDateKey = getSafeKey(new Date());
+
+  const centeredJournalEntries = useMemo(() => {
+    const allNoteKeys = Object.keys(trackerData).filter(
+      (k) => k !== todayDateKey && trackerData[k]?.note && trackerData[k].note.trim() !== ''
+    );
+
+    // Sort all existing note dates chronologically (oldest -> newest)
+    allNoteKeys.sort((a, b) => parseLocalDate(a) - parseLocalDate(b));
+
+    const beforeKeys = allNoteKeys.filter((k) => k < todayDateKey);
+    const laterKeys = allNoteKeys.filter((k) => k > todayDateKey);
+
+    // Take up to 25 closest before-days and up to 25 closest later-days (plus today = 51 max).
+    // If one side has fewer than 25, allocate the remaining capacity to the other side so up to 51 total load!
+    let takeBefore = Math.min(beforeKeys.length, 25);
+    let takeLater = Math.min(laterKeys.length, 25);
+
+    if (takeBefore < 25 && laterKeys.length > takeLater) {
+      takeLater = Math.min(laterKeys.length, 50 - takeBefore);
+    } else if (takeLater < 25 && beforeKeys.length > takeBefore) {
+      takeBefore = Math.min(beforeKeys.length, 50 - takeLater);
+    }
+
+    const closestBefore = beforeKeys.slice(beforeKeys.length - takeBefore);
+    const closestLater = laterKeys.slice(0, takeLater);
+
+    // Keep chronological order: closestBefore above Today, Today in the middle, closestLater below Today.
+    const orderedKeys = [...closestBefore, todayDateKey, ...closestLater];
+
+    return orderedKeys.map((k) => ({
+      dateKey: k,
+      isToday: k === todayDateKey,
+      note: trackerData[k]?.note || '',
+      noteTime: trackerData[k]?.noteTime || null,
+      hasNote: Boolean(trackerData[k]?.note && trackerData[k].note.trim() !== ''),
+    }));
+  }, [trackerData, todayDateKey]);
+
+  const filteredJournalEntries = useMemo(() => {
+    const q = journalSearchQuery.toLowerCase().trim();
+    if (!q) return centeredJournalEntries;
+    return centeredJournalEntries.filter(entry => {
+      if (entry.isToday && !entry.hasNote) return false;
+      const dateFormatted = parseLocalDate(entry.dateKey)
+        .toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+        .toLowerCase();
+      const noteText = (entry.note || '').toLowerCase();
+      return noteText.includes(q) || dateFormatted.includes(q);
+    });
+  }, [centeredJournalEntries, journalSearchQuery]);
+
+  const journalTypoSuggestion = useMemo(() => {
+    if (!journalSearchQuery.trim() || filteredJournalEntries.length > 0) return null;
+    const words = centeredJournalEntries
+      .filter(e => e.hasNote)
+      .flatMap(e => (e.note || '').split(/\s+/))
+      .filter(w => w.length > 3);
+    return findClosestSuggestion(journalSearchQuery, Array.from(new Set(words)));
+  }, [journalSearchQuery, filteredJournalEntries, centeredJournalEntries]);
+
+  // Center on Today and pre-open editor if Today is blank
+  useEffect(() => {
+    if (!showAllNotes) return;
+    setJournalSearchQuery('');
+    const todayNote = trackerData[todayDateKey]?.note || '';
+    if (!todayNote.trim()) {
+      setInlineEditingJournalKey(todayDateKey);
+      setInlineJournalDraft('');
+    } else {
+      setInlineEditingJournalKey(null);
+      setInlineJournalDraft('');
+    }
+    const timer = setTimeout(() => {
+      if (todayJournalCardRef.current) {
+        todayJournalCardRef.current.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+        });
+      }
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [showAllNotes, todayDateKey]);
 
   useEffect(() => {
     if (viewingHabitMap) {
@@ -735,9 +888,9 @@ export default function App() {
         const element = document.getElementById(`col-${todayKey}`);
         if (element) {
           const colWidth = element.offsetWidth;
-          container.scrollTo({ 
-            left: element.offsetLeft - 120 - (colWidth * 2), 
-            behavior: 'smooth' 
+          container.scrollTo({
+            left: element.offsetLeft - 120 - (colWidth * 2),
+            behavior: 'smooth'
           });
         }
       }
@@ -819,6 +972,11 @@ export default function App() {
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key !== 'Escape') return;
+      if (showWelcomeModal || showGuestPicker) {
+        setShowWelcomeModal(false);
+        setShowGuestPicker(false);
+        return;
+      }
       if (viewingHabitMap) { setViewingHabitMap(null); setIsEditingTabName(false); return; }
       if (editingNoteDate) { setEditingNoteDate(null); return; }
       if (showDeleteConfirm) { setShowDeleteConfirm(false); return; }
@@ -837,16 +995,16 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [viewingHabitMap, editingNoteDate, showDeleteConfirm, showWeeklyModal, showMonthlyGraphModal, showAllNotes, showInsightsModal, showManageModal, showTextSizeModal, showArchiveModal, showLevelDetailsModal, showTrophyDetailsModal, showLevelUpModal, categoryToDelete, selectedHeatmapDay]);
+  }, [viewingHabitMap, editingNoteDate, showDeleteConfirm, showWeeklyModal, showMonthlyGraphModal, showAllNotes, showInsightsModal, showManageModal, showTextSizeModal, showArchiveModal, showLevelDetailsModal, showTrophyDetailsModal, showLevelUpModal, categoryToDelete, selectedHeatmapDay, showWelcomeModal, showGuestPicker]);
 
   // Logic Handlers
   const handleDashboardRename = (oldName) => {
     const newName = tempHabitName.trim();
     if (newName === oldName) { setEditingHabitName(null); return; }
-    if (!newName) { 
-      setShowDeleteConfirm(true); 
-    } else { 
-      executeRename(oldName, newName); 
+    if (!newName) {
+      setShowDeleteConfirm(true);
+    } else {
+      executeRename(oldName, newName);
       setEditingHabitName(null);
     }
   };
@@ -861,7 +1019,11 @@ export default function App() {
 
   const executeRename = (oldName, newName) => {
     if (habits.some(h => h !== oldName && h.toLowerCase() === newName.toLowerCase())) {
-      alert(`A habit named "${newName}" already exists.`);
+      triggerActionToast({
+        type: 'error',
+        title: 'Habit Already Exists',
+        subtitle: `A habit named "${newName}" already exists.`,
+      }, 4000);
       return;
     }
     const newHabits = [...habits];
@@ -884,6 +1046,11 @@ export default function App() {
       habitConfigs: newConfigs,
       trackerData: newData,
     });
+    triggerActionToast({
+      type: 'success',
+      title: 'Renamed Successfully',
+      subtitle: `Renamed "${oldName}" to "${newName}".`,
+    }, 3000);
   };
 
   const deleteHabit = (name) => {
@@ -920,13 +1087,13 @@ export default function App() {
 
   const saveNote = (dateKey, noteText) => {
     const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const newTrackerData = { 
-      ...trackerData, 
-      [dateKey]: { 
-        ...(trackerData[dateKey] || {}), 
+    const newTrackerData = {
+      ...trackerData,
+      [dateKey]: {
+        ...(trackerData[dateKey] || {}),
         note: noteText,
-        noteTime: noteText.trim() ? (trackerData[dateKey]?.noteTime || nowTime) : null 
-      } 
+        noteTime: noteText.trim() ? (trackerData[dateKey]?.noteTime || nowTime) : null
+      }
     };
     setTrackerData(newTrackerData);
     save(newTrackerData, habits, habitConfigs);
@@ -947,13 +1114,13 @@ export default function App() {
 
   const handleNoteChange = (dateKey, value) => {
     // Instant local state update
-    const newTrackerData = { 
-      ...trackerData, 
-      [dateKey]: { 
-        ...(trackerData[dateKey] || {}), 
+    const newTrackerData = {
+      ...trackerData,
+      [dateKey]: {
+        ...(trackerData[dateKey] || {}),
         note: value,
-        noteTime: value.trim() ? (trackerData[dateKey]?.noteTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })) : null 
-      } 
+        noteTime: value.trim() ? (trackerData[dateKey]?.noteTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })) : null
+      }
     };
     setTrackerData(newTrackerData);
 
@@ -1017,10 +1184,10 @@ export default function App() {
 
   // Slider Interaction
   const handleHabitPressStart = (e, dateKey, habit, currentVal) => {
-    if (parseLocalDate(dateKey).setHours(0,0,0,0) > new Date().setHours(0,0,0,0)) return;
+    if (parseLocalDate(dateKey).setHours(0, 0, 0, 0) > new Date().setHours(0, 0, 0, 0)) return;
     if (e.button !== 0 && e.pointerType === 'mouse') return;
-    
-    
+
+
     const startX = e.clientX;
     const startY = e.clientY;
 
@@ -1028,21 +1195,21 @@ export default function App() {
     if (e.currentTarget.setPointerCapture) e.currentTarget.setPointerCapture(e.pointerId);
 
     longPressTimer.current = setTimeout(() => {
-      setActiveSlider({ 
-        dateKey, habit, value: val, 
-        x: startX, y: startY 
+      setActiveSlider({
+        dateKey, habit, value: val,
+        x: startX, y: startY
       });
       longPressTimer.current = null;
-    }, 450); 
+    }, 450);
   };
 
   const handleHabitPressEnd = (e, dateKey, habit, currentVal) => {
-    if (parseLocalDate(dateKey).setHours(0,0,0,0) > new Date().setHours(0,0,0,0)) return;
+    if (parseLocalDate(dateKey).setHours(0, 0, 0, 0) > new Date().setHours(0, 0, 0, 0)) return;
     if (longPressTimer.current) {
-        clearTimeout(longPressTimer.current); 
-        longPressTimer.current = null;
-        const val = typeof currentVal === 'number' ? currentVal : (currentVal ? 100 : 0);
-        updateHabitValue(dateKey, habit, val >= 100 ? 0 : 100);
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+      const val = typeof currentVal === 'number' ? currentVal : (currentVal ? 100 : 0);
+      updateHabitValue(dateKey, habit, val >= 100 ? 0 : 100);
     }
   };
 
@@ -1080,12 +1247,12 @@ export default function App() {
     Object.keys(trackerData).forEach(dateKey => {
       habits.forEach(habit => {
         const val = trackerData[dateKey]?.[habit] ?? 0;
-        const priority = habitConfigs[habit]?.priority || 1; 
+        const priority = habitConfigs[habit]?.priority || 1;
         // Now accurately scales from 1x to 10x XP
         totalXP += (val / 100) * 10 * priority;
       });
     });
-    
+
     // Growth logic: Level 2 at 100 XP, Level 3 at 400 XP, etc.
     const level = Math.floor(Math.sqrt(totalXP / 100)) + 1;
     const currentLevelXP = Math.pow(level - 1, 2) * 100;
@@ -1093,13 +1260,13 @@ export default function App() {
     const progressXP = totalXP - currentLevelXP;
     const requiredXP = nextLevelXP - currentLevelXP;
     const progressPct = requiredXP > 0 ? Math.min(100, Math.round((progressXP / requiredXP) * 100)) : 0;
-    
-    return { 
-      level, 
-      totalXP: Math.round(totalXP), 
-      progressPct, 
-      requiredXP: Math.round(requiredXP), 
-      progressXP: Math.round(progressXP) 
+
+    return {
+      level,
+      totalXP: Math.round(totalXP),
+      progressPct,
+      requiredXP: Math.round(requiredXP),
+      progressXP: Math.round(progressXP)
     };
   }, [trackerData, habits, habitConfigs, manualXPOffset]);
 
@@ -1118,7 +1285,7 @@ export default function App() {
     // ৩. এখন মেইন লজিক: বর্তমান লেভেল কি আগের চেয়ে বেশি?
     if (xpStats.level > prevLevelRef.current) {
       setShowLevelUpModal(true);
-      
+
       // Sound Effect
       try {
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1171,7 +1338,7 @@ export default function App() {
       const isShielded = shieldedDates.includes(key);
       activeHabitsList.forEach(h => {
         const raw = dayData[h] ?? 0; const val = typeof raw === 'number' ? raw : (raw ? 100 : 0);
-        stats[h] = (stats[h] || 0) + val; 
+        stats[h] = (stats[h] || 0) + val;
         totalEarnedWeight += (val / 100);
         if (isShielded && val < 100) {
           // Grace day: exclude missed habit from penalizing totalPossibleWeight
@@ -1226,11 +1393,11 @@ export default function App() {
     const topHabits = [...weeklyStats].sort((a, b) => b.score - a.score).slice(0, 3);
     const avgScore = activeHabitsList.length > 0 ? Math.round(weeklyStats.reduce((acc, h) => acc + h.score, 0) / activeHabitsList.length) : 0;
 
-    return { topHabits, avgScore, weeklyStats }; 
+    return { topHabits, avgScore, weeklyStats };
   }, [trackerData, activeHabitsList]);
   const weeklyGraphData = useMemo(() => {
     if (weeklyGraphFilter === 'all') return weeklySummary.weeklyStats;
-    
+
     // Generate last 7 days data for the selected habit
     const days = [];
     for (let i = 6; i >= 0; i--) {
@@ -1239,9 +1406,9 @@ export default function App() {
       const key = getSafeKey(d);
       const valRaw = trackerData[key]?.[weeklyGraphFilter] ?? 0;
       const score = typeof valRaw === 'number' ? valRaw : (valRaw ? 100 : 0);
-      days.push({ 
-        name: d.toLocaleDateString(undefined, { weekday: 'short' }), 
-        score 
+      days.push({
+        name: d.toLocaleDateString(undefined, { weekday: 'short' }),
+        score
       });
     }
     return days;
@@ -1263,9 +1430,9 @@ export default function App() {
         const key = getSafeKey(checkDate);
         const valRaw = trackerData[key]?.[habit] ?? 0;
         const val = typeof valRaw === 'number' ? valRaw : (valRaw ? 100 : 0);
-        if (Math.round(val) >= 100) { 
-          streak++; 
-          checkDate.setDate(checkDate.getDate() - 1); 
+        if (Math.round(val) >= 100) {
+          streak++;
+          checkDate.setDate(checkDate.getDate() - 1);
         } else if (shieldedDates.includes(key)) {
           // Grace day: preserve running streak across shielded date
           checkDate.setDate(checkDate.getDate() - 1);
@@ -1283,51 +1450,57 @@ export default function App() {
     const currentStreaks = {};
     let perfectDaysCount = 0;
     let totalWins = 0;
-    
+
     habits.forEach(h => { streaks[h] = 0; currentStreaks[h] = 0; });
-    const dayStats = [0,1,2,3,4,5,6].map(() => ({ earned: 0, total: 0 }));
-    
-    // Convert keys to dates using parseLocalDate to avoid UTC timezone offset bugs
-    const sortedDates = Object.keys(trackerData)
-      .map(k => parseLocalDate(k))
-      .filter(d => !isNaN(d.getTime()))
-      .sort((a,b) => a.getTime() - b.getTime());
-      
-    sortedDates.forEach(d => {
-      const dateStr = getSafeKey(d);
-      const isShielded = shieldedDates.includes(dateStr);
-      const dayOfWeek = d.getDay();
-      
-      let dayScore = 0;
-      let activeHabitsForDay = 0;
-      
-      habits.forEach(h => {
-        const valRaw = trackerData[dateStr]?.[h] ?? 0;
-        const score = typeof valRaw === 'number' ? valRaw : (valRaw ? 100 : 0);
-        
-        if (!archivedHabits.includes(h)) {
-           activeHabitsForDay++;
-           dayScore += score;
+    const dayStats = [0, 1, 2, 3, 4, 5, 6].map(() => ({ earned: 0, total: 0 }));
+
+    const allKeys = Object.keys(trackerData).sort();
+    if (allKeys.length > 0) {
+      const startDate = parseLocalDate(allKeys[0]);
+      startDate.setHours(0, 0, 0, 0);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      let cursor = new Date(startDate);
+      while (cursor <= today) {
+        const dateStr = getSafeKey(cursor);
+        const isShielded = shieldedDates.includes(dateStr);
+        const isToday = cursor.getTime() === today.getTime();
+        const dayOfWeek = cursor.getDay();
+
+        let dayScore = 0;
+        let activeHabitsForDay = 0;
+
+        habits.forEach(h => {
+          const valRaw = trackerData[dateStr]?.[h] ?? 0;
+          const score = typeof valRaw === 'number' ? valRaw : (valRaw ? 100 : 0);
+
+          if (!archivedHabits.includes(h)) {
+            activeHabitsForDay++;
+            dayScore += score;
+          }
+
+          dayStats[dayOfWeek].total += 100;
+          dayStats[dayOfWeek].earned += score;
+
+          if (score >= 100) {
+            totalWins++;
+            currentStreaks[h]++;
+            if (currentStreaks[h] > streaks[h]) streaks[h] = currentStreaks[h];
+          } else if (isShielded || isToday) {
+            // Preserve running streak on shielded grace days or if today isn't finished yet
+          } else {
+            currentStreaks[h] = 0;
+          }
+        });
+
+        if (activeHabitsForDay > 0 && dayScore === activeHabitsForDay * 100) {
+          perfectDaysCount++;
         }
-        
-        dayStats[dayOfWeek].total += 100;
-        dayStats[dayOfWeek].earned += score;
-        
-        if (score >= 100) {
-          totalWins++;
-          currentStreaks[h]++;
-          if (currentStreaks[h] > streaks[h]) streaks[h] = currentStreaks[h];
-        } else if (isShielded) {
-          // Grace day: preserve running streak across shielded grace day
-        } else {
-          currentStreaks[h] = 0;
-        }
-      });
-      
-      if (activeHabitsForDay > 0 && dayScore === activeHabitsForDay * 100) {
-         perfectDaysCount++;
+
+        cursor.setDate(cursor.getDate() + 1);
       }
-    });
+    }
 
     const dayAverages = dayStats.map(d => d.total > 0 ? Math.round((d.earned / d.total) * 100) : 0);
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -1384,7 +1557,7 @@ export default function App() {
 
     let monthlyEarned = 0;
     daysInMonth.forEach(day => {
-      const key = getSafeKey(day); 
+      const key = getSafeKey(day);
       const valRaw = trackerData[key]?.[viewingHabitMap] ?? 0;
       monthlyEarned += (typeof valRaw === 'number' ? valRaw : (valRaw ? 100 : 0));
     });
@@ -1429,7 +1602,7 @@ export default function App() {
       // Parse date locally to prevent UTC timezone offset bugs
       const [y, m, d_str] = allDates[0].split('-');
       let d = new Date(parseInt(y), parseInt(m) - 1, parseInt(d_str), 0, 0, 0, 0);
-      
+
       while (d <= today) {
         const key = getSafeKey(d);
         const valRaw = trackerData[key]?.[viewingHabitMap] ?? 0;
@@ -1457,29 +1630,29 @@ export default function App() {
       const key = getSafeKey(d);
       const valRaw = trackerData[key]?.[viewingHabitMap] ?? 0;
       const val = typeof valRaw === 'number' ? valRaw : (valRaw ? 100 : 0);
-      last7Days.push({ 
-        label: d.toLocaleDateString(undefined, { weekday: 'narrow' }), 
+      last7Days.push({
+        label: d.toLocaleDateString(undefined, { weekday: 'narrow' }),
         pct: val,
         isToday: d.toDateString() === new Date().toDateString(),
         key: key // Added this to track the live slider
       });
     }
 
-    return { 
-      score, 
-      currentStreak, 
+    return {
+      score,
+      currentStreak,
       bestStreak,
       last7Days,
-      level: score >= 90 ? "Grandmaster" : score >= 75 ? "Elite" : score >= 50 ? "Adept" : score >= 25 ? "Apprentice" : "Seed" 
+      level: score >= 90 ? "Grandmaster" : score >= 75 ? "Elite" : score >= 50 ? "Adept" : score >= 25 ? "Apprentice" : "Seed"
     };
   }, [viewingHabitMap, trackerData, daysInMonth, shieldedDates]);
 
   const heatmapConfig = useMemo(() => {
     const year = currentDate.getFullYear();
-    const firstDayOfYear = new Date(year, 0, 1).getDay(); 
-    const cells = Array(firstDayOfYear).fill(null); 
+    const firstDayOfYear = new Date(year, 0, 1).getDay();
+    const cells = Array(firstDayOfYear).fill(null);
     const daysInYear = (((year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0)) ? 366 : 365);
-    
+
     for (let i = 0; i < daysInYear; i++) {
       const d = new Date(year, 0, 1, 12); d.setDate(d.getDate() + i); const key = getSafeKey(d);
       let intensity = 0;
@@ -1490,9 +1663,9 @@ export default function App() {
       const totalCount = heatmapFilter === 'all' ? activeHabitsList.length : 1;
 
       if (heatmapFilter === 'all') {
-        let totalPct = 0; 
-        activeHabitsList.forEach(h => { 
-          const r = trackerData[key]?.[h] ?? 0; 
+        let totalPct = 0;
+        activeHabitsList.forEach(h => {
+          const r = trackerData[key]?.[h] ?? 0;
           const v = typeof r === 'number' ? r : (r ? 100 : 0);
           totalPct += v;
           if (v >= 100) doneCount++;
@@ -1527,20 +1700,20 @@ export default function App() {
 
   const monthlyGraphData = useMemo(() => {
     return daysInMonth.map((day) => {
-      const key = getSafeKey(day); 
+      const key = getSafeKey(day);
       let pct = 0;
 
       if (dashboardGraphFilter === 'all') {
-         let totalPct = 0;
-         activeHabitsList.forEach(h => { const r = trackerData[key]?.[h] ?? 0; totalPct += (typeof r === 'number' ? r : (r ? 100 : 0)); });
-         pct = activeHabitsList.length > 0 ? totalPct / activeHabitsList.length : 0;
+        let totalPct = 0;
+        activeHabitsList.forEach(h => { const r = trackerData[key]?.[h] ?? 0; totalPct += (typeof r === 'number' ? r : (r ? 100 : 0)); });
+        pct = activeHabitsList.length > 0 ? totalPct / activeHabitsList.length : 0;
       } else {
-         const r = trackerData[key]?.[dashboardGraphFilter] ?? 0;
-         pct = typeof r === 'number' ? r : (r ? 100 : 0);
+        const r = trackerData[key]?.[dashboardGraphFilter] ?? 0;
+        pct = typeof r === 'number' ? r : (r ? 100 : 0);
       }
-      
-      return { 
-        date: day.getDate(), 
+
+      return {
+        date: day.getDate(),
         fullDate: day.toLocaleDateString(undefined, { month: 'short', day: 'numeric', weekday: 'short' }),
         score: Math.round(pct)
       };
@@ -1550,18 +1723,18 @@ export default function App() {
   const trendPoints = useMemo(() => {
     if (daysInMonth.length < 2) return [];
     return daysInMonth.map((day, idx) => {
-      const key = getSafeKey(day); 
+      const key = getSafeKey(day);
       let pct = 0;
 
       if (dashboardGraphFilter === 'all') {
-         let totalPct = 0;
-         activeHabitsList.forEach(h => { const r = trackerData[key]?.[h] ?? 0; totalPct += (typeof r === 'number' ? r : (r ? 100 : 0)); });
-         pct = activeHabitsList.length > 0 ? totalPct / activeHabitsList.length : 0;
+        let totalPct = 0;
+        activeHabitsList.forEach(h => { const r = trackerData[key]?.[h] ?? 0; totalPct += (typeof r === 'number' ? r : (r ? 100 : 0)); });
+        pct = activeHabitsList.length > 0 ? totalPct / activeHabitsList.length : 0;
       } else {
-         const r = trackerData[key]?.[dashboardGraphFilter] ?? 0;
-         pct = typeof r === 'number' ? r : (r ? 100 : 0);
+        const r = trackerData[key]?.[dashboardGraphFilter] ?? 0;
+        pct = typeof r === 'number' ? r : (r ? 100 : 0);
       }
-      
+
       return { x: (idx / (daysInMonth.length - 1)) * 100, y: 100 - pct };
     }).filter(p => !isNaN(p.x));
   }, [daysInMonth, trackerData, activeHabitsList, dashboardGraphFilter]);
@@ -1575,8 +1748,8 @@ export default function App() {
   // Styling Helpers
   const getButtonStyles = (val, dateKey) => {
     const isToday = new Date().toDateString() === parseLocalDate(dateKey).toDateString();
-    const isPast = parseLocalDate(dateKey).setHours(0,0,0,0) < new Date().setHours(0,0,0,0);
-    
+    const isPast = parseLocalDate(dateKey).setHours(0, 0, 0, 0) < new Date().setHours(0, 0, 0, 0);
+
     if (!val) {
       const textCol = isToday ? (theme === 'dark' ? 'text-white' : 'text-slate-400') : (isPast ? 'text-red-500' : (theme === 'dark' ? 'text-slate-700' : 'text-slate-300'));
       return theme === 'dark' ? `bg-slate-800 ${textCol} border-slate-700` : `bg-white ${textCol} border-slate-200 hover:bg-slate-50`;
@@ -1613,10 +1786,133 @@ export default function App() {
   const sectionGap = isMobileMode ? 'gap-3 mb-4' : 'gap-6 mb-8';
   const horizontalColWidth = isMobileMode ? '70px' : 'calc((100vw - 160px) / 10)';
 
+  // 02/10 Loading Skeleton State
+  if (isHydrating) {
+    return (
+      <div className={`min-h-screen ${getContainerBg()} font-sans p-4 md:p-8 animate-pulse select-none`}>
+        <div className="max-w-7xl mx-auto space-y-6">
+          <div className="flex items-center justify-between pb-4 border-b border-slate-800/60">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-slate-800/80"></div>
+              <div className="space-y-2">
+                <div className="w-40 h-5 bg-slate-800/80 rounded"></div>
+                <div className="w-24 h-3 bg-slate-800/50 rounded"></div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-28 h-9 rounded-xl bg-slate-800/70"></div>
+              <div className="w-28 h-9 rounded-xl bg-slate-800/70"></div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="h-28 rounded-2xl bg-slate-900/60 border border-slate-800/60 p-4 space-y-3">
+                <div className="w-16 h-4 bg-slate-800/80 rounded"></div>
+                <div className="w-24 h-7 bg-slate-800/90 rounded"></div>
+              </div>
+            ))}
+          </div>
+          <div className="h-72 rounded-3xl bg-slate-900/60 border border-slate-800/60 p-6 space-y-4">
+            <div className="w-48 h-5 bg-slate-800/80 rounded"></div>
+            <div className="w-full h-44 bg-slate-800/40 rounded-2xl"></div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[1, 2, 3, 4, 5, 6].map(i => (
+              <div key={i} className="h-32 rounded-2xl bg-slate-900/60 border border-slate-800/60 p-4 space-y-3">
+                <div className="w-32 h-5 bg-slate-800/80 rounded"></div>
+                <div className="w-full h-8 bg-slate-800/50 rounded-xl"></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`min-h-screen ${getContainerBg()} font-sans pb-6 md:pb-20 select-none overflow-x-hidden ${isImpersonating ? 'pt-12' : ''}`}>
       <Analytics />
-      
+
+      {/* 04/10 Offline / Reconnected Banner */}
+      <AnimatePresence>
+        {!isOnline && (
+          <motion.div
+            initial={{ opacity: 0, y: -40 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -40 }}
+            className="fixed top-2 left-1/2 transform -translate-x-1/2 z-[9999] px-5 py-2.5 rounded-full shadow-2xl border border-amber-500/40 bg-amber-500/95 text-slate-950 text-xs font-black tracking-wide flex items-center gap-2 backdrop-blur-md"
+          >
+            <span>⚡ You are offline — Showing cached data. Habit logging, streaks &amp; notes still work 100% on this device.</span>
+          </motion.div>
+        )}
+        {isOnline && reconnectedBanner && (
+          <motion.div
+            initial={{ opacity: 0, y: -40 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -40 }}
+            className="fixed top-2 left-1/2 transform -translate-x-1/2 z-[9999] px-5 py-2.5 rounded-full shadow-2xl border border-emerald-500/40 bg-emerald-500/95 text-slate-950 text-xs font-black tracking-wide flex items-center gap-2 backdrop-blur-md"
+          >
+            <span>🔄 Connection restored — Syncing latest changes to cloud...</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 10/10 Actionable Success / Action Toast Banner */}
+      <AnimatePresence>
+        {actionToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -50, scale: 0.95 }}
+            className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-[9999] max-w-lg w-[92vw] sm:w-auto px-5 py-3.5 rounded-2xl shadow-2xl border flex items-center justify-between gap-4 backdrop-blur-xl ${actionToast.type === 'error'
+              ? 'bg-rose-950/90 border-rose-500/50 text-rose-100'
+              : 'bg-slate-900/95 border-emerald-500/40 text-white shadow-[0_10px_35px_rgba(16,185,129,0.15)]'
+              }`}
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-xl">
+                {actionToast.type === 'error' ? '⚠️' : '🎉'}
+              </span>
+              <div>
+                <p className="text-xs font-black uppercase tracking-wider text-emerald-400">
+                  {actionToast.title}
+                </p>
+                {actionToast.subtitle && (
+                  <p className="text-[11px] font-medium text-slate-300 leading-tight">
+                    {actionToast.subtitle}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {actionToast.actionLabel && (
+                <button
+                  onClick={() => {
+                    if (actionToast.actionType === 'open_today_journal') {
+                      setShowAllNotes(true);
+                    } else if (actionToast.actionType === 'open_manage_habits') {
+                      setManageModalTab('habits');
+                      setShowManageModal(true);
+                    }
+                    dismissActionToast();
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[10px] font-black uppercase tracking-wider transition-all shadow-md shadow-emerald-500/20"
+                >
+                  {actionToast.actionLabel}
+                </button>
+              )}
+              <button
+                onClick={dismissActionToast}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                title="Dismiss"
+              >
+                <XIcon />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Import Status Toast */}
       <AnimatePresence>
         {importStatus && (
@@ -1624,11 +1920,10 @@ export default function App() {
             initial={{ opacity: 0, y: -50 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -50 }}
-            className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-[9999] px-6 py-3 rounded-full shadow-2xl border font-black uppercase text-xs tracking-widest flex items-center gap-2 ${
-              importStatus === 'success' 
-                ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-500/30' 
-                : 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-500/30'
-            }`}
+            className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-[9999] px-6 py-3 rounded-full shadow-2xl border font-black uppercase text-xs tracking-widest flex items-center gap-2 ${importStatus === 'success'
+              ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-500/30'
+              : 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-500/30'
+              }`}
           >
             {importStatus === 'success' ? (
               <><CheckIcon /> Data Imported Successfully</>
@@ -1643,7 +1938,7 @@ export default function App() {
         <div className="fixed top-0 left-0 right-0 z-[9999] bg-red-600 text-white font-black text-sm px-4 py-2 flex items-center justify-center gap-4 shadow-xl border-b border-red-800">
           <span className="animate-pulse">⚠️</span>
           <span>IMPERSONATING: {impersonatedUserName}</span>
-          <button 
+          <button
             onClick={() => {
               stopImpersonation();
               navigate('/admin-panel');
@@ -1654,14 +1949,14 @@ export default function App() {
           </button>
         </div>
       )}
-      
+
       <motion.div initial="hidden" animate="visible" variants={containerVariants} className={`max-w-7xl mx-auto ${outerPadding} flex flex-col min-h-screen`}>
         <div className="flex-grow">
           {/* Dashboard Header */}
           <motion.div variants={itemVariants} className={`flex flex-col lg:flex-row lg:items-center justify-between ${theme === 'dark' ? 'border-slate-800' : 'border-slate-200'} ${getCardStyle()} ${headerPadding} border transition-colors relative overflow-visible z-[100]`}>
             <div className="flex items-center gap-4 z-10">
-              <motion.div 
-                whileHover={{ scale: 1.1, rotate: 5 }} 
+              <motion.div
+                whileHover={{ scale: 1.1, rotate: 5 }}
                 whileTap={{ scale: 0.9 }}
                 onClick={() => window.location.reload()}
                 title="Refresh the app"
@@ -1669,27 +1964,27 @@ export default function App() {
               >
                 <ZapIcon />
               </motion.div>
-              
+
               <div>
                 <h1 className={`text-xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'} tracking-tight leading-none`}>Habit Mastery</h1>
                 <div className="flex items-center gap-3 mt-2">
                   <div onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} className={`group relative w-12 h-6 flex items-center rounded-full cursor-pointer transition-all duration-500 shadow-inner ${theme === 'dark' ? 'bg-slate-800' : 'bg-slate-200'}`}>
-                    <motion.div 
-                      layout 
-                      className="absolute w-4 h-4 rounded-full shadow-md z-10 flex items-center justify-center bg-white" 
-                      style={{ left: theme === 'dark' ? '28px' : '4px' }} 
+                    <motion.div
+                      layout
+                      className="absolute w-4 h-4 rounded-full shadow-md z-10 flex items-center justify-center bg-white"
+                      style={{ left: theme === 'dark' ? '28px' : '4px' }}
                       transition={{ type: "spring", stiffness: 500, damping: 30 }}
                     >
                       {theme === 'dark' ? <MoonIcon /> : <SunIcon />}
                     </motion.div>
                   </div>
-                  
+
                   <div className="flex items-center gap-2">
-                    <button 
+                    <button
                       onClick={() => setShowTextSizeModal(true)}
                       className={`p-1.5 rounded-lg transition-all border active:scale-90
-                        ${theme === 'dark' 
-                          ? 'bg-slate-800 border-emerald-500/30 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.2)] hover:border-emerald-500/50' 
+                        ${theme === 'dark'
+                          ? 'bg-slate-800 border-emerald-500/30 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.2)] hover:border-emerald-500/50'
                           : 'bg-white border-emerald-200 text-emerald-600 shadow-[0_0_10px_rgba(16,185,129,0.15)] hover:border-emerald-400'
                         }`}
                       title="Adjust Display Sizes"
@@ -1698,20 +1993,20 @@ export default function App() {
                     </button>
 
                     {/* Mobile View Toggle */}
-                    <button 
+                    <button
                       onClick={toggleMobileMode}
                       className={`p-1.5 rounded-lg transition-all border active:scale-90 flex items-center gap-1.5
-                        ${isMobileMode 
-                          ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.3)]' 
-                          : (theme === 'dark' 
-                            ? 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white' 
+                        ${isMobileMode
+                          ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.3)]'
+                          : (theme === 'dark'
+                            ? 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
                             : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
                           )}`}
                       title="Toggle Mobile Compatibility Mode"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
-                        <line x1="12" y1="18" x2="12.01" y2="18"/>
+                        <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+                        <line x1="12" y1="18" x2="12.01" y2="18" />
                       </svg>
                       <span className="text-[9px] font-black uppercase tracking-wider hidden sm:inline">
                         {isMobileMode ? 'Mobile View On' : 'Mobile View Off'}
@@ -1721,16 +2016,16 @@ export default function App() {
 
                   {/* Status Zone - Separated from Buttons */}
                   <div className={`flex items-center gap-3 ml-4 md:ml-8 pl-4 md:pl-6 border-l ${theme === 'dark' ? 'border-slate-800' : 'border-slate-200'}`}>
-                    <button 
+                    <button
                       onClick={() => setShowLevelDetailsModal(true)}
                       className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full border transition-all duration-500 cursor-pointer hover:scale-105 active:scale-95 ${getLevelBadgeStyle(xpStats.level)}`}
                       title="View Level Details"
                     >
                       Level {xpStats.level}
                     </button>
-                    <button 
+                    <button
                       onClick={() => setShowTrophyDetailsModal(true)}
-                      className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-yellow-500/10 border border-yellow-500/20 shadow-[0_0_10px_rgba(234,179,8,0.1)] cursor-pointer hover:scale-105 active:scale-95 transition-all" 
+                      className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-yellow-500/10 border border-yellow-500/20 shadow-[0_0_10px_rgba(234,179,8,0.1)] cursor-pointer hover:scale-105 active:scale-95 transition-all"
                       title="View Win Milestones"
                     >
                       <TrophyIcon className="w-2.5 h-2.5 text-yellow-500" />
@@ -1741,7 +2036,7 @@ export default function App() {
                       className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.15)] cursor-pointer hover:scale-105 active:scale-95 transition-all"
                       title={`Streak Shields: ${shieldStats.availableCount} available (${shieldStats.usedCount} used). Click to shield today or click any heatmap day!`}
                     >
-                      <ShieldIcon/>
+                      <ShieldIcon />
                       <span className="text-[9px] font-black">{shieldStats.availableCount}</span>
                     </button>
                   </div>
@@ -1750,42 +2045,42 @@ export default function App() {
             </div>
 
             <div className="flex-1 max-w-md z-10">
-               <div className="flex items-center justify-between mb-1.5 px-1">
-                 <span className={`text-[10px] font-black ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'} uppercase tracking-tighter`}>Rank Progression</span>
-                 <span className={`text-[10px] font-black ${getTextMuted()}`}>{xpStats.progressXP} / {xpStats.requiredXP} XP</span>
-               </div>
-               <div className={`h-3 w-full rounded-full overflow-hidden ${theme === 'dark' ? 'bg-slate-800' : 'bg-slate-100'} border ${theme === 'dark' ? 'border-slate-700' : 'border-slate-200'}`}>
-                 <motion.div initial={{ width: 0 }} animate={{ width: `${xpStats.progressPct}%` }} transition={{ duration: 1.5, ease: "easeOut" }} className="h-full bg-gradient-to-r from-emerald-600 to-blue-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
-               </div>
+              <div className="flex items-center justify-between mb-1.5 px-1">
+                <span className={`text-[10px] font-black ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'} uppercase tracking-tighter`}>Rank Progression</span>
+                <span className={`text-[10px] font-black ${getTextMuted()}`}>{xpStats.progressXP} / {xpStats.requiredXP} XP</span>
+              </div>
+              <div className={`h-3 w-full rounded-full overflow-hidden ${theme === 'dark' ? 'bg-slate-800' : 'bg-slate-100'} border ${theme === 'dark' ? 'border-slate-700' : 'border-slate-200'}`}>
+                <motion.div initial={{ width: 0 }} animate={{ width: `${xpStats.progressPct}%` }} transition={{ duration: 1.5, ease: "easeOut" }} className="h-full bg-gradient-to-r from-emerald-600 to-blue-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
+              </div>
             </div>
 
             {/* Month Ribbon with Far-Right Alignment */}
             <div className={`flex items-center justify-between ${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'} rounded-xl p-1 border transition-colors z-10 w-full lg:w-auto`}>
               {/* Quick Weekly Summary Trigger */}
-<motion.button 
-  whileHover={{ scale: 1.05 }}
-  whileTap={{ scale: 0.95 }}
-  onClick={() => setShowWeeklyModal(true)}
-  title="View this week's habit summary"
-  className={`mr-2 px-3 py-1.5 rounded-xl border flex items-center gap-2 transition-all ${theme === 'dark' ? 'bg-emerald-900/20 border-emerald-500/30 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-600 shadow-sm'}`}
->
-  <div className="flex flex-col items-start leading-none">
-    <span className="text-[7px] font-black uppercase tracking-tighter opacity-70">Weekly Avg</span>
-    <span className="text-xs font-black">{weeklySummary.avgScore}%</span>
-  </div>
-  <TrophyIcon className={weeklySummary.avgScore >= 80 ? "animate-bounce" : ""} />
-</motion.button>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setShowWeeklyModal(true)}
+                title="View this week's habit summary"
+                className={`mr-2 px-3 py-1.5 rounded-xl border flex items-center gap-2 transition-all ${theme === 'dark' ? 'bg-emerald-900/20 border-emerald-500/30 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-600 shadow-sm'}`}
+              >
+                <div className="flex flex-col items-start leading-none">
+                  <span className="text-[7px] font-black uppercase tracking-tighter opacity-70">Weekly Avg</span>
+                  <span className="text-xs font-black">{weeklySummary.avgScore}%</span>
+                </div>
+                <TrophyIcon className={weeklySummary.avgScore >= 80 ? "animate-bounce" : ""} />
+              </motion.button>
 
-<motion.button
-  whileHover={{ scale: 1.05, boxShadow: '0 0 14px 3px rgba(245,158,11,0.45)' }}
-  whileTap={{ scale: 0.95 }}
-  onClick={() => setShowArchiveModal(true)}
-  title="View archived habits (hidden from tracker)"
-  className={`mr-2 p-2 rounded-xl border flex items-center justify-center transition-all ${theme === 'dark' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500/20' : 'bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100'}`}
->
-  <ArchiveIcon />
-</motion.button>
-<div className={`w-px h-6 mx-1 ${theme === 'dark' ? 'bg-slate-700' : 'bg-slate-200'}`} />
+              <motion.button
+                whileHover={{ scale: 1.05, boxShadow: '0 0 14px 3px rgba(245,158,11,0.45)' }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setShowArchiveModal(true)}
+                title="View archived habits (hidden from tracker)"
+                className={`mr-2 p-2 rounded-xl border flex items-center justify-center transition-all ${theme === 'dark' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500/20' : 'bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100'}`}
+              >
+                <ArchiveIcon />
+              </motion.button>
+              <div className={`w-px h-6 mx-1 ${theme === 'dark' ? 'bg-slate-700' : 'bg-slate-200'}`} />
               {/* Left Side: Date Navigation Group */}
               <div className="flex items-center">
                 <motion.button whileTap={{ scale: 0.9 }} title="Previous month" onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className={`p-1 md:p-2 ${theme === 'dark' ? 'hover:bg-slate-700 text-slate-300' : 'hover:bg-white text-slate-600'} rounded-lg transition-all`}><ChevronLeftIcon /></motion.button>
@@ -1796,29 +2091,50 @@ export default function App() {
                   <motion.button
                     whileTap={{ scale: 0.9 }}
                     onClick={() => setCurrentDate(new Date())}
-                    className={`ml-1 px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${
-                      theme === 'dark'
-                        ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/30'
-                        : 'bg-emerald-100 border-emerald-300 text-emerald-600 hover:bg-emerald-200'
-                    }`}
+                    className={`ml-1 px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${theme === 'dark'
+                      ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/30'
+                      : 'bg-emerald-100 border-emerald-300 text-emerald-600 hover:bg-emerald-200'
+                      }`}
                     title="Jump to current month"
                   >
                     Today
                   </motion.button>
                 )}
-                </div>
+              </div>
 
-                            {/* Right Side: Profile & Sync UI */}
+              {/* Right Side: Profile & Sync UI */}
               <div className="flex items-center gap-3 ml-auto">
-                
+
                 <div className={`w-px h-6 mx-1 ${theme === 'dark' ? 'bg-slate-700' : 'bg-slate-200'}`} />
-                
-                <HeaderProfile 
-                  totalXP={xpStats.totalXP} 
+
+                {isAuthenticated && activeProfileId !== 'main' && cloudProfiles[activeProfileId] && (
+                  <span
+                    className="px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hidden sm:inline-block"
+                    title="Currently active sub-profile"
+                  >
+                    📂 {cloudProfiles[activeProfileId].name}
+                  </span>
+                )}
+                {isSuperAdmin && (
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => navigate('/admin-panel')}
+                    title="Open Super Admin Command Center"
+                    className="px-2.5 py-1.5 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/40 text-purple-300 text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-[0_0_12px_rgba(168,85,247,0.25)] cursor-pointer"
+                  >
+                    <ShieldIcon />
+                    <span className="hidden md:inline">Admin</span>
+                  </motion.button>
+                )}
+
+                <HeaderProfile
+                  totalXP={xpStats.totalXP}
                   bestStreak={insightsData.topStreaks[0]?.max || Math.max(0, ...Object.values(allHabitStreaks))}
-                  handleLogin={handleLogin} 
-                  handleLogout={handleLogout} 
-                  handleExport={handleExport} 
+                  handleLogin={handleLogin}
+                  handleLogout={handleLogout}
+                  handleExport={handleExport}
+                  handleSwitchAccount={handleSwitchToGuestPicker}
                 />
               </div>
             </div>
@@ -1830,82 +2146,82 @@ export default function App() {
               <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-2 md:gap-4">
                 <div className="flex items-center gap-2 md:gap-4">
                   <div className="flex items-center gap-2">
-  <div className="flex items-center gap-2 md:gap-3">
-  <span className={`hidden md:block text-[8px] md:text-[9px] font-black uppercase tracking-widest shrink-0 ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>
-    Activity Heatmap
-  </span>
-  {/* Mobile Label (Icon only to save space) */}
-  <span className={`md:hidden text-emerald-500`}><ActivityIcon /></span>
-  
-  <select 
-    value={heatmapFilter} 
-    onChange={(e) => setHeatmapFilter(e.target.value)}
-    className={`text-[11px] font-black uppercase px-2 py-1 rounded-full border transition-all duration-500 cursor-pointer focus:outline-none max-w-[80px] md:max-w-[120px] truncate
-      ${theme === 'dark' 
-        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.2)] hover:bg-emerald-500/20' 
-        : 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:border-emerald-300 shadow-sm'}`}
-  >
-    <option value="all" className={theme === 'dark' ? 'bg-slate-900' : 'bg-white'}>Overall</option>
-    {habits.filter(h => !archivedHabits.includes(h)).map(h => (
-      <option key={h} value={h} className={theme === 'dark' ? 'bg-slate-900' : 'bg-white'}>{h}</option>
-    ))}
-  </select>
-</div> </div>
-                  <div className="flex items-center gap-1.5 md:gap-3 pl-2 md:pl-4">
-  <motion.button 
-    whileHover={{ scale: 1.05 }}
-    whileTap={{ scale: 0.95 }}
-    onClick={() => setShowAllNotes(true)} 
-    title="View all journal entries"
-    className={`flex items-center gap-1.5 transition-all px-2.5 py-1.5 rounded-xl border relative
-      ${analytics.noteCount > 0 ? 'animate-glow-blue' : ''} 
-      ${theme === 'dark' 
-        ? 'bg-blue-900/20 text-blue-400 border-blue-500/30' 
-        : 'bg-blue-50 text-blue-600 border-blue-200 shadow-sm'}`}
-  >
-    <NoteIcon />
-    <span className={`text-[10px] md:text-xs font-black`}>{analytics.noteCount}</span>
-    
-    {analytics.noteCount > 0 && (
-      <span className="absolute -top-1 -right-1 flex h-2 w-2">
-        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-        <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-      </span>
-    )}
-  </motion.button>
+                    <div className="flex items-center gap-2 md:gap-3">
+                      <span className={`hidden md:block text-[8px] md:text-[9px] font-black uppercase tracking-widest shrink-0 ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                        Activity Heatmap
+                      </span>
+                      {/* Mobile Label (Icon only to save space) */}
+                      <span className={`md:hidden text-emerald-500`}><ActivityIcon /></span>
 
-  {hoveredHeatmapCell ? (
-    <div className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-bold ${theme === 'dark' ? 'bg-slate-800/90 border-slate-700 text-slate-200' : 'bg-slate-100 border-slate-200 text-slate-700'}`}>
-      <span className="font-mono text-emerald-400">{hoveredHeatmapCell.key}</span>
-      <span>•</span>
-      <span className="font-black text-emerald-500">{hoveredHeatmapCell.pct}%</span>
-      <span className="opacity-70 text-[9px]">({hoveredHeatmapCell.doneCount}/{hoveredHeatmapCell.totalCount})</span>
-      {hoveredHeatmapCell.isShielded && <span title="Streak Shield Active" className="text-cyan-400">🛡️</span>}
-      {hoveredHeatmapCell.hasNote && <span title="Has Journal Note" className="text-blue-400">📝</span>}
-    </div>
-  ) : (
-    <div className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-bold ${theme === 'dark' ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400' : 'bg-cyan-50 border-cyan-200 text-cyan-600'}`}>
-      <ShieldIcon />
-      <span>{shieldStats.availableCount} Shields</span>
-    </div>
-  )}
-  </div>
+                      <select
+                        value={heatmapFilter}
+                        onChange={(e) => setHeatmapFilter(e.target.value)}
+                        className={`text-[11px] font-black uppercase px-2 py-1 rounded-full border transition-all duration-500 cursor-pointer focus:outline-none max-w-[80px] md:max-w-[120px] truncate
+      ${theme === 'dark'
+                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.2)] hover:bg-emerald-500/20'
+                            : 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:border-emerald-300 shadow-sm'}`}
+                      >
+                        <option value="all" className={theme === 'dark' ? 'bg-slate-900' : 'bg-white'}>Overall</option>
+                        {habits.filter(h => !archivedHabits.includes(h)).map(h => (
+                          <option key={h} value={h} className={theme === 'dark' ? 'bg-slate-900' : 'bg-white'}>{h}</option>
+                        ))}
+                      </select>
+                    </div> </div>
+                  <div className="flex items-center gap-1.5 md:gap-3 pl-2 md:pl-4">
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => setShowAllNotes(true)}
+                      title="View all journal entries"
+                      className={`flex items-center gap-1.5 transition-all px-2.5 py-1.5 rounded-xl border relative
+      ${analytics.noteCount > 0 ? 'animate-glow-blue' : ''} 
+      ${theme === 'dark'
+                          ? 'bg-blue-900/20 text-blue-400 border-blue-500/30'
+                          : 'bg-blue-50 text-blue-600 border-blue-200 shadow-sm'}`}
+                    >
+                      <NoteIcon />
+                      <span className={`text-[10px] md:text-xs font-black`}>{analytics.noteCount}</span>
+
+                      {analytics.noteCount > 0 && (
+                        <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                        </span>
+                      )}
+                    </motion.button>
+
+                    {hoveredHeatmapCell ? (
+                      <div className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-bold ${theme === 'dark' ? 'bg-slate-800/90 border-slate-700 text-slate-200' : 'bg-slate-100 border-slate-200 text-slate-700'}`}>
+                        <span className="font-mono text-emerald-400">{hoveredHeatmapCell.key}</span>
+                        <span>•</span>
+                        <span className="font-black text-emerald-500">{hoveredHeatmapCell.pct}%</span>
+                        <span className="opacity-70 text-[9px]">({hoveredHeatmapCell.doneCount}/{hoveredHeatmapCell.totalCount})</span>
+                        {hoveredHeatmapCell.isShielded && <span title="Streak Shield Active" className="text-cyan-400">🛡️</span>}
+                        {hoveredHeatmapCell.hasNote && <span title="Has Journal Note" className="text-blue-400">📝</span>}
+                      </div>
+                    ) : (
+                      <div className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-bold ${theme === 'dark' ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400' : 'bg-cyan-50 border-cyan-200 text-cyan-600'}`}>
+                        <ShieldIcon />
+                        <span>{shieldStats.availableCount} Shields</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                
+
                 {/* Right Side: Insights Button */}
                 <div className="flex items-center justify-end">
-                  <motion.button 
+                  <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    onClick={() => setShowInsightsModal(true)} 
+                    onClick={() => setShowInsightsModal(true)}
                     title="Year in Review Insights"
                     className={`flex items-center gap-1.5 transition-all px-3 py-1.5 rounded-xl border relative
-                      ${theme === 'dark' 
-                        ? 'bg-purple-900/20 text-purple-400 border-purple-500/30 hover:bg-purple-500/20' 
+                      ${theme === 'dark'
+                        ? 'bg-purple-900/20 text-purple-400 border-purple-500/30 hover:bg-purple-500/20'
                         : 'bg-purple-50 text-purple-600 border-purple-200 shadow-sm hover:bg-purple-100'}`}
                   >
                     <span className="text-[11px] font-black uppercase tracking-widest hidden sm:block">Insights</span>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18" /><path d="m19 9-5 5-4-4-3 3" /></svg>
                   </motion.button>
                 </div>
               </div>
@@ -1938,23 +2254,23 @@ export default function App() {
                   </div>
                 </ThanosDisintegrate>
               )}
-              
+
               <div className={`overflow-x-auto custom-scrollbar pb-2 ${isMobileMode ? 'whitespace-nowrap' : ''}`}>
                 <div className="inline-block min-w-full">
                   <div className="relative h-3 mb-1" style={{ marginLeft: `${isMobileMode ? 16 : 24}px` }}>
-  {heatmapConfig.monthLabels.map((m, idx) => (
-    <span key={idx} className={`absolute text-[7px] md:text-[8px] font-black ${getTextMuted()} uppercase tracking-tighter text-left`} style={{ left: `${m.weekIndex * (CELL_SIZE + CELL_GAP)}px` }}>
-      {m.label}
-    </span>
-  ))}
-</div>
-<div className="flex gap-1 md:gap-2">
-  <div className="grid grid-rows-7 gap-[2px] md:gap-[3px] text-[6px] md:text-[7px] font-black opacity-60 uppercase tracking-tighter text-slate-500 w-3 md:w-4 shrink-0 text-right pr-1" style={{ height: `${7 * CELL_SIZE + 6 * CELL_GAP}px`, lineHeight: `${CELL_SIZE}px` }}>
-    <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
-  </div>
+                    {heatmapConfig.monthLabels.map((m, idx) => (
+                      <span key={idx} className={`absolute text-[7px] md:text-[8px] font-black ${getTextMuted()} uppercase tracking-tighter text-left`} style={{ left: `${m.weekIndex * (CELL_SIZE + CELL_GAP)}px` }}>
+                        {m.label}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex gap-1 md:gap-2">
+                    <div className="grid grid-rows-7 gap-[2px] md:gap-[3px] text-[6px] md:text-[7px] font-black opacity-60 uppercase tracking-tighter text-slate-500 w-3 md:w-4 shrink-0 text-right pr-1" style={{ height: `${7 * CELL_SIZE + 6 * CELL_GAP}px`, lineHeight: `${CELL_SIZE}px` }}>
+                      <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+                    </div>
                     <div className="grid grid-rows-7 grid-flow-col gap-[2px] md:gap-[3px] min-h-[70px] md:min-h-[95px]">
                       {heatmapConfig.cells.map((cell, idx) => {
-                        const intensityStyles = theme === 'dark' 
+                        const intensityStyles = theme === 'dark'
                           ? ['bg-slate-800', 'bg-emerald-900/40', 'bg-emerald-800', 'bg-emerald-600', 'bg-emerald-400']
                           : ['bg-slate-100', 'bg-emerald-100', 'bg-emerald-300', 'bg-emerald-500', 'bg-emerald-700'];
                         if (!cell) {
@@ -1966,13 +2282,13 @@ export default function App() {
                         const noteHighlight = cell.hasNote ? 'ring-1 ring-blue-400/80' : '';
 
                         return (
-                          <motion.div 
-                            key={cell.key} 
-                            initial={{ scale: 0.5, opacity: 0 }} 
-                            animate={{ scale: 1, opacity: 1 }} 
-                            transition={{ delay: idx * 0.001 }} 
-                            style={{ width: `${CELL_SIZE}px`, height: `${CELL_SIZE}px` }} 
-                            className={`rounded-[1px] md:rounded-[2px] border-[0.5px] border-black/5 shadow-sm transition-all cursor-pointer hover:scale-125 z-10 ${cellColor} ${noteHighlight}`} 
+                          <motion.div
+                            key={cell.key}
+                            initial={{ scale: 0.5, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            transition={{ delay: idx * 0.001 }}
+                            style={{ width: `${CELL_SIZE}px`, height: `${CELL_SIZE}px` }}
+                            className={`rounded-[1px] md:rounded-[2px] border-[0.5px] border-black/5 shadow-sm transition-all cursor-pointer hover:scale-125 z-10 ${cellColor} ${noteHighlight}`}
                             title={`${cell.key}: ${cell.pct}% (${cell.doneCount}/${cell.totalCount})${cell.isShielded ? ' [Shielded 🛡️]' : ''}${cell.hasNote ? ' [Note 📝]' : ''} - Click to inspect`}
                             onMouseEnter={() => setHoveredHeatmapCell(cell)}
                             onMouseLeave={() => setHoveredHeatmapCell(null)}
@@ -1985,20 +2301,20 @@ export default function App() {
                 </div>
               </div>
             </motion.div>
-            
+
             <motion.div variants={itemVariants} className={`${isMobileMode ? '' : 'col-span-1'} ${getCardStyle()} ${cardPadding} border relative overflow-hidden flex flex-col justify-between transition-colors h-full min-w-0`}>
               <div className="flex items-start mb-2 md:mb-4 justify-between">
-                
+
                 {/* Left Side: Vertical Stack */}
                 <div className="flex flex-col gap-0.5 min-w-0 flex-1 mr-2 relative z-20">
                   {/* Row 1: Slim Dropdown Only */}
                   <div className="flex items-center gap-2">
-                    <select 
+                    <select
                       value={dashboardGraphFilter}
                       onChange={(e) => setDashboardGraphFilter(e.target.value)}
                       className={`text-[11px] font-black uppercase px-2 py-1 rounded-full border transition-all duration-500 cursor-pointer focus:outline-none max-w-[80px] md:max-w-[120px] truncate
-                        ${theme === 'dark' 
-                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.2)] hover:bg-emerald-500/20' 
+                        ${theme === 'dark'
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.2)] hover:bg-emerald-500/20'
                           : 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:border-emerald-300 shadow-sm'}`}
                     >
                       <option value="all" className={theme === 'dark' ? 'bg-slate-900' : 'bg-white'}>Overall</option>
@@ -2007,7 +2323,7 @@ export default function App() {
                       ))}
                     </select>
                   </div>
-                  
+
                   {/* Row 2: Big Percentage */}
                   <span className={`text-lg md:text-xl font-black ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'} leading-none mt-1`}>
                     {dashboardGraphFilter === 'all' ? analytics.monthlyPct : (analytics.habitPcts[dashboardGraphFilter] || 0)}%
@@ -2016,11 +2332,11 @@ export default function App() {
 
                 {/* Right Side: Expand Graph Button */}
                 <div className="flex items-center gap-2 shrink-0 z-20">
-                  <button 
+                  <button
                     onClick={() => setShowMonthlyGraphModal(true)}
                     className={`p-2 rounded-xl transition-all border
-                      ${theme === 'dark' 
-                        ? 'bg-slate-800/50 border-slate-700 text-slate-400 hover:text-emerald-400 hover:bg-slate-800' 
+                      ${theme === 'dark'
+                        ? 'bg-slate-800/50 border-slate-700 text-slate-400 hover:text-emerald-400 hover:bg-slate-800'
                         : 'bg-white border-slate-200 text-slate-500 hover:text-emerald-600 hover:bg-slate-50 shadow-sm'}`}
                     title="Detailed Monthly Graph"
                   >
@@ -2028,7 +2344,7 @@ export default function App() {
                   </button>
                 </div>
 
-                </div>
+              </div>
               <div className="flex-grow flex items-center h-16 md:h-28 w-full relative">
                 <svg className="w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
                   <defs>
@@ -2039,23 +2355,23 @@ export default function App() {
                     </linearGradient>
                   </defs>
                   {/* The Shadow Fill */}
-                  <motion.path 
-                    initial={{ opacity: 0 }} 
-                    animate={{ opacity: 1 }} 
-                    transition={{ duration: 2 }} 
-                    d={`${solveFluidPath(trendPoints)} L 100,100 L 0,100 Z`} 
-                    fill="url(#greenTrendShadow)" 
+                  <motion.path
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 2 }}
+                    d={`${solveFluidPath(trendPoints)} L 100,100 L 0,100 Z`}
+                    fill="url(#greenTrendShadow)"
                   />
                   {/* The Main Line */}
-                  <motion.path 
-                    initial={{ pathLength: 0 }} 
-                    animate={{ pathLength: 1 }} 
-                    transition={{ duration: 2 }} 
-                    d={solveFluidPath(trendPoints)} 
-                    fill="none" 
-                    stroke="#10b981" 
-                    strokeWidth="1.5" 
-                    strokeLinecap="round" 
+                  <motion.path
+                    initial={{ pathLength: 0 }}
+                    animate={{ pathLength: 1 }}
+                    transition={{ duration: 2 }}
+                    d={solveFluidPath(trendPoints)}
+                    fill="none"
+                    stroke="#10b981"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
                   />
                 </svg>
               </div>
@@ -2064,294 +2380,201 @@ export default function App() {
               </div>
             </motion.div>
           </div>
-<div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2 no-scrollbar">
-  {/* NEW: EDIT TAB (Manager Trigger) */}
-  <button 
-    onClick={() => setShowManageModal(true)}
-    title="Manage habits and categories"
-    className={`shrink-0 px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all flex items-center gap-2 ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white hover:border-slate-500' : 'bg-white border-slate-200 text-slate-500 hover:text-slate-800 hover:border-slate-300'}`}
-  >
-    <EditIcon /> <span>Edit</span>
-  </button>
+          <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2 no-scrollbar">
+            {/* NEW: EDIT TAB (Manager Trigger) */}
+            <button
+              onClick={() => setShowManageModal(true)}
+              title="Manage habits and categories"
+              className={`shrink-0 px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all flex items-center gap-2 ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white hover:border-slate-500' : 'bg-white border-slate-200 text-slate-500 hover:text-slate-800 hover:border-slate-300'}`}
+            >
+              <EditIcon /> <span>Edit</span>
+            </button>
 
-  <div className={`w-px h-4 mx-1 ${theme === 'dark' ? 'bg-slate-800' : 'bg-slate-200'}`}></div>
-  
-  
+            <div className={`w-px h-4 mx-1 ${theme === 'dark' ? 'bg-slate-800' : 'bg-slate-200'}`}></div>
 
-  {/* EXISTING CATEGORIES (Clean Look) */}
-  {categories.map(cat => (
-    <div key={cat} className="relative group shrink-0">
-      <button
-        onClick={() => setSelectedCategory(cat)}
-        title={`Filter by ${cat} (${categoryProgress[cat] || 0}% complete)`}
-        className={`relative overflow-hidden px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all ${
-          selectedCategory === cat 
-            ? 'border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)] text-white' 
-            : (theme === 'dark' ? 'border-emerald-800/60 hover:border-emerald-600 text-emerald-200/70' : 'border-emerald-300 hover:border-emerald-400 text-emerald-700/80')
-        }`}
-      >
-        {/* Background Track - Given a distinct green hue so it looks like an empty bar */}
-        <div className={`absolute inset-0 z-0 transition-colors duration-500 ${
-          selectedCategory === cat 
-            ? 'bg-emerald-900/80' 
-            : (theme === 'dark' ? 'bg-emerald-950/60' : 'bg-emerald-50')
-        }`} />
-        
-        {/* Progress Fill - Made much more vibrant so the loading state is obvious */}
-        <motion.div 
-          initial={{ width: 0 }} 
-          animate={{ width: `${categoryProgress[cat] || 0}%` }} 
-          transition={{ duration: 1, ease: "easeOut" }}
-          className={`absolute inset-y-0 left-0 z-0 h-full ${
-            selectedCategory === cat 
-              ? 'bg-emerald-500' 
-              : 'bg-emerald-500/60'
-          }`}
-        />
 
-        {/* Text Label */}
-        <span className="relative z-10">{cat}</span>
-      </button>
-    </div>
-  ))}
-</div>
+
+            {/* EXISTING CATEGORIES (Clean Look) */}
+            {categories.map(cat => (
+              <div key={cat} className="relative group shrink-0">
+                <button
+                  onClick={() => setSelectedCategory(cat)}
+                  title={`Filter by ${cat} (${categoryProgress[cat] || 0}% complete)`}
+                  className={`relative overflow-hidden px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all ${selectedCategory === cat
+                    ? 'border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)] text-white'
+                    : (theme === 'dark' ? 'border-emerald-800/60 hover:border-emerald-600 text-emerald-200/70' : 'border-emerald-300 hover:border-emerald-400 text-emerald-700/80')
+                    }`}
+                >
+                  {/* Background Track - Given a distinct green hue so it looks like an empty bar */}
+                  <div className={`absolute inset-0 z-0 transition-colors duration-500 ${selectedCategory === cat
+                    ? 'bg-emerald-900/80'
+                    : (theme === 'dark' ? 'bg-emerald-950/60' : 'bg-emerald-50')
+                    }`} />
+
+                  {/* Progress Fill - Made much more vibrant so the loading state is obvious */}
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${categoryProgress[cat] || 0}%` }}
+                    transition={{ duration: 1, ease: "easeOut" }}
+                    className={`absolute inset-y-0 left-0 z-0 h-full ${selectedCategory === cat
+                      ? 'bg-emerald-500'
+                      : 'bg-emerald-500/60'
+                      }`}
+                  />
+
+                  {/* Text Label */}
+                  <span className="relative z-10">{cat}</span>
+                </button>
+              </div>
+            ))}
+          </div>
           {/* Updated Habit Cards Grid */}
           <motion.div variants={containerVariants} className="grid gap-3 mb-8" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${textSizes.tabSize || 110}px, 1fr))` }}>
 
+            {/* 01/10 Empty Category State */}
+            {selectedCategory !== 'all' && habits.filter(h => !archivedHabits.includes(h) && habitConfigs[h]?.category === selectedCategory).length === 0 && (
+              <div className={`col-span-full p-8 rounded-3xl border text-center flex flex-col items-center justify-center my-2 ${theme === 'dark' ? 'bg-slate-900/40 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'
+                }`}>
+                <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 flex items-center justify-center text-xl mb-3 shadow-inner">
+                  📂
+                </div>
+                <h4 className={`text-base font-black mb-1 capitalize ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                  No habits in &lsquo;{selectedCategory}&rsquo; yet
+                </h4>
+                <p className={`text-xs font-medium mb-5 max-w-sm ${getTextMuted()}`}>
+                  Assign habits to this category in Manage Habits, or create a brand new habit specifically for {selectedCategory}.
+                </p>
+                <div className="flex items-center gap-3 flex-wrap justify-center">
+                  <button
+                    onClick={() => {
+                      setManageModalTab('habits');
+                      setShowManageModal(true);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-emerald-500/20"
+                  >
+                    + Create &lsquo;{selectedCategory}&rsquo; Habit
+                  </button>
+                  <button
+                    onClick={() => setSelectedCategory('all')}
+                    className={`px-4 py-2 rounded-xl border text-xs font-black uppercase tracking-wider transition-all ${theme === 'dark' ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-slate-200 text-slate-600 hover:bg-slate-100'
+                      }`}
+                  >
+                    Show All Habits
+                  </button>
+                </div>
+              </div>
+            )}
+
             <AnimatePresence mode='popLayout'>
-{habits.filter(h => !archivedHabits.includes(h) && (selectedCategory === 'all' || habitConfigs[h]?.category === selectedCategory)).map((habit, idx) => {
-  const pct = analytics.habitPcts[habit] ?? 0;
-  
-  // THE FIX: Prevent background cards from stealing focus when the modal is open!
-  const isEditing = editingHabitName === habit && !showManageModal; 
-  
-  return (
-    <motion.div 
-      layout 
-      variants={itemVariants} 
-      whileHover={{ y: -5, scale: 1.05 }} 
-      key={habit} 
-      className={`${getCardStyle()} cursor-pointer overflow-hidden group transition-all relative flex flex-col items-center justify-center rounded-full aspect-square border-0`}
-      onClick={() => setViewingHabitMap(habit)}
-      title={`${pct}% this month${allHabitStreaks[habit] > 0 ? ` · 🔥 ${allHabitStreaks[habit]} day streak` : ''}`}
-    >
-      
-      <svg 
-        className={`absolute transition-all duration-500 -rotate-90 inset-0 w-full h-full p-1`} 
-        viewBox="0 0 100 100"
-      >
-        <circle cx="50" cy="50" r="47" fill="none" stroke={theme === 'dark' ? '#1e293b' : '#f1f5f9'} strokeWidth="4" />
-        <motion.circle 
-          cx="50" cy="50" r="47" fill="none" stroke="#10b981" strokeWidth="4" 
-          strokeDasharray={295.3} initial={{ strokeDashoffset: 295.3 }} 
-          animate={{ strokeDashoffset: 295.3 - (295.3 * pct / 100) }} 
-          transition={{ duration: 1, ease: "easeInOut" }} strokeLinecap="round" 
-        />
-      </svg>
-      
-      <div className="z-10 text-center flex flex-col items-center px-2 w-full relative">
-        {isEditing ? (
-          <input 
-            autoFocus 
-            style={{ fontSize: `${textSizes.habit}px` }}
-            className={`font-black uppercase w-full text-center bg-transparent focus:outline-none border-b-2 border-emerald-500 mb-1 leading-[1.1] ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`} 
-            value={tempHabitName} 
-            onChange={(e) => setTempHabitName(e.target.value)} 
-            onBlur={() => handleDashboardRename(habit)} 
-            onKeyDown={(e) => e.key === 'Enter' && handleDashboardRename(habit)} 
-            onClick={(e) => e.stopPropagation()} 
-          />
-        ) : (
-          <div className="relative flex items-center justify-center w-full group/name min-h-[14px]">
-            <p style={{ fontSize: `${textSizes.habit}px` }} className="font-black uppercase opacity-80 leading-[1.1] line-clamp-2 text-center w-full px-1 break-words">{habit}</p>
-            <button className="opacity-0 group-hover:opacity-100 p-0.5 text-slate-400 hover:text-emerald-500 transition-all absolute right-0" title="Edit habit name" onClick={(e) => { e.stopPropagation(); setEditingHabitName(habit); setTempHabitName(habit); }}><EditIcon /></button>
-          </div>
-        )}
-        <span className={`text-[19px] font-black mt-1 ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>
-          <AnimatedNumber value={pct} />
-        </span>
-        {/* Streak badge */}
-        {allHabitStreaks[habit] > 0 && (
-          <div className="flex items-center gap-0.5 mt-0.5">
-            <span className="text-[11px] leading-none">🔥</span>
-            <span className={`text-[8px] font-black leading-none ${theme === 'dark' ? 'text-orange-400' : 'text-orange-500'}`}>{allHabitStreaks[habit]}d</span>
-          </div>
-        )}
-      </div>
-      
-    </motion.div>
-  );
-})}
-</AnimatePresence>
-<motion.button layout whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => {
-    const name = `Habit ${habits.length + 1}`; 
-    const categoryToAssign = selectedCategory === 'all' ? 'all' : selectedCategory; 
-    const newHabits = [...habits, name]; 
-    const newConfigs = {...habitConfigs, [name]: { steps: 1, category: categoryToAssign }};
-    setHabits(newHabits); 
-    setHabitConfigs(newConfigs); 
-    save(trackerData, newHabits, newConfigs); 
-    setEditingHabitName(name); 
-    setTempHabitName(name);
-  }}
-  className={`${getCardStyle()} flex items-center justify-center border-2 border-dashed transition-all rounded-full aspect-square ${theme === 'dark' ? 'border-slate-800 text-slate-700 hover:border-emerald-700' : 'border-slate-200 text-slate-300 hover:border-emerald-400'}`}
-  title="Add New Habit"
->
-  <PlusIcon />
-</motion.button>
+              {habits.filter(h => !archivedHabits.includes(h) && (selectedCategory === 'all' || habitConfigs[h]?.category === selectedCategory)).map((habit, idx) => {
+                const pct = analytics.habitPcts[habit] ?? 0;
+
+                // THE FIX: Prevent background cards from stealing focus when the modal is open!
+                const isEditing = editingHabitName === habit && !showManageModal;
+
+                return (
+                  <motion.div
+                    layout
+                    variants={itemVariants}
+                    whileHover={{ y: -5, scale: 1.05 }}
+                    key={habit}
+                    className={`${getCardStyle()} cursor-pointer overflow-hidden group transition-all relative flex flex-col items-center justify-center rounded-full aspect-square border-0`}
+                    onClick={() => setViewingHabitMap(habit)}
+                    title={`${pct}% this month${allHabitStreaks[habit] > 0 ? ` · 🔥 ${allHabitStreaks[habit]} day streak` : ''}`}
+                  >
+
+                    <svg
+                      className={`absolute transition-all duration-500 -rotate-90 inset-0 w-full h-full p-1`}
+                      viewBox="0 0 100 100"
+                    >
+                      <circle cx="50" cy="50" r="47" fill="none" stroke={theme === 'dark' ? '#1e293b' : '#f1f5f9'} strokeWidth="4" />
+                      <motion.circle
+                        cx="50" cy="50" r="47" fill="none" stroke="#10b981" strokeWidth="4"
+                        strokeDasharray={295.3} initial={{ strokeDashoffset: 295.3 }}
+                        animate={{ strokeDashoffset: 295.3 - (295.3 * pct / 100) }}
+                        transition={{ duration: 1, ease: "easeInOut" }} strokeLinecap="round"
+                      />
+                    </svg>
+
+                    <div className="z-10 text-center flex flex-col items-center px-2 w-full relative">
+                      {isEditing ? (
+                        <input
+                          autoFocus
+                          style={{ fontSize: `${textSizes.habit}px` }}
+                          className={`font-black uppercase w-full text-center bg-transparent focus:outline-none border-b-2 border-emerald-500 mb-1 leading-[1.1] ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}
+                          value={tempHabitName}
+                          onChange={(e) => setTempHabitName(e.target.value)}
+                          onBlur={() => handleDashboardRename(habit)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleDashboardRename(habit)}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      ) : (
+                        <div className="relative flex items-center justify-center w-full group/name min-h-[14px]">
+                          <p style={{ fontSize: `${textSizes.habit}px` }} className="font-black uppercase opacity-80 leading-[1.1] line-clamp-2 text-center w-full px-1 break-words">{habit}</p>
+                          <button className="opacity-0 group-hover:opacity-100 p-0.5 text-slate-400 hover:text-emerald-500 transition-all absolute right-0" title="Edit habit name" onClick={(e) => { e.stopPropagation(); setEditingHabitName(habit); setTempHabitName(habit); }}><EditIcon /></button>
+                        </div>
+                      )}
+                      <span className={`text-[19px] font-black mt-1 ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>
+                        <AnimatedNumber value={pct} />
+                      </span>
+                      {/* Streak badge */}
+                      {allHabitStreaks[habit] > 0 && (
+                        <div className="flex items-center gap-0.5 mt-0.5">
+                          <span className="text-[11px] leading-none">🔥</span>
+                          <span className={`text-[8px] font-black leading-none ${theme === 'dark' ? 'text-orange-400' : 'text-orange-500'}`}>{allHabitStreaks[habit]}d</span>
+                        </div>
+                      )}
+                    </div>
+
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+            <motion.button layout whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => {
+              const name = `Habit ${habits.length + 1}`;
+              const categoryToAssign = selectedCategory === 'all' ? 'all' : selectedCategory;
+              const newHabits = [...habits, name];
+              const newConfigs = { ...habitConfigs, [name]: { steps: 1, category: categoryToAssign } };
+              setHabits(newHabits);
+              setHabitConfigs(newConfigs);
+              save(trackerData, newHabits, newConfigs);
+              setEditingHabitName(name);
+              setTempHabitName(name);
+            }}
+              className={`${getCardStyle()} flex items-center justify-center border-2 border-dashed transition-all rounded-full aspect-square ${theme === 'dark' ? 'border-slate-800 text-slate-700 hover:border-emerald-700' : 'border-slate-200 text-slate-300 hover:border-emerald-400'}`}
+              title="Add New Habit"
+            >
+              <PlusIcon />
+            </motion.button>
           </motion.div>
-{/* Monthly Graph Detailed Modal */}
-        {showMonthlyGraphModal && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowMonthlyGraphModal(false)}>
-            <motion.div initial={{ scale: 0.9, opacity: 0, y: 50 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 50 }} className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} border rounded-[1.2rem] md:rounded-[2rem] w-full max-w-4xl p-6 md:p-8 shadow-2xl relative flex flex-col`} onClick={e => e.stopPropagation()}>
-              <button onClick={() => setShowMonthlyGraphModal(false)} className={`absolute top-6 right-6 flex flex-col items-center gap-0.5 p-2 ${getTextMuted()} hover:text-rose-500 transition-all`} title="Close (ESC)"><XIcon /><span className="text-[6px] font-mono opacity-50">ESC</span></button>
-              
-              <div className="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
-                <div>
-                  <p className={`text-[10px] font-black ${getTextMuted()} uppercase tracking-[0.2em] mb-2`}>Monthly Trends</p>
-                  <div className="flex items-center gap-3">
-                    <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} title="Previous month" className={`p-1.5 rounded-lg transition-all ${theme === 'dark' ? 'bg-slate-800 text-slate-400 hover:text-emerald-400' : 'bg-slate-100 text-slate-500 hover:text-emerald-600'}`}>
-                      <ChevronLeftIcon />
-                    </button>
-                    <h3 className={`text-2xl md:text-3xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'} min-w-[160px] md:min-w-[200px] text-center`}>
-                      {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
-                    </h3>
-                    <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} title="Next month" className={`p-1.5 rounded-lg transition-all ${theme === 'dark' ? 'bg-slate-800 text-slate-400 hover:text-emerald-400' : 'bg-slate-100 text-slate-500 hover:text-emerald-600'}`}>
-                      <ChevronRightIcon />
-                    </button>
-                  </div>
-                </div>
-                
-                <select 
-                  value={dashboardGraphFilter}
-                  onChange={(e) => setDashboardGraphFilter(e.target.value)}
-                  className={`text-[11px] font-black uppercase px-3 py-2 rounded-full border transition-all duration-500 cursor-pointer focus:outline-none max-w-[120px] md:max-w-[160px] truncate shrink-0
-                    ${theme === 'dark' 
-                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.2)] hover:bg-emerald-500/20' 
-                      : 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:border-emerald-300 shadow-sm'}`}
-                >
-                  <option value="all" className={theme === 'dark' ? 'bg-slate-900' : 'bg-white'}>Overall</option>
-                  {habits.filter(h => !archivedHabits.includes(h)).map(h => (
-                    <option key={h} value={h} className={theme === 'dark' ? 'bg-slate-900' : 'bg-white'}>{h}</option>
-                  ))}
-                </select>
-              </div>
+          {/* Monthly Graph Detailed Modal */}
+          {showMonthlyGraphModal && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowMonthlyGraphModal(false)}>
+              <motion.div initial={{ scale: 0.9, opacity: 0, y: 50 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 50 }} className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} border rounded-[1.2rem] md:rounded-[2rem] w-full max-w-4xl p-6 md:p-8 shadow-2xl relative flex flex-col`} onClick={e => e.stopPropagation()}>
+                <button onClick={() => setShowMonthlyGraphModal(false)} className={`absolute top-6 right-6 flex flex-col items-center gap-0.5 p-2 ${getTextMuted()} hover:text-rose-500 transition-all`} title="Close (ESC)"><XIcon /><span className="text-[6px] font-mono opacity-50">ESC</span></button>
 
-              {/* Monthly Trend Onboarding Guide */}
-              {!hasAnyData && (
-                <div className={`mb-4 p-3.5 rounded-2xl border ${theme === 'dark' ? 'bg-slate-800/60 border-slate-700' : 'bg-emerald-50/80 border-emerald-200'} flex items-center gap-3`}>
-                  <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-500 flex items-center justify-center shrink-0 text-base">
-                    📈
-                  </div>
+                <div className="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
                   <div>
-                    <p className={`text-[10px] font-black uppercase tracking-wider ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-700'}`}>Monthly Trend Curve</p>
-                    <p className={`text-xs font-medium leading-relaxed ${getTextMuted()}`}>As you check off habits across the month, this graph forms a smooth consistency curve showing your daily trajectory.</p>
+                    <p className={`text-[10px] font-black ${getTextMuted()} uppercase tracking-[0.2em] mb-2`}>Monthly Trends</p>
+                    <div className="flex items-center gap-3">
+                      <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} title="Previous month" className={`p-1.5 rounded-lg transition-all ${theme === 'dark' ? 'bg-slate-800 text-slate-400 hover:text-emerald-400' : 'bg-slate-100 text-slate-500 hover:text-emerald-600'}`}>
+                        <ChevronLeftIcon />
+                      </button>
+                      <h3 className={`text-2xl md:text-3xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'} min-w-[160px] md:min-w-[200px] text-center`}>
+                        {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
+                      </h3>
+                      <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} title="Next month" className={`p-1.5 rounded-lg transition-all ${theme === 'dark' ? 'bg-slate-800 text-slate-400 hover:text-emerald-400' : 'bg-slate-100 text-slate-500 hover:text-emerald-600'}`}>
+                        <ChevronRightIcon />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
 
-              <div className={`w-full h-[60vh] rounded-3xl border p-4 md:p-6 ${theme === 'dark' ? 'bg-slate-800/30 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={monthlyGraphData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.6}/>
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme === 'dark' ? '#334155' : '#e2e8f0'} />
-                    <XAxis 
-                      dataKey="date" 
-                      stroke={theme === 'dark' ? '#64748b' : '#94a3b8'} 
-                      fontSize={10} 
-                      tickLine={false} 
-                      axisLine={false}
-                      tickMargin={10}
-                    />
-                    <YAxis 
-                      stroke={theme === 'dark' ? '#64748b' : '#94a3b8'} 
-                      fontSize={10} 
-                      tickLine={false} 
-                      axisLine={false}
-                      domain={[0, 100]}
-                      tickFormatter={(val) => `${val}%`}
-                    />
-                    <RechartsTooltip 
-                      cursor={{ stroke: '#10b981', strokeWidth: 2, strokeDasharray: '4 4' }}
-                      content={({ active, payload }) => {
-                        if (active && payload && payload.length) {
-                          return (
-                            <div className={`px-3 py-2 rounded-xl border shadow-xl flex flex-col gap-1 ${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
-                              <span className={`text-[10px] font-black uppercase ${getTextMuted()}`}>{payload[0].payload.fullDate}</span>
-                              <span className="text-sm font-black text-emerald-500">{payload[0].value}% Score</span>
-                            </div>
-                          );
-                        }
-                        return null;
-                      }}
-                    />
-                    <Area 
-                      type="monotone" 
-                      dataKey="score" 
-                      stroke="#10b981" 
-                      strokeWidth={3}
-                      fillOpacity={1} 
-                      fill="url(#colorScore)" 
-                      activeDot={{ r: 6, fill: '#10b981', stroke: theme === 'dark' ? '#0f172a' : '#ffffff', strokeWidth: 3 }}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-
-{/* Weekly Summary Popup Modal */}
-        {showWeeklyModal && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[150] flex items-center justify-center bg-black/70 backdrop-blur-md p-4" onClick={() => setShowWeeklyModal(false)}>
-            <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} border rounded-[2.5rem] w-full max-w-2xl p-8 shadow-2xl relative`} onClick={e => e.stopPropagation()}>
-              
-              <button onClick={() => setShowWeeklyModal(false)} className={`absolute top-6 right-6 flex flex-col items-center gap-0.5 p-2 ${getTextMuted()} hover:text-rose-500 transition-all`} title="Close (ESC)"><XIcon /><span className="text-[6px] font-mono opacity-50">ESC</span></button>
-              
-              <div className="mb-8">
-                <p className={`text-[10px] font-black ${getTextMuted()} uppercase tracking-[0.2em] mb-1`}>Performance Overview</p>
-                <h3 className={`text-3xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Weekly Summary</h3>
-              </div>
-
-              {/* Weekly Summary Onboarding Guide */}
-              {weeklySummary.avgScore === 0 && !hasAnyData && (
-                <div className={`mb-6 p-4 rounded-2xl border ${theme === 'dark' ? 'bg-slate-800/60 border-slate-700' : 'bg-emerald-50/80 border-emerald-200'} flex items-center gap-3.5`}>
-                  <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-500 flex items-center justify-center shrink-0 text-lg">
-                    📊
-                  </div>
-                  <div>
-                    <p className={`text-[10px] font-black uppercase tracking-wider ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-700'}`}>Weekly Performance Report</p>
-                    <p className={`text-xs font-medium leading-relaxed ${getTextMuted()}`}>Track habits across 3 or more days to generate your 7-day rolling score and top habit achievements ranking.</p>
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className={`p-6 rounded-3xl border ${theme === 'dark' ? 'bg-emerald-900/20 border-emerald-500/20' : 'bg-emerald-50 border-emerald-100'} flex flex-col items-center justify-center`}>
-                  <span className="text-4xl font-black text-emerald-500">{weeklySummary.avgScore}%</span>
-                  <span className={`text-[9px] font-black uppercase mt-2 ${getTextMuted()}`}>7-Day Average</span>
-                </div>
-                
-              {/* --- NEW VISUALISATION SECTION --- */}
-              <div className="col-span-1 md:col-span-2">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <ActivityIcon className="w-4 h-4 text-emerald-500" />
-                    <p className={`text-[10px] font-black ${getTextMuted()} uppercase tracking-widest`}>
-                      {weeklyGraphFilter === 'all' ? 'Performance Graph' : `${weeklyGraphFilter} Trend`}
-                    </p>
-                  </div>
-                  <select 
-                    value={weeklyGraphFilter} 
-                    onChange={(e) => setWeeklyGraphFilter(e.target.value)}
-                    className={`text-[11px] font-black uppercase px-2 py-1 rounded-full border transition-all duration-500 cursor-pointer focus:outline-none max-w-[80px] md:max-w-[120px] truncate
-                      ${theme === 'dark' 
-                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.2)] hover:bg-emerald-500/20' 
+                  <select
+                    value={dashboardGraphFilter}
+                    onChange={(e) => setDashboardGraphFilter(e.target.value)}
+                    className={`text-[11px] font-black uppercase px-3 py-2 rounded-full border transition-all duration-500 cursor-pointer focus:outline-none max-w-[120px] md:max-w-[160px] truncate shrink-0
+                    ${theme === 'dark'
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.2)] hover:bg-emerald-500/20'
                         : 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:border-emerald-300 shadow-sm'}`}
                   >
                     <option value="all" className={theme === 'dark' ? 'bg-slate-900' : 'bg-white'}>Overall</option>
@@ -2360,234 +2583,490 @@ export default function App() {
                     ))}
                   </select>
                 </div>
-                
-                <div className={`w-full h-48 rounded-2xl border p-4 ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+
+                {/* Monthly Trend Onboarding Guide */}
+                {!hasAnyData && (
+                  <div className={`mb-4 p-3.5 rounded-2xl border ${theme === 'dark' ? 'bg-slate-800/60 border-slate-700' : 'bg-emerald-50/80 border-emerald-200'} flex items-center gap-3`}>
+                    <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-500 flex items-center justify-center shrink-0 text-base">
+                      📈
+                    </div>
+                    <div>
+                      <p className={`text-[10px] font-black uppercase tracking-wider ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-700'}`}>Monthly Trend Curve</p>
+                      <p className={`text-xs font-medium leading-relaxed ${getTextMuted()}`}>As you check off habits across the month, this graph forms a smooth consistency curve showing your daily trajectory.</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className={`w-full h-[60vh] rounded-3xl border p-4 md:p-6 ${theme === 'dark' ? 'bg-slate-800/30 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={weeklyGraphData}>
-                      <XAxis 
-                        dataKey="name" 
-                        stroke={theme === 'dark' ? '#64748b' : '#94a3b8'} 
-                        fontSize={8} 
-                        tickLine={false} 
+                    <AreaChart data={monthlyGraphData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.6} />
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme === 'dark' ? '#334155' : '#e2e8f0'} />
+                      <XAxis
+                        dataKey="date"
+                        stroke={theme === 'dark' ? '#64748b' : '#94a3b8'}
+                        fontSize={10}
+                        tickLine={false}
                         axisLine={false}
-                        interval={0}
-                        tickFormatter={(val) => val.slice(0, 3).toUpperCase()}
+                        tickMargin={10}
                       />
-                      <RechartsTooltip 
-                        cursor={{ fill: theme === 'dark' ? '#334155' : '#e2e8f0', opacity: 0.4 }}
+                      <YAxis
+                        stroke={theme === 'dark' ? '#64748b' : '#94a3b8'}
+                        fontSize={10}
+                        tickLine={false}
+                        axisLine={false}
+                        domain={[0, 100]}
+                        tickFormatter={(val) => `${val}%`}
+                      />
+                      <RechartsTooltip
+                        cursor={{ stroke: '#10b981', strokeWidth: 2, strokeDasharray: '4 4' }}
                         content={({ active, payload }) => {
                           if (active && payload && payload.length) {
                             return (
-                              <div className={`px-2 py-1 rounded-lg border text-xs font-black uppercase ${theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-800'}`}>
-                                {payload[0].payload.name}: <span className="text-emerald-500">{payload[0].value}%</span>
+                              <div className={`px-3 py-2 rounded-xl border shadow-xl flex flex-col gap-1 ${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                                <span className={`text-[10px] font-black uppercase ${getTextMuted()}`}>{payload[0].payload.fullDate}</span>
+                                <span className="text-sm font-black text-emerald-500">{payload[0].value}% Score</span>
                               </div>
                             );
                           }
                           return null;
                         }}
                       />
-                      <Bar dataKey="score" radius={[4, 4, 4, 4]}>
-                        {weeklyGraphData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.score >= 80 ? '#10b981' : entry.score >= 50 ? '#3b82f6' : '#64748b'} />
-                        ))}
-                      </Bar>
-                    </BarChart>
+                      <Area
+                        type="monotone"
+                        dataKey="score"
+                        stroke="#10b981"
+                        strokeWidth={3}
+                        fillOpacity={1}
+                        fill="url(#colorScore)"
+                        activeDot={{ r: 6, fill: '#10b981', stroke: theme === 'dark' ? '#0f172a' : '#ffffff', strokeWidth: 3 }}
+                      />
+                    </AreaChart>
                   </ResponsiveContainer>
                 </div>
-              </div>
-              {/* --- END NEW VISUALISATION SECTION --- */}
-              {/* --- END NEW VISUALISATION SECTION --- */}
-                <div className="col-span-1 md:col-span-3 space-y-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <TrophyIcon className="text-yellow-500" />
-                    <p className={`text-[10px] font-black ${getTextMuted()} uppercase tracking-widest`}>Top Achievements</p>
-                  </div>
-                  {weeklySummary.topHabits.map((h, i) => (
-                    <div key={i} className={`p-4 rounded-2xl border ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'} flex items-center justify-between`}>
-                      <span className={`text-[10px] font-black uppercase ${theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>{h.name}</span>
-                      <span className="text-sm font-black text-emerald-500">{h.score}%</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              </motion.div>
             </motion.div>
-          </motion.div>
-        )}
+          )}
 
-        {/* --- JOURNAL HISTORY MODAL --- */}
-        {showAllNotes && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[180] flex items-center justify-center bg-black/70 backdrop-blur-md p-4" onClick={() => setShowAllNotes(false)}>
-            <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} border rounded-[2.5rem] w-full max-w-lg p-8 shadow-2xl relative flex flex-col max-h-[85vh]`} onClick={e => e.stopPropagation()}>
-              <button onClick={() => setShowAllNotes(false)} className={`absolute top-6 right-6 flex flex-col items-center gap-0.5 p-2 ${getTextMuted()} hover:text-rose-500 transition-all`} title="Close (ESC)"><XIcon /><span className="text-[6px] font-mono opacity-50">ESC</span></button>
-              
-              <div className="mb-6 shrink-0">
-                <p className={`text-[10px] font-black ${getTextMuted()} uppercase tracking-[0.2em] mb-1`}>Reflection Log</p>
-                <h3 className={`text-3xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Journal History</h3>
-              </div>
+          {/* Weekly Summary Popup Modal */}
+          {showWeeklyModal && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[150] flex items-center justify-center bg-black/70 backdrop-blur-md p-4" onClick={() => setShowWeeklyModal(false)}>
+              <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} border rounded-[2.5rem] w-full max-w-2xl p-8 shadow-2xl relative`} onClick={e => e.stopPropagation()}>
 
-              <div className="overflow-y-auto custom-scrollbar pr-2 space-y-4">
-                {Object.keys(trackerData).filter(k => trackerData[k]?.note).length > 0 ? (
-                  Object.entries(trackerData)
-                    .filter(([k, v]) => v.note && v.note.trim())
-                    .sort((a, b) => parseLocalDate(b[0]) - parseLocalDate(a[0])) // Sort by newest first (parseLocalDate avoids UTC timezone offset bugs)
-                    .map(([dateKey, data]) => (
-                      <div key={dateKey} className={`relative p-5 rounded-2xl border transition-colors ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                        {/* Top row: date badge + edit icon */}
-                        <div className="flex items-center justify-between mb-3">
-                          <span className={`text-[9px] font-black uppercase tracking-wider ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'} bg-emerald-500/10 px-2 py-1 rounded-md border border-emerald-500/20`}>
-                            {parseLocalDate(dateKey).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
-                          </span>
-                          {/* Edit icon — top right */}
-                          <button
-                            onClick={() => { setEditingNoteDate(dateKey); setShowAllNotes(false); }}
-                            title="Edit entry"
-                            className={`p-1.5 rounded-lg transition-all ${theme === 'dark' ? 'text-slate-500 hover:text-emerald-400 hover:bg-slate-700' : 'text-slate-400 hover:text-emerald-600 hover:bg-slate-200'}`}
-                          >
-                            <EditIcon />
-                          </button>
-                        </div>
+                <button onClick={() => setShowWeeklyModal(false)} className={`absolute top-6 right-6 flex flex-col items-center gap-0.5 p-2 ${getTextMuted()} hover:text-rose-500 transition-all`} title="Close (ESC)"><XIcon /><span className="text-[6px] font-mono opacity-50">ESC</span></button>
 
-                        {/* Note content */}
-                        <p className={`text-sm font-medium whitespace-pre-wrap leading-relaxed mb-4 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>
-                          {data.note}
-                        </p>
+                <div className="mb-8">
+                  <p className={`text-[10px] font-black ${getTextMuted()} uppercase tracking-[0.2em] mb-1`}>Performance Overview</p>
+                  <h3 className={`text-3xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Weekly Summary</h3>
+                </div>
 
-                        {/* Bottom row: delete icon — bottom right */}
-                        <div className="flex justify-end">
-                          {confirmDeleteNoteDate === dateKey ? (
-                            <div className="flex items-center gap-1.5">
-                              <span className={`text-[9px] font-black uppercase ${theme === 'dark' ? 'text-rose-400' : 'text-rose-500'}`}>Sure?</span>
-                              <button
-                                onClick={() => setConfirmDeleteNoteDate(null)}
-                                className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-lg border transition-all ${theme === 'dark' ? 'border-slate-600 text-slate-400 hover:bg-slate-700' : 'border-slate-200 text-slate-500 hover:bg-slate-100'}`}
-                              >Cancel</button>
-                              <button
-                                onClick={() => { deleteNote(dateKey); setConfirmDeleteNoteDate(null); }}
-                                className="text-[9px] font-black uppercase px-2 py-0.5 rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white transition-all"
-                              >Delete</button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => setConfirmDeleteNoteDate(dateKey)}
-                              title="Delete entry"
-                              className={`p-1.5 rounded-lg transition-all ${theme === 'dark' ? 'text-slate-600 hover:text-rose-400 hover:bg-slate-700' : 'text-slate-300 hover:text-rose-500 hover:bg-rose-50'}`}
-                            >
-                              <TrashIcon />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))
-                ) : (
-                  <div className={`text-center py-10 px-6 rounded-3xl border ${theme === 'dark' ? 'bg-slate-800/30 border-slate-800' : 'bg-slate-50 border-slate-200'} flex flex-col items-center max-w-md mx-auto my-4`}>
-                    <div className="w-14 h-14 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-500 flex items-center justify-center text-2xl mb-4 shadow-lg shadow-blue-500/10">
-                      📝
+                {/* Weekly Summary Onboarding Guide */}
+                {weeklySummary.avgScore === 0 && !hasAnyData && (
+                  <div className={`mb-6 p-4 rounded-2xl border ${theme === 'dark' ? 'bg-slate-800/60 border-slate-700' : 'bg-emerald-50/80 border-emerald-200'} flex items-center gap-3.5`}>
+                    <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-500 flex items-center justify-center shrink-0 text-lg">
+                      📊
                     </div>
-                    <h4 className={`text-base font-black mb-1.5 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
-                      Start Your Daily Reflection Journal
-                    </h4>
-                    <p className={`text-xs font-medium mb-5 leading-relaxed max-w-xs ${getTextMuted()}`}>
-                      Log how your day went, workout notes, or reasons behind a missed habit. Every date in the tracker has a note icon.
-                    </p>
-                    <div className={`w-full p-3.5 rounded-xl border text-left mb-5 text-[11px] leading-relaxed ${theme === 'dark' ? 'bg-slate-900/60 border-slate-700/60 text-slate-400' : 'bg-white border-slate-200 text-slate-500'}`}>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[9px] font-black uppercase tracking-wider text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded">Example Entry</span>
-                      </div>
-                      &ldquo;Completed calisthenics & 7h sleep. Energy level 9/10. Felt focused throughout study time.&rdquo;
+                    <div>
+                      <p className={`text-[10px] font-black uppercase tracking-wider ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-700'}`}>Weekly Performance Report</p>
+                      <p className={`text-xs font-medium leading-relaxed ${getTextMuted()}`}>Track habits across 3 or more days to generate your 7-day rolling score and top habit achievements ranking.</p>
                     </div>
-                    <button
-                      onClick={() => {
-                        const todayKey = getSafeKey(new Date());
-                        setEditingNoteDate(todayKey);
-                        setShowAllNotes(false);
-                      }}
-                      className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-black uppercase tracking-wider transition-all shadow-lg shadow-blue-500/25 flex items-center gap-2"
-                    >
-                      <span>Write Today&apos;s Note</span>
-                      <EditIcon />
-                    </button>
                   </div>
                 )}
-              </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className={`p-6 rounded-3xl border ${theme === 'dark' ? 'bg-emerald-900/20 border-emerald-500/20' : 'bg-emerald-50 border-emerald-100'} flex flex-col items-center justify-center`}>
+                    <span className="text-4xl font-black text-emerald-500">{weeklySummary.avgScore}%</span>
+                    <span className={`text-[9px] font-black uppercase mt-2 ${getTextMuted()}`}>7-Day Average</span>
+                  </div>
+
+                  {/* --- NEW VISUALISATION SECTION --- */}
+                  <div className="col-span-1 md:col-span-2">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <ActivityIcon className="w-4 h-4 text-emerald-500" />
+                        <p className={`text-[10px] font-black ${getTextMuted()} uppercase tracking-widest`}>
+                          {weeklyGraphFilter === 'all' ? 'Performance Graph' : `${weeklyGraphFilter} Trend`}
+                        </p>
+                      </div>
+                      <select
+                        value={weeklyGraphFilter}
+                        onChange={(e) => setWeeklyGraphFilter(e.target.value)}
+                        className={`text-[11px] font-black uppercase px-2 py-1 rounded-full border transition-all duration-500 cursor-pointer focus:outline-none max-w-[80px] md:max-w-[120px] truncate
+                      ${theme === 'dark'
+                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.2)] hover:bg-emerald-500/20'
+                            : 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:border-emerald-300 shadow-sm'}`}
+                      >
+                        <option value="all" className={theme === 'dark' ? 'bg-slate-900' : 'bg-white'}>Overall</option>
+                        {habits.filter(h => !archivedHabits.includes(h)).map(h => (
+                          <option key={h} value={h} className={theme === 'dark' ? 'bg-slate-900' : 'bg-white'}>{h}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className={`w-full h-48 rounded-2xl border p-4 ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={weeklyGraphData}>
+                          <XAxis
+                            dataKey="name"
+                            stroke={theme === 'dark' ? '#64748b' : '#94a3b8'}
+                            fontSize={8}
+                            tickLine={false}
+                            axisLine={false}
+                            interval={0}
+                            tickFormatter={(val) => val.slice(0, 3).toUpperCase()}
+                          />
+                          <RechartsTooltip
+                            cursor={{ fill: theme === 'dark' ? '#334155' : '#e2e8f0', opacity: 0.4 }}
+                            content={({ active, payload }) => {
+                              if (active && payload && payload.length) {
+                                return (
+                                  <div className={`px-2 py-1 rounded-lg border text-xs font-black uppercase ${theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-800'}`}>
+                                    {payload[0].payload.name}: <span className="text-emerald-500">{payload[0].value}%</span>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            }}
+                          />
+                          <Bar dataKey="score" radius={[4, 4, 4, 4]}>
+                            {weeklyGraphData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.score >= 80 ? '#10b981' : entry.score >= 50 ? '#3b82f6' : '#64748b'} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                  {/* --- END NEW VISUALISATION SECTION --- */}
+                  {/* --- END NEW VISUALISATION SECTION --- */}
+                  <div className="col-span-1 md:col-span-3 space-y-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <TrophyIcon className="text-yellow-500" />
+                      <p className={`text-[10px] font-black ${getTextMuted()} uppercase tracking-widest`}>Top Achievements</p>
+                    </div>
+                    {weeklySummary.topHabits.map((h, i) => (
+                      <div key={i} className={`p-4 rounded-2xl border ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'} flex items-center justify-between`}>
+                        <span className={`text-[10px] font-black uppercase ${theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>{h.name}</span>
+                        <span className="text-sm font-black text-emerald-500">{h.score}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
             </motion.div>
-          </motion.div>
-        )}
+          )}
 
-        {/* --- INSIGHTS MODAL --- */}
-        {showInsightsModal && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[180] flex items-center justify-center bg-black/70 backdrop-blur-md p-4" onClick={() => setShowInsightsModal(false)}>
-            <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} border rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl relative flex flex-col max-h-[85vh]`} onClick={e => e.stopPropagation()}>
-              <button onClick={() => setShowInsightsModal(false)} className={`absolute top-6 right-6 flex flex-col items-center gap-0.5 p-2 ${getTextMuted()} hover:text-rose-500 transition-all`} title="Close (ESC)"><XIcon /><span className="text-[6px] font-mono opacity-50">ESC</span></button>
-              
-              <div className="mb-6 shrink-0">
-                <p className={`text-[10px] font-black ${getTextMuted()} uppercase tracking-[0.2em] mb-1`}>Year in Review</p>
-                <h3 className={`text-3xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Insights</h3>
-              </div>
+          {/* --- JOURNAL HISTORY MODAL --- */}
+          {/* --- 51-ENTRY CENTERED JOURNAL HISTORY MODAL --- */}
+          {showAllNotes && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[180] flex items-center justify-center bg-black/70 backdrop-blur-md p-4" onClick={() => setShowAllNotes(false)}>
+              <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} border rounded-[2.5rem] w-full max-w-xl p-6 md:p-8 shadow-2xl relative flex flex-col max-h-[88vh]`} onClick={e => e.stopPropagation()}>
+                <button onClick={() => setShowAllNotes(false)} className={`absolute top-6 right-6 flex flex-col items-center gap-0.5 p-2 ${getTextMuted()} hover:text-rose-500 transition-all`} title="Close (ESC)"><XIcon /><span className="text-[6px] font-mono opacity-50">ESC</span></button>
 
-              <div className="overflow-y-auto custom-scrollbar pr-2 space-y-4">
-                
-                {/* Grid for small stats */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className={`p-4 rounded-2xl border flex flex-col items-center justify-center text-center ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                    <span className={`text-[10px] font-black uppercase tracking-widest ${getTextMuted()} mb-1`}>Perfect Days</span>
-                    <span className={`text-2xl font-black ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                      {insightsData.perfectDaysCount} <span className="text-[10px] font-bold opacity-50 uppercase tracking-widest">Days</span>
+                <div className="mb-4 shrink-0">
+                  <p className={`text-[10px] font-black ${getTextMuted()} uppercase tracking-[0.2em] mb-1`}>Reflection Log</p>
+                  <div className="flex items-center justify-between">
+                    <h3 className={`text-2xl md:text-3xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Journal History</h3>
+                    <span className={`text-[10px] font-bold ${getTextMuted()} mr-8`}>
+                      {centeredJournalEntries.filter(e => e.hasNote).length} reflections
                     </span>
                   </div>
-                  <div className={`p-4 rounded-2xl border flex flex-col items-center justify-center text-center ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                    <span className={`text-[10px] font-black uppercase tracking-widest ${getTextMuted()} mb-1`}>Total Wins</span>
-                    <span className={`text-2xl font-black ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>
-                      {insightsData.totalWins} <span className="text-[10px] font-bold opacity-50 uppercase tracking-widest">Habits</span>
-                    </span>
-                  </div>
-                </div>
+                  <p className={`text-xs font-medium mt-1 ${getTextMuted()}`}>
+                    Centered view: Up to 51 closest reflections with Today anchored in the middle
+                  </p>
 
-                {/* Best Day */}
-                <div className={`p-5 rounded-2xl border flex items-center justify-between ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                  <div className="flex flex-col">
-                    <span className={`text-[10px] font-black uppercase tracking-widest ${getTextMuted()}`}>Best Day</span>
-                    <span className={`text-xl font-black mt-1 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{insightsData.bestDay}</span>
-                  </div>
-                  <div className={`w-14 h-14 rounded-full flex flex-col items-center justify-center border-4 ${theme === 'dark' ? 'border-purple-500/20 text-purple-400 bg-purple-500/10' : 'border-purple-200 text-purple-600 bg-purple-50'}`}>
-                    <span className="text-sm font-black">{insightsData.bestDayScore}%</span>
-                  </div>
-                </div>
-
-                {/* Longest Streaks */}
-                <div className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                  <span className={`text-[10px] font-black uppercase tracking-widest ${getTextMuted()}`}>Top All-Time Streaks</span>
-                  <div className="mt-4 space-y-3">
-                    {insightsData.topStreaks.length > 0 ? (
-                      insightsData.topStreaks.map((streakData, i) => (
-                        <div key={streakData.habit} className="flex items-center justify-between">
-                          <span className={`text-sm font-bold uppercase truncate pr-4 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>{i + 1}. {streakData.habit}</span>
-                          <div className="flex gap-2 shrink-0">
-                            {streakData.current > 0 && (
-                              <div className={`flex flex-col items-center px-2 py-1 rounded-lg ${theme === 'dark' ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-emerald-50 border border-emerald-200'}`} title="Active streak going on right now">
-                                <span className={`text-[8px] font-black uppercase opacity-70 ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>Current</span>
-                                <span className={`text-[11px] font-black ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                                  🔥 {streakData.current} {streakData.current === 1 ? 'Day' : 'Days'}
-                                </span>
-                              </div>
-                            )}
-                            <div className={`flex flex-col items-center px-2 py-1 rounded-lg ${theme === 'dark' ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-amber-50 border border-amber-200'}`} title="Longest streak you've ever had">
-                              <span className={`text-[8px] font-black uppercase opacity-70 ${theme === 'dark' ? 'text-amber-400' : 'text-amber-600'}`}>Best</span>
-                              <span className={`text-[11px] font-black ${theme === 'dark' ? 'text-amber-400' : 'text-amber-600'}`}>
-                                🏆 {streakData.max} {streakData.max === 1 ? 'Day' : 'Days'}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <span className={`text-xs font-bold ${getTextMuted()}`}>No streaks yet. Keep going!</span>
+                  {/* Search bar */}
+                  <div className="relative mt-3">
+                    <input
+                      type="text"
+                      value={journalSearchQuery}
+                      onChange={(e) => setJournalSearchQuery(e.target.value)}
+                      placeholder="Search journal entries or dates..."
+                      className={`w-full px-4 py-2.5 rounded-xl text-xs font-bold focus:outline-none border-2 transition-all ${theme === 'dark'
+                        ? 'bg-slate-800/80 border-slate-700/80 focus:border-emerald-500 text-white placeholder:text-slate-500'
+                        : 'bg-slate-50 border-slate-200 focus:border-emerald-500 text-slate-800 placeholder:text-slate-400'
+                        }`}
+                    />
+                    {journalSearchQuery && (
+                      <button
+                        onClick={() => setJournalSearchQuery('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-white"
+                        title="Clear search"
+                      >
+                        <XIcon />
+                      </button>
                     )}
                   </div>
                 </div>
-              </div>
+
+                {/* Scrollable list container with py-[18vh] so Today can center even if there are 0 earlier or 0 later notes */}
+                <div
+                  ref={journalListContainerRef}
+                  className="overflow-y-auto custom-scrollbar pr-2 space-y-4 py-[18vh] flex-1 min-h-0"
+                >
+                  {filteredJournalEntries.length === 0 ? (
+                    <div className={`text-center py-10 px-6 rounded-3xl border ${theme === 'dark' ? 'bg-slate-800/30 border-slate-800' : 'bg-slate-50 border-slate-200'} flex flex-col items-center max-w-md mx-auto my-4`}>
+                      <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-center justify-center text-xl mb-3">
+                        🔍
+                      </div>
+                      <h4 className={`text-base font-black mb-1 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                        No journals matched &ldquo;{journalSearchQuery}&rdquo;
+                      </h4>
+                      {journalTypoSuggestion ? (
+                        <p className="text-xs font-medium text-slate-400 mt-1 mb-4">
+                          Did you mean:{" "}
+                          <button
+                            type="button"
+                            onClick={() => setJournalSearchQuery(journalTypoSuggestion)}
+                            className="text-emerald-400 underline font-bold hover:text-emerald-300"
+                          >
+                            {journalTypoSuggestion}
+                          </button>
+                          ?
+                        </p>
+                      ) : (
+                        <p className={`text-xs font-medium mb-4 ${getTextMuted()}`}>
+                          Try searching by date, habit keyword, or partial note text.
+                        </p>
+                      )}
+                      <button
+                        onClick={() => setJournalSearchQuery('')}
+                        className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white text-xs font-black uppercase tracking-wider transition-all border border-slate-700"
+                      >
+                        Clear Search
+                      </button>
+                    </div>
+                  ) : (
+                    filteredJournalEntries.map((entry) => {
+                      const isEditingThisCard = inlineEditingJournalKey === entry.dateKey;
+                      return (
+                        <div
+                          key={entry.dateKey}
+                          ref={entry.isToday ? todayJournalCardRef : null}
+                          className={`relative p-5 rounded-2xl border transition-all ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'
+                            } ${entry.isToday ? 'ring-2 ring-emerald-500/40 shadow-[0_0_25px_rgba(16,185,129,0.12)]' : ''}`}
+                        >
+                          {/* Top row: date badge + edit icon (exact same layout for Today and all other days) */}
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <span className={`text-[9px] font-black uppercase tracking-wider ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'} bg-emerald-500/10 px-2 py-1 rounded-md border border-emerald-500/20`}>
+                                {parseLocalDate(entry.dateKey).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                              </span>
+                              {entry.isToday && (
+                                <span className="text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-emerald-500 text-white shadow-sm">
+                                  Today
+                                </span>
+                              )}
+                              {entry.noteTime && (
+                                <span className={`text-[9px] font-bold ${getTextMuted()}`}>{entry.noteTime}</span>
+                              )}
+                            </div>
+
+                            {/* Top-right Edit button */}
+                            {!isEditingThisCard && (
+                              <button
+                                onClick={() => {
+                                  setInlineEditingJournalKey(entry.dateKey);
+                                  setInlineJournalDraft(entry.note || '');
+                                }}
+                                title={entry.hasNote ? "Edit entry" : "Write journal"}
+                                className={`p-1.5 rounded-lg transition-all ${theme === 'dark' ? 'text-slate-500 hover:text-emerald-400 hover:bg-slate-700' : 'text-slate-400 hover:text-emerald-600 hover:bg-slate-200'}`}
+                              >
+                                <EditIcon />
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Card Body */}
+                          {isEditingThisCard ? (
+                            <div className="space-y-3">
+                              <textarea
+                                value={inlineJournalDraft}
+                                onChange={(e) => setInlineJournalDraft(e.target.value)}
+                                placeholder={entry.isToday ? "Write today's reflection journal..." : "Write reflection journal..."}
+                                rows={3}
+                                className={`w-full p-3 rounded-xl border text-sm font-medium leading-relaxed focus:outline-none focus:ring-2 focus:ring-emerald-500/50 resize-none ${theme === 'dark'
+                                  ? 'bg-slate-900/70 border-slate-700 text-slate-200 placeholder-slate-500'
+                                  : 'bg-white border-slate-200 text-slate-700 placeholder-slate-400'
+                                  }`}
+                              />
+                              <div className="flex items-center justify-end gap-2">
+                                {entry.hasNote && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setInlineEditingJournalKey(null);
+                                      setInlineJournalDraft('');
+                                    }}
+                                    className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider border transition-all ${theme === 'dark' ? 'border-slate-700 text-slate-400 hover:bg-slate-700' : 'border-slate-200 text-slate-500 hover:bg-slate-100'
+                                      }`}
+                                  >
+                                    Cancel
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    saveNote(entry.dateKey, inlineJournalDraft);
+                                    setInlineEditingJournalKey(null);
+                                    triggerActionToast({
+                                      type: 'success',
+                                      title: '📝 Journal Reflection Saved!',
+                                      subtitle: `Saved entry for ${parseLocalDate(entry.dateKey).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}.`,
+                                    }, 3500);
+                                  }}
+                                  disabled={!inlineJournalDraft.trim()}
+                                  className="px-4 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-white text-[10px] font-black uppercase tracking-wider transition-all shadow-md shadow-emerald-500/20 flex items-center gap-1.5"
+                                >
+                                  <CheckIcon />
+                                  <span>Save Journal</span>
+                                </button>
+                              </div>
+                            </div>
+                          ) : entry.hasNote ? (
+                            <>
+                              <p className={`text-sm font-medium whitespace-pre-wrap leading-relaxed mb-4 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>
+                                {entry.note}
+                              </p>
+                              <div className="flex justify-end">
+                                {confirmDeleteNoteDate === entry.dateKey ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <span className={`text-[9px] font-black uppercase ${theme === 'dark' ? 'text-rose-400' : 'text-rose-500'}`}>Sure?</span>
+                                    <button
+                                      onClick={() => setConfirmDeleteNoteDate(null)}
+                                      className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-lg border transition-all ${theme === 'dark' ? 'border-slate-600 text-slate-400 hover:bg-slate-700' : 'border-slate-200 text-slate-500 hover:bg-slate-100'}`}
+                                    >
+                                      Cancel
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        deleteNote(entry.dateKey);
+                                        setConfirmDeleteNoteDate(null);
+                                        if (entry.isToday) {
+                                          setInlineEditingJournalKey(entry.dateKey);
+                                          setInlineJournalDraft('');
+                                        }
+                                      }}
+                                      className="text-[9px] font-black uppercase px-2 py-0.5 rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white transition-all"
+                                    >
+                                      Delete
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => setConfirmDeleteNoteDate(entry.dateKey)}
+                                    title="Delete entry"
+                                    className={`p-1.5 rounded-lg transition-all ${theme === 'dark' ? 'text-slate-600 hover:text-rose-400 hover:bg-slate-700' : 'text-slate-300 hover:text-rose-500 hover:bg-rose-50'}`}
+                                  >
+                                    <TrashIcon />
+                                  </button>
+                                )}
+                              </div>
+                            </>
+                          ) : (
+                            <div className="flex items-center justify-between pt-1">
+                              <span className={`text-xs italic ${getTextMuted()}`}>No journal written for today yet.</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setInlineEditingJournalKey(entry.dateKey);
+                                  setInlineJournalDraft('');
+                                }}
+                                className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-black uppercase tracking-wider transition-all shadow-md shadow-emerald-500/20"
+                              >
+                                Write Journal
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </motion.div>
             </motion.div>
-          </motion.div>
-        )}
+          )}
+
+          {/* --- INSIGHTS MODAL --- */}
+          {showInsightsModal && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[180] flex items-center justify-center bg-black/70 backdrop-blur-md p-4" onClick={() => setShowInsightsModal(false)}>
+              <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} border rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl relative flex flex-col max-h-[85vh]`} onClick={e => e.stopPropagation()}>
+                <button onClick={() => setShowInsightsModal(false)} className={`absolute top-6 right-6 flex flex-col items-center gap-0.5 p-2 ${getTextMuted()} hover:text-rose-500 transition-all`} title="Close (ESC)"><XIcon /><span className="text-[6px] font-mono opacity-50">ESC</span></button>
+
+                <div className="mb-6 shrink-0">
+                  <p className={`text-[10px] font-black ${getTextMuted()} uppercase tracking-[0.2em] mb-1`}>Year in Review</p>
+                  <h3 className={`text-3xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Insights</h3>
+                </div>
+
+                <div className="overflow-y-auto custom-scrollbar pr-2 space-y-4">
+
+                  {/* Grid for small stats */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className={`p-4 rounded-2xl border flex flex-col items-center justify-center text-center ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                      <span className={`text-[10px] font-black uppercase tracking-widest ${getTextMuted()} mb-1`}>Perfect Days</span>
+                      <span className={`text-2xl font-black ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                        {insightsData.perfectDaysCount} <span className="text-[10px] font-bold opacity-50 uppercase tracking-widest">Days</span>
+                      </span>
+                    </div>
+                    <div className={`p-4 rounded-2xl border flex flex-col items-center justify-center text-center ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                      <span className={`text-[10px] font-black uppercase tracking-widest ${getTextMuted()} mb-1`}>Total Wins</span>
+                      <span className={`text-2xl font-black ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>
+                        {insightsData.totalWins} <span className="text-[10px] font-bold opacity-50 uppercase tracking-widest">Habits</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Best Day */}
+                  <div className={`p-5 rounded-2xl border flex items-center justify-between ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                    <div className="flex flex-col">
+                      <span className={`text-[10px] font-black uppercase tracking-widest ${getTextMuted()}`}>Best Day</span>
+                      <span className={`text-xl font-black mt-1 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{insightsData.bestDay}</span>
+                    </div>
+                    <div className={`w-14 h-14 rounded-full flex flex-col items-center justify-center border-4 ${theme === 'dark' ? 'border-purple-500/20 text-purple-400 bg-purple-500/10' : 'border-purple-200 text-purple-600 bg-purple-50'}`}>
+                      <span className="text-sm font-black">{insightsData.bestDayScore}%</span>
+                    </div>
+                  </div>
+
+                  {/* Longest Streaks */}
+                  <div className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                    <span className={`text-[10px] font-black uppercase tracking-widest ${getTextMuted()}`}>Top All-Time Streaks</span>
+                    <div className="mt-4 space-y-3">
+                      {insightsData.topStreaks.length > 0 ? (
+                        insightsData.topStreaks.map((streakData, i) => (
+                          <div key={streakData.habit} className="flex items-center justify-between">
+                            <span className={`text-sm font-bold uppercase truncate pr-4 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>{i + 1}. {streakData.habit}</span>
+                            <div className="flex gap-2 shrink-0">
+                              {streakData.current > 0 && (
+                                <div className={`flex flex-col items-center px-2 py-1 rounded-lg ${theme === 'dark' ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-emerald-50 border border-emerald-200'}`} title="Active streak going on right now">
+                                  <span className={`text-[8px] font-black uppercase opacity-70 ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>Current</span>
+                                  <span className={`text-[11px] font-black ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                                    🔥 {streakData.current} {streakData.current === 1 ? 'Day' : 'Days'}
+                                  </span>
+                                </div>
+                              )}
+                              <div className={`flex flex-col items-center px-2 py-1 rounded-lg ${theme === 'dark' ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-amber-50 border border-amber-200'}`} title="Longest streak you've ever had">
+                                <span className={`text-[8px] font-black uppercase opacity-70 ${theme === 'dark' ? 'text-amber-400' : 'text-amber-600'}`}>Best</span>
+                                <span className={`text-[11px] font-black ${theme === 'dark' ? 'text-amber-400' : 'text-amber-600'}`}>
+                                  🏆 {streakData.max} {streakData.max === 1 ? 'Day' : 'Days'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <span className={`text-xs font-bold ${getTextMuted()}`}>No streaks yet. Keep going!</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
           {/* Empty State Onboarding — Thanos snap out when first habit is logged */}
           {welcomeCardStatus !== 'gone' && (
             <ThanosDisintegrate
@@ -2601,9 +3080,8 @@ export default function App() {
               >
                 <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-blue-500/5 pointer-events-none" />
                 <div className="relative z-10 py-12 px-8 text-center">
-                  <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 border-2 ${
-                    theme === 'dark' ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-emerald-50 border-emerald-200'
-                  }`}>
+                  <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 border-2 ${theme === 'dark' ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-emerald-50 border-emerald-200'
+                    }`}>
                     <span className="text-3xl">🌱</span>
                   </div>
                   <h3 className={`text-2xl font-black mb-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
@@ -2623,9 +3101,8 @@ export default function App() {
                       <span>Partial</span>
                     </div>
                     <div className="flex flex-col items-center gap-2">
-                      <div className={`w-10 h-10 rounded-2xl border-2 flex items-center justify-center text-red-500 ${
-                        theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'
-                      }`}>✘</div>
+                      <div className={`w-10 h-10 rounded-2xl border-2 flex items-center justify-center text-red-500 ${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'
+                        }`}>✘</div>
                       <span>Missed</span>
                     </div>
                   </div>
@@ -2633,11 +3110,10 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => setWelcomeCardStatus('snapping')}
-                      className={`text-xs font-bold px-4 py-2 rounded-xl transition-all border ${
-                        theme === 'dark'
-                          ? 'bg-slate-800/80 hover:bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
-                          : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-600 hover:text-slate-900'
-                      }`}
+                      className={`text-xs font-bold px-4 py-2 rounded-xl transition-all border ${theme === 'dark'
+                        ? 'bg-slate-800/80 hover:bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
+                        : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-600 hover:text-slate-900'
+                        }`}
                     >
                       Got it, dismiss ✨
                     </button>
@@ -2647,221 +3123,229 @@ export default function App() {
             </ThanosDisintegrate>
           )}
           {/* Table Log */}
-<motion.div variants={itemVariants} className={`${getCardStyle()} ${isMobileMode ? 'rounded-2xl' : 'rounded-[2.5rem]'} overflow-hidden mb-8 relative transition-colors`}>
-    
-    <div 
-  ref={scrollContainerRef} 
-  className={`overflow-x-auto overflow-y-auto custom-scrollbar ${isMobileMode ? 'whitespace-nowrap' : ''}`}
-  style={{ 
-    maxHeight: tableOrientation === 'vertical' ? `${tableHeight}px` : 'none',
-    willChange: tableOrientation === 'vertical' ? 'max-height' : 'auto'
-  }}
->
-        <table 
-          className={`border-separate border-spacing-0 ${
-            isMobileMode 
-              ? (tableOrientation === 'vertical' ? 'min-w-[850px] table-fixed' : 'min-w-[1200px] table-auto') 
-              : 'w-full min-w-full ' + (tableOrientation === 'vertical' ? 'table-fixed' : 'table-auto')
-          }`}
-        >
-            {tableOrientation === 'vertical' ? (
-                /* --- Table 1: Vertical Layout --- */
-                <>
-                    <thead className={`sticky top-0 z-30 shadow-sm ${getTableHeadStyle()} border-b transition-colors`}>
-                        <tr className="h-[72px]">
-                            <th className={`p-5 font-black ${getTextMuted()} text-[9px] uppercase tracking-widest sticky top-0 left-0 border-r border-b ${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} w-[120px] min-w-[120px] z-40 text-center`}>
-                              <div className="flex items-center justify-center gap-2">
-                                <button 
-                                  onClick={toggleTableOrientation} 
-                                  className={`p-1.5 rounded-lg border transition-all active:scale-90 shadow-sm
-                                    ${theme === 'dark' 
-                                      ? 'bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600' 
-                                      : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'}`} 
-                                  title="Switch to Horizontal View"
-                                >
-                                  <TableRotateIcon />
-                                </button>
-                                <span>DATE Log</span>
-                              </div>
-                            </th>
+          <motion.div variants={itemVariants} className={`${getCardStyle()} ${isMobileMode ? 'rounded-2xl' : 'rounded-[2.5rem]'} overflow-hidden mb-8 relative transition-colors`}>
 
-                            {/* FILTERED HABITS HEADER */}
-                            {habits.filter(h => !archivedHabits.includes(h)).map((h, i) => <th key={i} className={`p-2 border-r border-b uppercase text-center font-black transition-colors ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'}`} style={{ fontSize: `${textSizes.table1}px`, minWidth: isMobileMode ? '90px' : 'auto' }}><div className="px-1 leading-tight break-words" title={h}>{h}</div></th>)}
-                            <th className={`p-4 font-black text-emerald-600 text-[14px] sticky top-0 right-0 border-l border-b ${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} w-[100px] z-40 text-center`}>Efficiency</th>
-                        </tr>
+            <div
+              ref={scrollContainerRef}
+              className={`overflow-x-auto overflow-y-auto custom-scrollbar ${isMobileMode ? 'whitespace-nowrap' : ''}`}
+              style={{
+                maxHeight: tableOrientation === 'vertical' ? `${tableHeight}px` : 'none',
+                willChange: tableOrientation === 'vertical' ? 'max-height' : 'auto'
+              }}
+            >
+              <table
+                className={`border-separate border-spacing-0 ${isMobileMode
+                  ? (tableOrientation === 'vertical' ? 'min-w-[850px] table-fixed' : 'min-w-[1200px] table-auto')
+                  : 'w-full min-w-full ' + (tableOrientation === 'vertical' ? 'table-fixed' : 'table-auto')
+                  }`}
+              >
+                {tableOrientation === 'vertical' ? (
+                  /* --- Table 1: Vertical Layout --- */
+                  <>
+                    <thead className={`sticky top-0 z-30 shadow-sm ${getTableHeadStyle()} border-b transition-colors`}>
+                      <tr className="h-[72px]">
+                        <th className={`p-5 font-black ${getTextMuted()} text-[9px] uppercase tracking-widest sticky top-0 left-0 border-r border-b ${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} w-[120px] min-w-[120px] z-40 text-center`}>
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={toggleTableOrientation}
+                              className={`p-1.5 rounded-lg border transition-all active:scale-90 shadow-sm
+                                    ${theme === 'dark'
+                                  ? 'bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600'
+                                  : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'}`}
+                              title="Switch to Horizontal View"
+                            >
+                              <TableRotateIcon />
+                            </button>
+                            <span>DATE Log</span>
+                          </div>
+                        </th>
+
+                        {/* FILTERED HABITS HEADER */}
+                        {habits.filter(h => !archivedHabits.includes(h)).map((h, i) => <th key={i} className={`p-2 border-r border-b uppercase text-center font-black transition-colors ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'}`} style={{ fontSize: `${textSizes.table1}px`, minWidth: isMobileMode ? '90px' : 'auto' }}><div className="px-1 leading-tight break-words" title={h}>{h}</div></th>)}
+                        <th className={`p-4 font-black text-emerald-600 text-[14px] sticky top-0 right-0 border-l border-b ${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} w-[100px] z-40 text-center`}>Efficiency</th>
+                      </tr>
                     </thead>
                     <tbody>
-                        {daysInMonth.map((day) => {
-                            const key = getSafeKey(day); const dayData = trackerData[key] || {};
-                            let totalEarnedWeight = 0; let totalPossibleWeight = 0;
-                            
-                            // EFFICIENCY CALCULATION (Ignoring Archived)
-                            const activeHabits = habits.filter(h => !archivedHabits.includes(h));
-                            activeHabits.forEach(h => { 
-                                const val = typeof dayData[h] === 'number' ? dayData[h] : (dayData[h] ? 100 : 0);
-                                totalEarnedWeight += (val / 100);
-                                totalPossibleWeight += 1;
-                            });
-                            const progress = totalPossibleWeight > 0 ? Math.round((totalEarnedWeight / totalPossibleWeight) * 100) : 0;
-                            const isToday = new Date().toDateString() === day.toDateString();
-                            const rowBgStyle = isToday 
-                              ? (theme === 'dark' ? 'bg-emerald-900/40 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.1)]' : 'bg-emerald-50 border-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.1)]') 
-                              : (theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100');
-                            
-                            return (
-                                <tr key={key} id={`row-${key}`} className="h-[72px]">
-                                    <td className={`p-2 sticky left-0 z-10 border-r border-b transition-all duration-500 ${rowBgStyle} ${isToday ? 'border-l-4 border-l-emerald-500' : ''} ${theme === 'dark' ? 'border-r-slate-700' : 'border-r-slate-200'}`}>
-                                        <div className="flex items-center justify-center gap-3">
-                                            <div className="tooltip-trigger">
-                                              <motion.button whileTap={{ scale: 0.9 }} onClick={() => setEditingNoteDate(key)} title={dayData.note ? "View/Edit Reflection" : "Add Reflection"} className={`p-2 rounded-xl transition-all ${dayData.note ? 'bg-blue-600 text-white shadow-md' : (theme === 'dark' ? 'bg-slate-800 text-slate-600 hover:bg-slate-700' : 'bg-slate-100 text-slate-300 hover:bg-slate-200')}`}><NoteIcon /></motion.button>
-                                              <span className="tooltip-content" style={{ whiteSpace: 'nowrap', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                {dayData.note ? `“${dayData.note.split('\n')[0].substring(0, 45)}${dayData.note.split('\n')[0].length > 45 ? '…' : ''}”` : 'Add reflection'}
-                                              </span>
-                                            </div>
-                                            <div className="flex flex-col text-center"><span className={`text-[8px] uppercase opacity-80 leading-none ${theme === 'dark' ? 'text-slate-500' : ''}`}>{day.toLocaleDateString(undefined, { weekday: 'short' })}</span><div className="flex items-center justify-center gap-1"><span className={`text-sm font-black mt-0.5 ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>{day.getDate()}</span>{shieldedDates.includes(key) && <span title="Streak Shield Active" className="text-cyan-400 text-xs">🛡️</span>}</div></div>
-                                        </div>
-                                    </td>
-                                    
-                                    {/* FILTERED HABITS CELLS */}
-                                    {activeHabits.map((h, i) => {
-                                        const rawVal = dayData[h] ?? 0; const val = typeof rawVal === 'number' ? rawVal : (rawVal ? 100 : 0);
-                                        return (
-                                            <td key={i} className={`p-2 border-r border-b transition-all duration-500 text-center ${rowBgStyle} ${isToday ? 'border-y-2 border-emerald-500/20' : ''}`}>
-                                                <motion.button whileTap={{ scale: 0.9 }} title="Mark habit completion" className={`w-11 h-11 rounded-2xl transition-all flex flex-col items-center justify-center mx-auto border-2 text-xl font-black ${getButtonStyles(val, key)} touch-none select-none ${new Date(key).setHours(0,0,0,0) > new Date().setHours(0,0,0,0) ? 'opacity-20 cursor-not-allowed grayscale' : ''}`} onPointerDown={(e) => handleHabitPressStart(e, key, h, val)} onPointerUp={(e) => handleHabitPressEnd(e, key, h, val)}>
-                                                    <span className={`text-[7px] font-black leading-none mb-0.5 pointer-events-none ${val > 0 ? 'text-white/60' : (theme === 'dark' ? 'text-slate-600' : 'text-slate-300')}`}>{day.getDate()}</span>
-                                                    <span className="pointer-events-none font-bold">
-                                                      {(() => {
-                                                          const config = habitConfigs[h];
-                                                          const stepVal = config?.steps > 1 ? Math.round((val / 100) * config.steps) : null;
-                                                          return stepVal !== null ? stepVal : (val === 100 ? '✔' : (val > 0 ? `${Math.round(val)}%` : '✘'));
-                                                      })()}
-                                                    </span>
-                                                </motion.button>
-                                            </td>
-                                        );
-                                    })}
-                                    <td className={`p-2 sticky right-0 z-10 border-l border-b transition-all duration-500 text-center font-black text-sm ${rowBgStyle} ${isToday ? 'border-r-4 border-r-emerald-500' : ''} ${theme === 'dark' ? 'border-l-slate-700' : 'border-l-slate-200'}`}>
-                                        <span className={progress === 100 ? 'text-emerald-600 font-bold' : progress > 0 ? 'text-blue-600' : theme === 'dark' ? 'text-slate-700' : 'text-slate-300'}>
-                                            <AnimatedNumber value={progress} />
-                                        </span>
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                        <tr style={{ height: '216px' }}><td></td></tr> 
+                      {daysInMonth.map((day) => {
+                        const key = getSafeKey(day); const dayData = trackerData[key] || {};
+                        let totalEarnedWeight = 0; let totalPossibleWeight = 0;
+
+                        // EFFICIENCY CALCULATION (Ignoring Archived)
+                        const activeHabits = habits.filter(h => !archivedHabits.includes(h));
+                        const isShieldedDay = shieldedDates.includes(key);
+                        activeHabits.forEach(h => {
+                          const val = typeof dayData[h] === 'number' ? dayData[h] : (dayData[h] ? 100 : 0);
+                          totalEarnedWeight += (val / 100);
+                          if (!isShieldedDay || val >= 100) {
+                            totalPossibleWeight += 1;
+                          }
+                        });
+                        const progress = totalPossibleWeight > 0 ? Math.round((totalEarnedWeight / totalPossibleWeight) * 100) : (isShieldedDay ? 100 : 0);
+                        const isToday = new Date().toDateString() === day.toDateString();
+                        const rowBgStyle = isToday
+                          ? (theme === 'dark' ? 'bg-emerald-900/40 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.1)]' : 'bg-emerald-50 border-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.1)]')
+                          : (theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100');
+
+                        return (
+                          <tr key={key} id={`row-${key}`} className="h-[72px]">
+                            <td className={`p-2 sticky left-0 z-10 border-r border-b transition-all duration-500 ${rowBgStyle} ${isToday ? 'border-l-4 border-l-emerald-500' : ''} ${theme === 'dark' ? 'border-r-slate-700' : 'border-r-slate-200'}`}>
+                              <div className="flex items-center justify-center gap-3">
+                                <div className="tooltip-trigger">
+                                  <motion.button whileTap={{ scale: 0.9 }} onClick={() => setEditingNoteDate(key)} title={dayData.note ? "View/Edit Reflection" : "Add Reflection"} className={`p-2 rounded-xl transition-all ${dayData.note ? 'bg-blue-600 text-white shadow-md' : (theme === 'dark' ? 'bg-slate-800 text-slate-600 hover:bg-slate-700' : 'bg-slate-100 text-slate-300 hover:bg-slate-200')}`}><NoteIcon /></motion.button>
+                                  <span className="tooltip-content" style={{ whiteSpace: 'nowrap', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    {dayData.note ? `“${dayData.note.split('\n')[0].substring(0, 45)}${dayData.note.split('\n')[0].length > 45 ? '…' : ''}”` : 'Add reflection'}
+                                  </span>
+                                </div>
+                                <div className="flex flex-col text-center"><span className={`text-[8px] uppercase opacity-80 leading-none ${theme === 'dark' ? 'text-slate-500' : ''}`}>{day.toLocaleDateString(undefined, { weekday: 'short' })}</span><div className="flex items-center justify-center gap-1"><span className={`text-sm font-black mt-0.5 ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>{day.getDate()}</span>{shieldedDates.includes(key) && <span title="Streak Shield Active" className="text-cyan-400 text-xs">🛡️</span>}</div></div>
+                              </div>
+                            </td>
+
+                            {/* FILTERED HABITS CELLS */}
+                            {activeHabits.map((h, i) => {
+                              const rawVal = dayData[h] ?? 0; const val = typeof rawVal === 'number' ? rawVal : (rawVal ? 100 : 0);
+                              return (
+                                <td key={i} className={`p-2 border-r border-b transition-all duration-500 text-center ${rowBgStyle} ${isToday ? 'border-y-2 border-emerald-500/20' : ''}`}>
+                                  <motion.button whileTap={{ scale: 0.9 }} title="Mark habit completion" className={`w-11 h-11 rounded-2xl transition-all flex flex-col items-center justify-center mx-auto border-2 text-xl font-black ${getButtonStyles(val, key)} touch-none select-none ${parseLocalDate(key).setHours(0, 0, 0, 0) > new Date().setHours(0, 0, 0, 0) ? 'opacity-20 cursor-not-allowed grayscale' : ''}`} onPointerDown={(e) => handleHabitPressStart(e, key, h, val)} onPointerUp={(e) => handleHabitPressEnd(e, key, h, val)}>
+                                    <span className={`text-[7px] font-black leading-none mb-0.5 pointer-events-none ${val > 0 ? 'text-white/60' : (theme === 'dark' ? 'text-slate-600' : 'text-slate-300')}`}>{day.getDate()}</span>
+                                    <span className="pointer-events-none font-bold">
+                                      {(() => {
+                                        const config = habitConfigs[h];
+                                        const stepVal = config?.steps > 1 ? Math.round((val / 100) * config.steps) : null;
+                                        return stepVal !== null ? stepVal : (val === 100 ? '✔' : (val > 0 ? `${Math.round(val)}%` : '✘'));
+                                      })()}
+                                    </span>
+                                  </motion.button>
+                                </td>
+                              );
+                            })}
+                            <td className={`p-2 sticky right-0 z-10 border-l border-b transition-all duration-500 text-center font-black text-sm ${rowBgStyle} ${isToday ? 'border-r-4 border-r-emerald-500' : ''} ${theme === 'dark' ? 'border-l-slate-700' : 'border-l-slate-200'}`}>
+                              <span className={progress === 100 ? 'text-emerald-600 font-bold' : progress > 0 ? 'text-blue-600' : theme === 'dark' ? 'text-slate-700' : 'text-slate-300'}>
+                                <AnimatedNumber value={progress} />
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      <tr style={{ height: '216px' }}><td></td></tr>
                     </tbody>
-                </>
-            ) : (
-                /* --- Table 2: Horizontal Layout (8 Columns visible) --- */
-                <>
+                  </>
+                ) : (
+                  /* --- Table 2: Horizontal Layout (8 Columns visible) --- */
+                  <>
                     <thead onWheel={(e) => e.stopPropagation()} className={`sticky top-0 z-30 shadow-sm ${getTableHeadStyle()} border-b transition-colors`}>
-                        <tr className="h-[72px]">
-                            <th className={`p-4 font-black ${getTextMuted()} text-[9px] uppercase tracking-widest sticky left-0 z-40 text-center border-r border-b ${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} shadow-[4px_0_8px_rgba(0,0,0,0.3)] w-[120px] min-w-[120px]`}>
-                              <div className="flex items-center justify-center gap-2">
-                                <button 
-  onClick={toggleTableOrientation} 
-  className={`p-1.5 rounded-lg border transition-all active:scale-90 shadow-sm
-    ${theme === 'dark' 
-      ? 'bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600' 
-      : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'}`} 
-  title="Switch to Vertical View"
->
-  <TableRotateIcon />
-</button>
-                                <span>DATE Log</span>
+                      <tr className="h-[72px]">
+                        <th className={`p-4 font-black ${getTextMuted()} text-[9px] uppercase tracking-widest sticky left-0 z-40 text-center border-r border-b ${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} shadow-[4px_0_8px_rgba(0,0,0,0.3)] w-[120px] min-w-[120px]`}>
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={toggleTableOrientation}
+                              className={`p-1.5 rounded-lg border transition-all active:scale-90 shadow-sm
+    ${theme === 'dark'
+                                  ? 'bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600'
+                                  : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'}`}
+                              title="Switch to Vertical View"
+                            >
+                              <TableRotateIcon />
+                            </button>
+                            <span>DATE Log</span>
+                          </div>
+                        </th>
+                        {daysInMonth.map((day) => {
+                          const key = getSafeKey(day);
+                          const isToday = new Date().toDateString() === day.toDateString();
+                          const cellBgStyle = isToday
+                            ? (theme === 'dark' ? 'bg-emerald-900/40 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.1)]' : 'bg-emerald-50 border-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.1)]')
+                            : (theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100');
+                          return (
+                            <th key={key} id={`col-${key}`} className={`p-2 border-r border-b transition-all duration-500 ${cellBgStyle} ${isToday ? (theme === 'dark' ? 'border-emerald-500/50 shadow-[inset_0_0_15px_rgba(16,185,129,0.2)]' : 'border-emerald-400 shadow-[inset_0_0_15px_rgba(16,185,129,0.2)]') : (theme === 'dark' ? 'border-r-slate-800 border-b-slate-700' : 'border-r-slate-100 border-b-slate-200')}`} style={{ width: horizontalColWidth, minWidth: horizontalColWidth }}>
+                              <div className="flex flex-col items-center gap-1">
+                                <div className="tooltip-trigger flex items-center justify-center">
+                                  <motion.button
+                                    whileTap={{ scale: 0.9 }}
+                                    onClick={() => setEditingNoteDate(key)}
+                                    title={trackerData[key]?.note ? "View/Edit Reflection" : "Add Reflection"}
+                                    className={`p-2 rounded-xl transition-all ${trackerData[key]?.note ? 'bg-blue-600 text-white shadow-md' : (theme === 'dark' ? 'bg-slate-800 text-slate-600 hover:bg-slate-700' : 'bg-slate-100 text-slate-300 hover:bg-slate-200')}`}
+                                  >
+                                    <NoteIcon />
+                                  </motion.button>
+                                  <span className="tooltip-content" style={{ whiteSpace: 'nowrap', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    {trackerData[key]?.note ? `“${trackerData[key].note.split('\n')[0].substring(0, 45)}${trackerData[key].note.split('\n')[0].length > 45 ? '…' : ''}”` : 'Add reflection'}
+                                  </span>
+                                </div>
+                                <span className={`text-[7px] uppercase font-black ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>{day.toLocaleDateString(undefined, { weekday: 'short' })}</span>
+                                <div className="flex items-center justify-center gap-0.5"><span className={`text-xs font-black ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>{day.getDate()}</span>{shieldedDates.includes(key) && <span title="Streak Shield Active" className="text-cyan-400 text-[10px]">🛡️</span>}</div>
                               </div>
                             </th>
-                            {daysInMonth.map((day) => {
-                                const key = getSafeKey(day); 
-                                const isToday = new Date().toDateString() === day.toDateString();
-                                const cellBgStyle = isToday 
-                                  ? (theme === 'dark' ? 'bg-emerald-900/40 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.1)]' : 'bg-emerald-50 border-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.1)]') 
-                                  : (theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100');
-                                return (
-                                    <th key={key} id={`col-${key}`} className={`p-2 border-r border-b transition-all duration-500 ${cellBgStyle} ${isToday ? (theme === 'dark' ? 'border-emerald-500/50 shadow-[inset_0_0_15px_rgba(16,185,129,0.2)]' : 'border-emerald-400 shadow-[inset_0_0_15px_rgba(16,185,129,0.2)]') : (theme === 'dark' ? 'border-r-slate-800 border-b-slate-700' : 'border-r-slate-100 border-b-slate-200')}`} style={{ width: horizontalColWidth, minWidth: horizontalColWidth }}>
-                                    <div className="flex flex-col items-center gap-1">
-                                            <div className="tooltip-trigger flex items-center justify-center">
-                                              <motion.button 
-  whileTap={{ scale: 0.9 }} 
-  onClick={() => setEditingNoteDate(key)} 
-  title={trackerData[key]?.note ? "View/Edit Reflection" : "Add Reflection"}
-  className={`p-2 rounded-xl transition-all ${trackerData[key]?.note ? 'bg-blue-600 text-white shadow-md' : (theme === 'dark' ? 'bg-slate-800 text-slate-600 hover:bg-slate-700' : 'bg-slate-100 text-slate-300 hover:bg-slate-200')}`}
->
-  <NoteIcon />
-</motion.button>
-                                              <span className="tooltip-content" style={{ whiteSpace: 'nowrap', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                {trackerData[key]?.note ? `“${trackerData[key].note.split('\n')[0].substring(0, 45)}${trackerData[key].note.split('\n')[0].length > 45 ? '…' : ''}”` : 'Add reflection'}
-                                              </span>
-                                            </div>
-                                            <span className={`text-[7px] uppercase font-black ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>{day.toLocaleDateString(undefined, { weekday: 'short' })}</span>
-                                            <div className="flex items-center justify-center gap-0.5"><span className={`text-xs font-black ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>{day.getDate()}</span>{shieldedDates.includes(key) && <span title="Streak Shield Active" className="text-cyan-400 text-[10px]">🛡️</span>}</div>
-                                        </div>
-                                    </th>
-                                );
-                            })}
-                        </tr>
+                          );
+                        })}
+                      </tr>
                     </thead>
                     <tbody>
-                        <tr className="h-[52px]">
-                            <td data-no-scroll className={`p-2 font-black text-[12px] uppercase sticky left-0 z-20 border-r border-b text-center transition-colors ${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} text-emerald-400 shadow-[4px_0_8px_rgba(0,0,0,0.3)]`}>
-                                <div className="w-full px-1 font-black leading-tight break-words">Efficiency</div>
+                      <tr className="h-[52px]">
+                        <td data-no-scroll className={`p-2 font-black text-[12px] uppercase sticky left-0 z-20 border-r border-b text-center transition-colors ${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} text-emerald-400 shadow-[4px_0_8px_rgba(0,0,0,0.3)]`}>
+                          <div className="w-full px-1 font-black leading-tight break-words">Efficiency</div>
+                        </td>
+                        {daysInMonth.map(day => {
+                          const key = getSafeKey(day); const dayData = trackerData[key] || {};
+                          const isShieldedDay = shieldedDates.includes(key);
+                          let earned = 0;
+                          let possible = 0;
+
+                          // EFFICIENCY CALCULATION (Ignoring Archived)
+                          const activeHabits = habits.filter(h => !archivedHabits.includes(h));
+                          activeHabits.forEach(h => {
+                            const v = typeof dayData[h] === 'number' ? dayData[h] : (dayData[h] ? 100 : 0);
+                            earned += (v / 100);
+                            if (!isShieldedDay || v >= 100) possible += 1;
+                          });
+                          const progress = possible > 0 ? Math.round((earned / possible) * 100) : (isShieldedDay ? 100 : 0);
+
+                          return (
+                            <td key={key} className={`p-2 border-r border-b text-center text-[10px] font-black transition-all duration-500 ${new Date().toDateString() === day.toDateString() ? (theme === 'dark' ? 'bg-emerald-900/20 border-emerald-500/30 shadow-[inset_0_0_15px_rgba(16,185,129,0.05)]' : 'bg-emerald-50/50 border-emerald-400/30 shadow-[inset_0_0_15px_rgba(16,185,129,0.05)]') : (theme === 'dark' ? 'border-r-slate-800 border-b-slate-800' : 'border-r-slate-100 border-b-slate-100')}`} style={{ width: horizontalColWidth, minWidth: horizontalColWidth }}>
+                              <span className={progress === 100 ? 'text-emerald-500' : progress > 0 ? 'text-blue-500' : 'text-slate-300'}><AnimatedNumber value={progress} /></span>
                             </td>
-                            {daysInMonth.map(day => {
-                                const key = getSafeKey(day); const dayData = trackerData[key] || {};
-                                let earned = 0; 
-                                
-                                // EFFICIENCY CALCULATION (Ignoring Archived)
-                                const activeHabits = habits.filter(h => !archivedHabits.includes(h));
-                                activeHabits.forEach(h => { const v = typeof dayData[h] === 'number' ? dayData[h] : (dayData[h] ? 100 : 0); earned += (v / 100); });
-                                const progress = activeHabits.length > 0 ? Math.round((earned / activeHabits.length) * 100) : 0;
-                                
-                                return (
-                                    <td key={key} className={`p-2 border-r border-b text-center text-[10px] font-black transition-all duration-500 ${new Date().toDateString() === day.toDateString() ? (theme === 'dark' ? 'bg-emerald-900/20 border-emerald-500/30 shadow-[inset_0_0_15px_rgba(16,185,129,0.05)]' : 'bg-emerald-50/50 border-emerald-400/30 shadow-[inset_0_0_15px_rgba(16,185,129,0.05)]') : (theme === 'dark' ? 'border-r-slate-800 border-b-slate-800' : 'border-r-slate-100 border-b-slate-100')}`} style={{ width: horizontalColWidth, minWidth: horizontalColWidth }}>
-                                    <span className={progress === 100 ? 'text-emerald-500' : progress > 0 ? 'text-blue-500' : 'text-slate-300'}><AnimatedNumber value={progress} /></span>
-                                    </td>
-                                );
-                            })}
+                          );
+                        })}
+                      </tr>
+                      {/* FILTERED HABITS ROWS */}
+                      {habits.filter(h => !archivedHabits.includes(h)).map((habit, hIdx) => (
+                        <tr key={hIdx} className="h-[68px]">
+                          <td data-no-scroll className={`p-1 font-black uppercase sticky left-0 z-20 border-r border-b text-center transition-colors ${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} text-slate-400 shadow-[4px_0_8px_rgba(0,0,0,0.3)]`} style={{ fontSize: `${textSizes.table2}px` }}>
+                            <div className="truncate w-full px-1 font-black leading-tight">{habit}</div>
+                          </td>
+                          {daysInMonth.map(day => {
+                            const key = getSafeKey(day); const val = typeof trackerData[key]?.[habit] === 'number' ? trackerData[key][habit] : (trackerData[key]?.[habit] ? 100 : 0);
+                            return (
+                              <td key={key} className={`p-1.5 border-r border-b text-center transition-all duration-500 ${new Date().toDateString() === day.toDateString() ? (theme === 'dark' ? 'bg-emerald-900/20 border-emerald-500/30 shadow-[inset_0_0_20px_rgba(16,185,129,0.08)]' : 'bg-emerald-50/50 border-emerald-400/30 shadow-[inset_0_0_20px_rgba(16,185,129,0.08)]') : (theme === 'dark' ? 'border-r-slate-800 border-b-slate-800' : 'border-r-slate-100 border-b-slate-100')}`} style={{ width: horizontalColWidth, minWidth: horizontalColWidth }}>
+                                <motion.button whileTap={{ scale: 0.9 }} title="Mark habit completion" onPointerDown={(e) => handleHabitPressStart(e, key, habit, val)} onPointerUp={(e) => handleHabitPressEnd(e, key, habit, val)} className={`w-11 h-11 rounded-2xl mx-auto border-2 flex items-center justify-center font-black transition-all text-xl ${getButtonStyles(val, key)} ${parseLocalDate(key).setHours(0, 0, 0, 0) > new Date().setHours(0, 0, 0, 0) ? 'opacity-20 grayscale' : ''}`}>
+                                  <span>
+                                    {(() => {
+                                      const config = habitConfigs[habit];
+                                      const stepVal = config?.steps > 1 ? Math.round((val / 100) * config.steps) : null;
+                                      return stepVal !== null ? stepVal : (val === 100 ? '✔' : (val > 0 ? `${Math.round(val)}%` : '✘'));
+                                    })()}
+                                  </span>
+                                </motion.button>
+                              </td>
+                            );
+                          })}
                         </tr>
-                        {/* FILTERED HABITS ROWS */}
-                        {habits.filter(h => !archivedHabits.includes(h)).map((habit, hIdx) => (
-                            <tr key={hIdx} className="h-[68px]">
-                                <td data-no-scroll className={`p-1 font-black uppercase sticky left-0 z-20 border-r border-b text-center transition-colors ${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} text-slate-400 shadow-[4px_0_8px_rgba(0,0,0,0.3)]`} style={{ fontSize: `${textSizes.table2}px` }}>
-                                    <div className="truncate w-full px-1 font-black leading-tight">{habit}</div>
-                                </td>
-                                {daysInMonth.map(day => {
-                                    const key = getSafeKey(day); const val = typeof trackerData[key]?.[habit] === 'number' ? trackerData[key][habit] : (trackerData[key]?.[habit] ? 100 : 0);
-                                    return (
-                                        <td key={key} className={`p-1.5 border-r border-b text-center transition-all duration-500 ${new Date().toDateString() === day.toDateString() ? (theme === 'dark' ? 'bg-emerald-900/20 border-emerald-500/30 shadow-[inset_0_0_20px_rgba(16,185,129,0.08)]' : 'bg-emerald-50/50 border-emerald-400/30 shadow-[inset_0_0_20px_rgba(16,185,129,0.08)]') : (theme === 'dark' ? 'border-r-slate-800 border-b-slate-800' : 'border-r-slate-100 border-b-slate-100')}`} style={{ width: horizontalColWidth, minWidth: horizontalColWidth }}>
-                                            <motion.button whileTap={{ scale: 0.9 }} title="Mark habit completion" onPointerDown={(e) => handleHabitPressStart(e, key, habit, val)} onPointerUp={(e) => handleHabitPressEnd(e, key, habit, val)} className={`w-11 h-11 rounded-2xl mx-auto border-2 flex items-center justify-center font-black transition-all text-xl ${getButtonStyles(val, key)} ${new Date(key).setHours(0,0,0,0) > new Date().setHours(0,0,0,0) ? 'opacity-20 grayscale' : ''}`}>
-                                                <span>
-                                                    {(() => {
-                                                    const config = habitConfigs[habit];
-                                                    const stepVal = config?.steps > 1 ? Math.round((val / 100) * config.steps) : null;
-                                                    return stepVal !== null ? stepVal : (val === 100 ? '✔' : (val > 0 ? `${Math.round(val)}%` : '✘'));
-                                                    })()}
-                                                </span>
-                                            </motion.button>
-                                        </td>
-                                    );
-                                })}
-                            </tr>
-                        ))}
+                      ))}
                     </tbody>
-                </>
-            )}
-        </table>
-    </div>
-</motion.div>
+                  </>
+                )}
+              </table>
+            </div>
+          </motion.div>
         </div>
-        
+
 
         {/* Footer Credit Section */}
         <footer className={`mt-auto py-6 md:py-10 text-center border-t ${theme === 'dark' ? 'border-slate-900' : 'border-slate-100'}`}>
           <p className={`text-[15px] md:text-[16px] font-black uppercase tracking-[0.2em] md:tracking-[0.3em] ${getTextMuted()}`}>
-            Developed by <a 
-              href="https://www.facebook.com/hsnshahriaradib" 
-              target="_blank" 
-              rel="noopener noreferrer" 
+            Developed by <a
+              href="https://www.facebook.com/hsnshahriaradib"
+              target="_blank"
+              rel="noopener noreferrer"
               className="text-emerald-500 hover:text-emerald-400 hover:underline decoration-2 underline-offset-4 transition-all cursor-pointer"
             >
               Adib
@@ -2887,7 +3371,8 @@ export default function App() {
           });
           const dayPct = activeHabitsList.length > 0 ? Math.round(totalPct / activeHabitsList.length) : 0;
           const hasNote = Boolean(dayData.note && dayData.note.trim());
-          const canToggleShield = isShielded || shieldStats.availableCount > 0;
+          const isFutureDay = new Date(dayDate).setHours(0, 0, 0, 0) > new Date().setHours(0, 0, 0, 0);
+          const canToggleShield = !isFutureDay && (isShielded || shieldStats.availableCount > 0);
 
           const handleJumpToMonth = () => {
             setCurrentDate(new Date(dayDate.getFullYear(), dayDate.getMonth(), 1));
@@ -2937,9 +3422,8 @@ export default function App() {
                 <div className="flex flex-wrap gap-2 mb-4">
                   <button
                     onClick={handleJumpToMonth}
-                    className={`flex-1 py-2 px-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 border transition-all ${
-                      theme === 'dark' ? 'bg-slate-800 border-slate-700 text-emerald-400 hover:bg-slate-700' : 'bg-slate-100 border-slate-200 text-emerald-600 hover:bg-slate-200'
-                    }`}
+                    className={`flex-1 py-2 px-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 border transition-all ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-emerald-400 hover:bg-slate-700' : 'bg-slate-100 border-slate-200 text-emerald-600 hover:bg-slate-200'
+                      }`}
                   >
                     <span>Jump to Month in Table</span>
                     <ChevronRightIcon />
@@ -2948,13 +3432,12 @@ export default function App() {
                   <button
                     disabled={!canToggleShield}
                     onClick={() => toggleShieldDate(selectedHeatmapDay)}
-                    className={`py-2 px-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 border transition-all ${
-                      isShielded
-                        ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.3)]'
-                        : canToggleShield
+                    className={`py-2 px-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 border transition-all ${isShielded
+                      ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.3)]'
+                      : canToggleShield
                         ? (theme === 'dark' ? 'bg-slate-800/60 border-slate-700 text-slate-300 hover:border-cyan-500/40 hover:text-cyan-400' : 'bg-slate-100 border-slate-200 text-slate-700 hover:border-cyan-500/40 hover:text-cyan-600')
                         : 'opacity-40 cursor-not-allowed border-slate-800 text-slate-500'
-                    }`}
+                      }`}
                     title={canToggleShield ? (isShielded ? 'Remove Streak Shield from this date' : 'Protect this date with a Streak Shield') : 'No streak shields available'}
                   >
                     <ShieldIcon />
@@ -2971,12 +3454,11 @@ export default function App() {
                     return (
                       <div
                         key={h}
-                        onClick={() => updateHabitValue(selectedHeatmapDay, h, isDone ? 0 : 100)}
-                        className={`flex items-center justify-between p-2.5 rounded-xl border cursor-pointer transition-all ${
-                          isDone
-                            ? (theme === 'dark' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-700')
-                            : (theme === 'dark' ? 'bg-slate-800/40 border-slate-800 text-slate-400 hover:bg-slate-800/80' : 'bg-slate-50 border-slate-100 text-slate-500 hover:bg-slate-100')
-                        }`}
+                        onClick={() => { if (!isFutureDay) updateHabitValue(selectedHeatmapDay, h, isDone ? 0 : 100); }}
+                        className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${isFutureDay ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'} ${isDone
+                          ? (theme === 'dark' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-700')
+                          : (theme === 'dark' ? 'bg-slate-800/40 border-slate-800 text-slate-400 hover:bg-slate-800/80' : 'bg-slate-50 border-slate-100 text-slate-500 hover:bg-slate-100')
+                          }`}
                       >
                         <span className="text-xs font-bold uppercase tracking-wide truncate">{h}</span>
                         <span className={`text-xs font-black px-2 py-0.5 rounded-md ${isDone ? 'bg-emerald-500 text-white' : (theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-200 text-slate-600')}`}>
@@ -3001,9 +3483,8 @@ export default function App() {
                       setSelectedHeatmapDay(null);
                       setEditingNoteDate(targetDate);
                     }}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all border shrink-0 ${
-                      theme === 'dark' ? 'bg-blue-900/20 text-blue-400 border-blue-500/30 hover:bg-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100'
-                    }`}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all border shrink-0 ${theme === 'dark' ? 'bg-blue-900/20 text-blue-400 border-blue-500/30 hover:bg-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100'
+                      }`}
                   >
                     {hasNote ? 'Edit Note' : 'Add Note'}
                   </button>
@@ -3014,327 +3495,325 @@ export default function App() {
         })()}
         {/* Habit Detail Modal Clean Version Below */}
         {viewingHabitMap && habitInsights && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => { setViewingHabitMap(null); setIsEditingTabName(false); }}>
-              {/* Forced Horizontal Layout for all modes */}
-{/* Compact Locked Layout: 20% Smaller & No Sidebar Scroll */}
-<motion.div
-  initial={{ scale: 0.9, opacity: 0, y: 50 }}
-  animate={{ scale: 1, opacity: 1, y: 0 }}
-  exit={{ scale: 0.9, opacity: 0, y: 50 }}
-  className={`rounded-[1.5rem] md:rounded-[2rem] w-[95vw] md:w-full max-w-[760px] max-h-[90vh] overflow-y-auto md:overflow-hidden shadow-2xl flex flex-col md:flex-row transition-colors border ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}
-  onClick={(e) => e.stopPropagation()}
->
-                {/* Left Sidebar */}
-                <div className={`w-full md:w-60 border-b md:border-b-0 md:border-r p-4 md:p-5 flex flex-col shrink-0 ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-                  
-                  {/* Mobile Compact View (<768px): 2-row clean grid */}
-                  <div className="flex md:hidden items-center justify-between gap-3 w-full">
-                    {/* Score Ring */}
-                    <div className="relative w-16 h-16 flex items-center justify-center shrink-0">
-                      <svg className="absolute w-full h-full -rotate-90" viewBox="0 0 144 144">
-                        <circle cx="72" cy="72" r="64" fill="none" stroke={theme==='dark'?'#334155':'#e2e8f0'} strokeWidth="10" />
-                        <motion.circle initial={{ strokeDashoffset: 402 }} animate={{ strokeDashoffset: 402 - (402 * habitInsights.score / 100) }} transition={{ duration: 1.5, ease: "easeOut" }} cx="72" cy="72" r="64" fill="none" stroke="#10b981" strokeWidth="10" strokeDasharray={402} strokeLinecap="round" />
-                      </svg>
-                      <div className="flex flex-col items-center">
-                        <span className={`text-base font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}><AnimatedNumber value={habitInsights.score} /></span>
-                        <span className={`text-[7px] font-black ${getTextMuted()} uppercase tracking-widest`}>Score</span>
-                      </div>
-                    </div>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => { setViewingHabitMap(null); setIsEditingTabName(false); }}>
+            {/* Forced Horizontal Layout for all modes */}
+            {/* Compact Locked Layout: 20% Smaller & No Sidebar Scroll */}
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 50 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 50 }}
+              className={`rounded-[1.5rem] md:rounded-[2rem] w-[95vw] md:w-full max-w-[760px] max-h-[90vh] overflow-y-auto md:overflow-hidden shadow-2xl flex flex-col md:flex-row transition-colors border ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Left Sidebar */}
+              <div className={`w-full md:w-60 border-b md:border-b-0 md:border-r p-4 md:p-5 flex flex-col shrink-0 ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
 
-                    {/* Stats 2x2 Grid */}
-                    <div className="grid grid-cols-2 gap-1.5 flex-1">
-                      <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} p-1.5 rounded-xl border flex flex-col items-center justify-center text-center`}>
-                        <span className={`text-[8px] uppercase font-black ${getTextMuted()} leading-none mb-0.5`}>Steps</span>
-                        <input 
-                          type="number" 
-                          value={tempGoalVal} 
-                          onChange={(e) => setTempGoalVal(e.target.value)} 
-                          onBlur={() => {
-                            let val = parseInt(tempGoalVal);
-                            if (isNaN(val) || val < 1) val = 1;
-                            setTempGoalVal(val);
-                            const nc = {
-                              ...habitConfigs, 
-                              [viewingHabitMap]: {
-                                ...(habitConfigs[viewingHabitMap] || {priority: 1, steps: 1}), 
-                                steps: val
-                              }
-                            };
-                            setHabitConfigs(nc); 
-                            save(trackerData, habits, nc);
-                          }} 
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') e.currentTarget.blur();
-                          }}
-                          className="w-full text-center text-xs font-black bg-transparent focus:outline-none focus:text-emerald-500" 
-                        />
-                      </div>
-
-                      <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} p-1.5 rounded-xl border flex flex-col items-center justify-center text-center`}>
-                        <span className={`text-[8px] uppercase font-black ${getTextMuted()} leading-none mb-0.5`}>Rank</span>
-                        <span className={`text-xs font-black truncate max-w-[70px] ${habitInsights.level === "Grandmaster" ? "text-emerald-500" : (theme === 'dark' ? 'text-slate-200' : 'text-slate-800')}`}>{habitInsights.level}</span>
-                      </div>
-
-                      <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} p-1.5 rounded-xl border flex flex-col items-center justify-center text-center`}>
-                        <span className={`text-[8px] uppercase font-black ${getTextMuted()} leading-none mb-0.5`}>Streak</span>
-                        <span className={`text-xs font-black ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>{habitInsights.currentStreak}d</span>
-                      </div>
-
-                      <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} p-1.5 rounded-xl border flex flex-col items-center justify-center text-center`}>
-                        <span className={`text-[8px] uppercase font-black ${getTextMuted()} leading-none mb-0.5`}>Best</span>
-                        <span className={`text-xs font-black ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>{habitInsights.bestStreak}d</span>
-                      </div>
+                {/* Mobile Compact View (<768px): 2-row clean grid */}
+                <div className="flex md:hidden items-center justify-between gap-3 w-full">
+                  {/* Score Ring */}
+                  <div className="relative w-16 h-16 flex items-center justify-center shrink-0">
+                    <svg className="absolute w-full h-full -rotate-90" viewBox="0 0 144 144">
+                      <circle cx="72" cy="72" r="64" fill="none" stroke={theme === 'dark' ? '#334155' : '#e2e8f0'} strokeWidth="10" />
+                      <motion.circle initial={{ strokeDashoffset: 402 }} animate={{ strokeDashoffset: 402 - (402 * habitInsights.score / 100) }} transition={{ duration: 1.5, ease: "easeOut" }} cx="72" cy="72" r="64" fill="none" stroke="#10b981" strokeWidth="10" strokeDasharray={402} strokeLinecap="round" />
+                    </svg>
+                    <div className="flex flex-col items-center">
+                      <span className={`text-base font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}><AnimatedNumber value={habitInsights.score} /></span>
+                      <span className={`text-[7px] font-black ${getTextMuted()} uppercase tracking-widest`}>Score</span>
                     </div>
                   </div>
 
-                  {/* Desktop Layout (>=768px): Vertical Stack */}
-                  <div className="hidden md:flex flex-col items-center w-full">
-                    <div className="relative w-28 h-28 flex items-center justify-center mb-5 shrink-0">
-                      <svg className="absolute w-full h-full -rotate-90" viewBox="0 0 144 144">
-                        <circle cx="72" cy="72" r="64" fill="none" stroke={theme==='dark'?'#334155':'#e2e8f0'} strokeWidth="10" />
-                        <motion.circle initial={{ strokeDashoffset: 402 }} animate={{ strokeDashoffset: 402 - (402 * habitInsights.score / 100) }} transition={{ duration: 1.5, ease: "easeOut" }} cx="72" cy="72" r="64" fill="none" stroke="#10b981" strokeWidth="10" strokeDasharray={402} strokeLinecap="round" />
-                      </svg>
-                      <div className="flex flex-col items-center">
-                        <span className={`text-3xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}><AnimatedNumber value={habitInsights.score} /></span>
-                        <span className={`text-[8px] font-black ${getTextMuted()} uppercase tracking-widest`}>Score</span>
-                      </div>
-                    </div>
-
-                    {/* Goal Input Desktop */}
-                    <div className={`w-full mb-5 p-3 rounded-xl border ${theme === 'dark' ? 'bg-slate-900/50 border-slate-700' : 'bg-white border-slate-200'} shadow-sm`}>
-                      <label className={`text-[7px] font-black uppercase ${getTextMuted()} block mb-0.5 text-center`}>Goal Steps</label>
-                      <input 
-                        type="number" 
-                        value={tempGoalVal} 
-                        onChange={(e) => setTempGoalVal(e.target.value)} 
+                  {/* Stats 2x2 Grid */}
+                  <div className="grid grid-cols-2 gap-1.5 flex-1">
+                    <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} p-1.5 rounded-xl border flex flex-col items-center justify-center text-center`}>
+                      <span className={`text-[8px] uppercase font-black ${getTextMuted()} leading-none mb-0.5`}>Steps</span>
+                      <input
+                        type="number"
+                        value={tempGoalVal}
+                        onChange={(e) => setTempGoalVal(e.target.value)}
                         onBlur={() => {
                           let val = parseInt(tempGoalVal);
                           if (isNaN(val) || val < 1) val = 1;
                           setTempGoalVal(val);
                           const nc = {
-                            ...habitConfigs, 
+                            ...habitConfigs,
                             [viewingHabitMap]: {
-                              ...(habitConfigs[viewingHabitMap] || {priority: 1, steps: 1}), 
+                              ...(habitConfigs[viewingHabitMap] || { priority: 1, steps: 1 }),
                               steps: val
                             }
                           };
-                          setHabitConfigs(nc); 
+                          setHabitConfigs(nc);
                           save(trackerData, habits, nc);
-                        }} 
+                        }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') e.currentTarget.blur();
                         }}
-                        className="w-full text-center text-xl font-black p-1 rounded bg-transparent focus:outline-none focus:text-emerald-500 transition-colors" 
+                        className="w-full text-center text-xs font-black bg-transparent focus:outline-none focus:text-emerald-500"
                       />
                     </div>
 
-                    {/* Rank & Streaks Desktop */}
-                    <div className="w-full space-y-4">
-                      <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-sm' : 'bg-white border-slate-100 shadow-sm'} p-4 rounded-xl border flex flex-col items-center text-center transition-all relative overflow-hidden group/rank w-full`}>
-                        <div className={`mb-1 transition-all duration-500 ${
-                          habitInsights.level === "Grandmaster" ? "text-emerald-500 scale-110 drop-shadow-[0_0_8px_rgba(16,185,129,0.6)]" : 
-                          habitInsights.level === "Elite" ? "text-blue-500" : 
-                          habitInsights.level === "Adept" ? "text-purple-500" : 
-                          habitInsights.level === "Apprentice" ? "text-amber-500" : "text-slate-400 opacity-50"
-                        }`}>
-                          <TrophyIcon className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <span className={`text-[9px] block uppercase font-black ${getTextMuted()} leading-none mb-0.5`}>Rank</span>
-                          <span className={`text-xs font-black transition-colors ${
-                            habitInsights.level === "Grandmaster" ? "text-emerald-500" : (theme === 'dark' ? 'text-slate-200' : 'text-slate-800')
-                          }`}>{habitInsights.level}</span>
-                        </div>
-                        
-                        <div className="flex gap-0.5 mt-2 opacity-30 group-hover/rank:opacity-100 transition-opacity">
-                          {['Seed', 'Apprentice', 'Adept', 'Elite', 'Grandmaster'].map((r) => (
-                            <div key={r} className={`w-1 h-1 rounded-full ${habitInsights.level === r ? 'bg-emerald-500 scale-125' : 'bg-slate-600'}`} />
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-sm' : 'bg-white border-slate-100 shadow-sm'} p-3 rounded-xl border flex flex-col items-center text-center transition-colors w-full`}>
-                        <div className="text-orange-600 scale-90 mb-1"><FlameIcon /></div>
-                        <div><span className={`text-[9px] block uppercase font-black ${getTextMuted()} leading-none`}>Streak</span><span className={`text-xs font-black ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>{habitInsights.currentStreak}d</span></div>
-                      </div>
-
-                      <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-sm' : 'bg-white border-slate-100 shadow-sm'} p-3 rounded-xl border flex flex-col items-center text-center transition-colors ring-2 ring-emerald-500/10 w-full`}>
-                        <div className="text-yellow-500 scale-90 mb-1"><TrophyIcon /></div>
-                        <div><span className={`text-[9px] block uppercase font-black ${getTextMuted()} leading-none`}>Best</span><span className={`text-xs font-black ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>{habitInsights.bestStreak}d</span></div>
-                      </div>
+                    <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} p-1.5 rounded-xl border flex flex-col items-center justify-center text-center`}>
+                      <span className={`text-[8px] uppercase font-black ${getTextMuted()} leading-none mb-0.5`}>Rank</span>
+                      <span className={`text-xs font-black truncate max-w-[70px] ${habitInsights.level === "Grandmaster" ? "text-emerald-500" : (theme === 'dark' ? 'text-slate-200' : 'text-slate-800')}`}>{habitInsights.level}</span>
                     </div>
-                  </div>
 
-                  {/* Archive and Delete buttons: side-by-side on mobile, stacked on desktop */}
-                  <div className="flex flex-row md:flex-col gap-2 w-full mt-3 md:mt-8">
-                    <motion.button whileTap={{ scale: 0.95 }} title="Archive habit" onClick={() => toggleArchiveHabit(viewingHabitMap)} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 md:py-3 px-3 md:px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${theme === 'dark' ? 'bg-amber-500/10 text-amber-500 hover:bg-amber-500 hover:text-white border border-amber-500/20' : 'bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-500 hover:text-white'}`}>
-                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v3"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7"/><path d="M9 13v-3"/><path d="M15 13v-3"/></svg>
-                      Archive
-                    </motion.button>
-                    <motion.button whileTap={{ scale: 0.95 }} title="Delete habit" onClick={() => setShowDeleteConfirm(true)} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 md:py-3 px-3 md:px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white border border-rose-500/20">
-                      <TrashIcon /> Delete
-                    </motion.button>
+                    <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} p-1.5 rounded-xl border flex flex-col items-center justify-center text-center`}>
+                      <span className={`text-[8px] uppercase font-black ${getTextMuted()} leading-none mb-0.5`}>Streak</span>
+                      <span className={`text-xs font-black ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>{habitInsights.currentStreak}d</span>
+                    </div>
+
+                    <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} p-1.5 rounded-xl border flex flex-col items-center justify-center text-center`}>
+                      <span className={`text-[8px] uppercase font-black ${getTextMuted()} leading-none mb-0.5`}>Best</span>
+                      <span className={`text-xs font-black ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>{habitInsights.bestStreak}d</span>
+                    </div>
                   </div>
                 </div>
 
-                {/* MAIN CALENDAR SECTION */}
-                <div className="flex-1 p-4 md:p-6 flex flex-col md:overflow-y-auto custom-scrollbar">
-                  <div className="flex items-start justify-between mb-6 gap-3">
-                    <div className="flex-1 flex flex-col items-center text-center">
-                      <div className="flex flex-col items-center gap-1.5 w-full">
-                        {isEditingTabName ? (
-                          <input autoFocus className={`text-xl font-black bg-transparent focus:outline-none border-b-2 border-emerald-500 text-center w-full max-w-[200px] ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`} value={tempHabitName} onChange={(e) => setTempHabitName(e.target.value)} onBlur={handleTabRename} onKeyDown={(e) => e.key === 'Enter' && handleTabRename()} />
-                        ) : (
-                          <h3 className={`text-lg md:text-xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'} leading-tight cursor-pointer hover:text-emerald-500 transition-colors flex items-center justify-center gap-2 group w-full`} onClick={() => { setIsEditingTabName(true); setTempHabitName(viewingHabitMap); }}>
-                            {viewingHabitMap}
-                            <span className="opacity-0 group-hover:opacity-100 transition-opacity"><EditIcon /></span>
-                          </h3>
-                        )}
-                        
-                        <select 
-                          value={habitConfigs[viewingHabitMap]?.category || 'all'} 
-                          onChange={(e) => {
-                            const newConfigs = {
-                              ...habitConfigs,
-                              [viewingHabitMap]: { ...(habitConfigs[viewingHabitMap] || {steps: 1}), category: e.target.value }
-                            };
-                            setHabitConfigs(newConfigs);
-                            save(trackerData, habits, newConfigs);
-                          }}
-                          className={`px-3 py-1 rounded-full text-[8px] md:text-[9px] font-black uppercase tracking-widest border transition-all cursor-pointer focus:outline-none appearance-none text-center
-                            ${theme === 'dark' ? 'bg-slate-800 text-emerald-400 border-slate-700 hover:border-emerald-500' : 'bg-slate-100 text-emerald-600 border-slate-200 hover:border-emerald-400'}`}
-                        >
-                          <option value="all">Add to category</option>
-                          {categories.filter(cat => cat !== 'all').map(cat => (
-                            <option key={cat} value={cat}>{cat}</option>
-                          ))}
-                        </select>
-                      </div>
-                      
-                      <div className={`flex items-center justify-center gap-1 mt-2 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
-                        <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} title="Previous month" className="p-1 hover:text-emerald-500 transition-colors"><ChevronLeftIcon /></button>
-                        <span className="text-[10px] font-black uppercase tracking-widest min-w-[80px] text-center">{currentDate.toLocaleString('default', { month: 'short', year: 'numeric' })}</span>
-                        <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} title="Next month" className="p-1 hover:text-emerald-500 transition-colors"><ChevronRightIcon /></button>
-                        </div>
+                {/* Desktop Layout (>=768px): Vertical Stack */}
+                <div className="hidden md:flex flex-col items-center w-full">
+                  <div className="relative w-28 h-28 flex items-center justify-center mb-5 shrink-0">
+                    <svg className="absolute w-full h-full -rotate-90" viewBox="0 0 144 144">
+                      <circle cx="72" cy="72" r="64" fill="none" stroke={theme === 'dark' ? '#334155' : '#e2e8f0'} strokeWidth="10" />
+                      <motion.circle initial={{ strokeDashoffset: 402 }} animate={{ strokeDashoffset: 402 - (402 * habitInsights.score / 100) }} transition={{ duration: 1.5, ease: "easeOut" }} cx="72" cy="72" r="64" fill="none" stroke="#10b981" strokeWidth="10" strokeDasharray={402} strokeLinecap="round" />
+                    </svg>
+                    <div className="flex flex-col items-center">
+                      <span className={`text-3xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}><AnimatedNumber value={habitInsights.score} /></span>
+                      <span className={`text-[8px] font-black ${getTextMuted()} uppercase tracking-widest`}>Score</span>
                     </div>
-                    <button onClick={() => { setViewingHabitMap(null); setIsEditingTabName(false); }} className={`flex flex-col items-center gap-0.5 p-3 transition-all ${getTextMuted()} hover:text-rose-500 shrink-0`} title="Close (ESC)"><XIcon /><span className="text-[6px] font-mono opacity-50">ESC</span></button>
                   </div>
 
-                  {/* Relocated Super Compact Priority Slider */}
-                  <div className={`mb-6 p-2 px-4 rounded-2xl border ${theme === 'dark' ? 'bg-slate-800/40 border-slate-700' : 'bg-slate-50 border-slate-200'} flex items-center gap-4`}>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <label className={`text-[8px] font-black uppercase ${getTextMuted()} tracking-widest`}>Priority</label>
-                      <span className="text-[11px] font-black text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20">{habitConfigs[viewingHabitMap]?.priority || 1}x</span>
-                    </div>
-                    <input 
-                      type="range" min="1" max="10" step="1"
-                      value={habitConfigs[viewingHabitMap]?.priority || 1}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value);
+                  {/* Goal Input Desktop */}
+                  <div className={`w-full mb-5 p-3 rounded-xl border ${theme === 'dark' ? 'bg-slate-900/50 border-slate-700' : 'bg-white border-slate-200'} shadow-sm`}>
+                    <label className={`text-[7px] font-black uppercase ${getTextMuted()} block mb-0.5 text-center`}>Goal Steps</label>
+                    <input
+                      type="number"
+                      value={tempGoalVal}
+                      onChange={(e) => setTempGoalVal(e.target.value)}
+                      onBlur={() => {
+                        let val = parseInt(tempGoalVal);
+                        if (isNaN(val) || val < 1) val = 1;
+                        setTempGoalVal(val);
                         const nc = {
                           ...habitConfigs,
-                          [viewingHabitMap]: { ...(habitConfigs[viewingHabitMap] || {steps: 1}), priority: val }
+                          [viewingHabitMap]: {
+                            ...(habitConfigs[viewingHabitMap] || { priority: 1, steps: 1 }),
+                            steps: val
+                          }
                         };
                         setHabitConfigs(nc);
                         save(trackerData, habits, nc);
                       }}
-                      className="flex-1 h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500 transition-all"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') e.currentTarget.blur();
+                      }}
+                      className="w-full text-center text-xl font-black p-1 rounded bg-transparent focus:outline-none focus:text-emerald-500 transition-colors"
                     />
                   </div>
 
-                  {/* Last 7 Days Activity Bar */}
-                  <div className="mb-10">
-                    <div className="flex items-center gap-2 mb-4">
-                      <ActivityIcon className="w-4 h-4 text-slate-400" />
-                      <p className={`text-[10px] font-black ${getTextMuted()} uppercase tracking-widest`}>Last 7 Days Activity</p>
-                    </div>
-                    <div className="grid grid-cols-7 gap-3">
-                      {habitInsights.last7Days.map((day, i) => {
-                        const isLiveDragging = activeSlider?.dateKey === day.key && activeSlider?.habit === viewingHabitMap;
-                        const displayPct = isLiveDragging ? activeSlider.value : day.pct;
+                  {/* Rank & Streaks Desktop */}
+                  <div className="w-full space-y-4">
+                    <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-sm' : 'bg-white border-slate-100 shadow-sm'} p-4 rounded-xl border flex flex-col items-center text-center transition-all relative overflow-hidden group/rank w-full`}>
+                      <div className={`mb-1 transition-all duration-500 ${habitInsights.level === "Grandmaster" ? "text-emerald-500 scale-110 drop-shadow-[0_0_8px_rgba(16,185,129,0.6)]" :
+                        habitInsights.level === "Elite" ? "text-blue-500" :
+                          habitInsights.level === "Adept" ? "text-purple-500" :
+                            habitInsights.level === "Apprentice" ? "text-amber-500" : "text-slate-400 opacity-50"
+                        }`}>
+                        <TrophyIcon className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <span className={`text-[9px] block uppercase font-black ${getTextMuted()} leading-none mb-0.5`}>Rank</span>
+                        <span className={`text-xs font-black transition-colors ${habitInsights.level === "Grandmaster" ? "text-emerald-500" : (theme === 'dark' ? 'text-slate-200' : 'text-slate-800')
+                          }`}>{habitInsights.level}</span>
+                      </div>
 
-                        return (
-                          <div key={i} className="flex flex-col items-center gap-2">
-                            <div className={`w-full aspect-square rounded-2xl border-2 overflow-hidden relative ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                              <motion.div 
-                                id={`bar-fill-${day.key}`} // This allows direct DOM updates
-                                initial={{ height: 0 }}
-                                animate={{ height: `${displayPct}%` }}
-                                // Matches the duration-700 ease style from v12.6
-                                transition={{ duration: 0.7, ease: "easeInOut" }}
-                                className={`absolute bottom-0 w-full ${displayPct >= 100 ? 'bg-emerald-500' : 'bg-blue-600'}`}
-                              />
-                            </div>
-                            <span className={`text-[10px] font-black ${day.isToday ? 'text-emerald-500' : (theme === 'dark' ? 'text-slate-500' : 'text-slate-400')}`}>
-                              {day.label}
-                            </span>
-                          </div>
-                        );
-                      })}
+                      <div className="flex gap-0.5 mt-2 opacity-30 group-hover/rank:opacity-100 transition-opacity">
+                        {['Seed', 'Apprentice', 'Adept', 'Elite', 'Grandmaster'].map((r) => (
+                          <div key={r} className={`w-1 h-1 rounded-full ${habitInsights.level === r ? 'bg-emerald-500 scale-125' : 'bg-slate-600'}`} />
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-sm' : 'bg-white border-slate-100 shadow-sm'} p-3 rounded-xl border flex flex-col items-center text-center transition-colors w-full`}>
+                      <div className="text-orange-600 scale-90 mb-1"><FlameIcon /></div>
+                      <div><span className={`text-[9px] block uppercase font-black ${getTextMuted()} leading-none`}>Streak</span><span className={`text-xs font-black ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>{habitInsights.currentStreak}d</span></div>
+                    </div>
+
+                    <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-sm' : 'bg-white border-slate-100 shadow-sm'} p-3 rounded-xl border flex flex-col items-center text-center transition-colors ring-2 ring-emerald-500/10 w-full`}>
+                      <div className="text-yellow-500 scale-90 mb-1"><TrophyIcon /></div>
+                      <div><span className={`text-[9px] block uppercase font-black ${getTextMuted()} leading-none`}>Best</span><span className={`text-xs font-black ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>{habitInsights.bestStreak}d</span></div>
                     </div>
                   </div>
+                </div>
 
-                  <div className="grid grid-cols-7 gap-3 text-center">
-                    {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => <span key={i} className={`text-[10px] font-black ${theme === 'dark' ? 'text-slate-700' : 'text-slate-300'} uppercase`}>{day}</span>)}
-                    {modalCalendarGrid.map((day, idx) => {
-                      const key = getSafeKey(day); 
-                      const isOtherMonth = day.getMonth() !== currentDate.getMonth();
-                      const v = typeof trackerData[key]?.[viewingHabitMap] === 'number' ? trackerData[key]?.[viewingHabitMap] : (trackerData[key]?.[viewingHabitMap] ? 100 : 0);
-                      const isTodayCell = new Date().toDateString() === day.toDateString();
-                      const isPassedCell = new Date(day).setHours(0,0,0,0) < new Date().setHours(0,0,0,0);
-                      const config = habitConfigs[viewingHabitMap];
-                      const stepVal = config?.steps > 1 ? Math.round((v / 100) * config.steps) : null;
-                      
+                {/* Archive and Delete buttons: side-by-side on mobile, stacked on desktop */}
+                <div className="flex flex-row md:flex-col gap-2 w-full mt-3 md:mt-8">
+                  <motion.button whileTap={{ scale: 0.95 }} title="Archive habit" onClick={() => toggleArchiveHabit(viewingHabitMap)} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 md:py-3 px-3 md:px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${theme === 'dark' ? 'bg-amber-500/10 text-amber-500 hover:bg-amber-500 hover:text-white border border-amber-500/20' : 'bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-500 hover:text-white'}`}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v3" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7" /><path d="M9 13v-3" /><path d="M15 13v-3" /></svg>
+                    Archive
+                  </motion.button>
+                  <motion.button whileTap={{ scale: 0.95 }} title="Delete habit" onClick={() => setShowDeleteConfirm(true)} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 md:py-3 px-3 md:px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white border border-rose-500/20">
+                    <TrashIcon /> Delete
+                  </motion.button>
+                </div>
+              </div>
+
+              {/* MAIN CALENDAR SECTION */}
+              <div className="flex-1 p-4 md:p-6 flex flex-col md:overflow-y-auto custom-scrollbar">
+                <div className="flex items-start justify-between mb-6 gap-3">
+                  <div className="flex-1 flex flex-col items-center text-center">
+                    <div className="flex flex-col items-center gap-1.5 w-full">
+                      {isEditingTabName ? (
+                        <input autoFocus className={`text-xl font-black bg-transparent focus:outline-none border-b-2 border-emerald-500 text-center w-full max-w-[200px] ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`} value={tempHabitName} onChange={(e) => setTempHabitName(e.target.value)} onBlur={handleTabRename} onKeyDown={(e) => e.key === 'Enter' && handleTabRename()} />
+                      ) : (
+                        <h3 className={`text-lg md:text-xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'} leading-tight cursor-pointer hover:text-emerald-500 transition-colors flex items-center justify-center gap-2 group w-full`} onClick={() => { setIsEditingTabName(true); setTempHabitName(viewingHabitMap); }}>
+                          {viewingHabitMap}
+                          <span className="opacity-0 group-hover:opacity-100 transition-opacity"><EditIcon /></span>
+                        </h3>
+                      )}
+
+                      <select
+                        value={habitConfigs[viewingHabitMap]?.category || 'all'}
+                        onChange={(e) => {
+                          const newConfigs = {
+                            ...habitConfigs,
+                            [viewingHabitMap]: { ...(habitConfigs[viewingHabitMap] || { steps: 1 }), category: e.target.value }
+                          };
+                          setHabitConfigs(newConfigs);
+                          save(trackerData, habits, newConfigs);
+                        }}
+                        className={`px-3 py-1 rounded-full text-[8px] md:text-[9px] font-black uppercase tracking-widest border transition-all cursor-pointer focus:outline-none appearance-none text-center
+                            ${theme === 'dark' ? 'bg-slate-800 text-emerald-400 border-slate-700 hover:border-emerald-500' : 'bg-slate-100 text-emerald-600 border-slate-200 hover:border-emerald-400'}`}
+                      >
+                        <option value="all">Add to category</option>
+                        {categories.filter(cat => cat !== 'all').map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className={`flex items-center justify-center gap-1 mt-2 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+                      <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} title="Previous month" className="p-1 hover:text-emerald-500 transition-colors"><ChevronLeftIcon /></button>
+                      <span className="text-[10px] font-black uppercase tracking-widest min-w-[80px] text-center">{currentDate.toLocaleString('default', { month: 'short', year: 'numeric' })}</span>
+                      <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} title="Next month" className="p-1 hover:text-emerald-500 transition-colors"><ChevronRightIcon /></button>
+                    </div>
+                  </div>
+                  <button onClick={() => { setViewingHabitMap(null); setIsEditingTabName(false); }} className={`flex flex-col items-center gap-0.5 p-3 transition-all ${getTextMuted()} hover:text-rose-500 shrink-0`} title="Close (ESC)"><XIcon /><span className="text-[6px] font-mono opacity-50">ESC</span></button>
+                </div>
+
+                {/* Relocated Super Compact Priority Slider */}
+                <div className={`mb-6 p-2 px-4 rounded-2xl border ${theme === 'dark' ? 'bg-slate-800/40 border-slate-700' : 'bg-slate-50 border-slate-200'} flex items-center gap-4`}>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <label className={`text-[8px] font-black uppercase ${getTextMuted()} tracking-widest`}>Priority</label>
+                    <span className="text-[11px] font-black text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20">{habitConfigs[viewingHabitMap]?.priority || 1}x</span>
+                  </div>
+                  <input
+                    type="range" min="1" max="10" step="1"
+                    value={habitConfigs[viewingHabitMap]?.priority || 1}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value);
+                      const nc = {
+                        ...habitConfigs,
+                        [viewingHabitMap]: { ...(habitConfigs[viewingHabitMap] || { steps: 1 }), priority: val }
+                      };
+                      setHabitConfigs(nc);
+                      save(trackerData, habits, nc);
+                    }}
+                    className="flex-1 h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500 transition-all"
+                  />
+                </div>
+
+                {/* Last 7 Days Activity Bar */}
+                <div className="mb-10">
+                  <div className="flex items-center gap-2 mb-4">
+                    <ActivityIcon className="w-4 h-4 text-slate-400" />
+                    <p className={`text-[10px] font-black ${getTextMuted()} uppercase tracking-widest`}>Last 7 Days Activity</p>
+                  </div>
+                  <div className="grid grid-cols-7 gap-3">
+                    {habitInsights.last7Days.map((day, i) => {
+                      const isLiveDragging = activeSlider?.dateKey === day.key && activeSlider?.habit === viewingHabitMap;
+                      const displayPct = isLiveDragging ? activeSlider.value : day.pct;
+
                       return (
-                          <motion.div key={idx} whileTap={{ scale: 0.9 }} 
-    onPointerDown={(e) => handleHabitPressStart(e, key, viewingHabitMap, v)} 
-    onPointerUp={(e) => handleHabitPressEnd(e, key, viewingHabitMap, v)} 
-    className={`aspect-square rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all border-2 touch-none select-none ${getButtonStyles(v, key)} ${isTodayCell ? 'ring-2 ring-emerald-400 ring-offset-2' : ''} ${isOtherMonth ? 'opacity-30 pointer-events-none' : ''}`}>
-                              <span className={`text-[8px] font-black pointer-events-none ${v > 0 ? 'text-white/60' : (theme === 'dark' ? 'text-slate-600' : 'text-slate-400')}`}>{day.getDate()}</span>
-                              <span className={`text-xs font-black pointer-events-none ${v > 0 ? 'text-white' : (isPassedCell ? 'text-red-500' : 'text-white [text-shadow:_-1px_-1px_0_#000,1px_-1px_0_#000,-1px_1px_0_#000,1px_1px_0_#000]')} ${v > 0 && v < 100 ? 'text-[9px]' : ''}`}>
-                                  {stepVal !== null ? stepVal : (v === 100 ? '✔' : (v > 0 ? `${Math.round(v)}%` : '✘'))}
-                              </span>
-                          </motion.div>
+                        <div key={i} className="flex flex-col items-center gap-2">
+                          <div className={`w-full aspect-square rounded-2xl border-2 overflow-hidden relative ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                            <motion.div
+                              id={`bar-fill-${day.key}`} // This allows direct DOM updates
+                              initial={{ height: 0 }}
+                              animate={{ height: `${displayPct}%` }}
+                              // Matches the duration-700 ease style from v12.6
+                              transition={{ duration: 0.7, ease: "easeInOut" }}
+                              className={`absolute bottom-0 w-full ${displayPct >= 100 ? 'bg-emerald-500' : 'bg-blue-600'}`}
+                            />
+                          </div>
+                          <span className={`text-[10px] font-black ${day.isToday ? 'text-emerald-500' : (theme === 'dark' ? 'text-slate-500' : 'text-slate-400')}`}>
+                            {day.label}
+                          </span>
+                        </div>
                       );
                     })}
                   </div>
                 </div>
-              </motion.div>
+
+                <div className="grid grid-cols-7 gap-3 text-center">
+                  {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => <span key={i} className={`text-[10px] font-black ${theme === 'dark' ? 'text-slate-700' : 'text-slate-300'} uppercase`}>{day}</span>)}
+                  {modalCalendarGrid.map((day, idx) => {
+                    const key = getSafeKey(day);
+                    const isOtherMonth = day.getMonth() !== currentDate.getMonth();
+                    const v = typeof trackerData[key]?.[viewingHabitMap] === 'number' ? trackerData[key]?.[viewingHabitMap] : (trackerData[key]?.[viewingHabitMap] ? 100 : 0);
+                    const isTodayCell = new Date().toDateString() === day.toDateString();
+                    const isPassedCell = new Date(day).setHours(0, 0, 0, 0) < new Date().setHours(0, 0, 0, 0);
+                    const config = habitConfigs[viewingHabitMap];
+                    const stepVal = config?.steps > 1 ? Math.round((v / 100) * config.steps) : null;
+
+                    return (
+                      <motion.div key={idx} whileTap={{ scale: 0.9 }}
+                        onPointerDown={(e) => handleHabitPressStart(e, key, viewingHabitMap, v)}
+                        onPointerUp={(e) => handleHabitPressEnd(e, key, viewingHabitMap, v)}
+                        className={`aspect-square rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all border-2 touch-none select-none ${getButtonStyles(v, key)} ${isTodayCell ? 'ring-2 ring-emerald-400 ring-offset-2' : ''} ${isOtherMonth ? 'opacity-30 pointer-events-none' : ''}`}>
+                        <span className={`text-[8px] font-black pointer-events-none ${v > 0 ? 'text-white/60' : (theme === 'dark' ? 'text-slate-600' : 'text-slate-400')}`}>{day.getDate()}</span>
+                        <span className={`text-xs font-black pointer-events-none ${v > 0 ? 'text-white' : (isPassedCell ? 'text-red-500' : 'text-white [text-shadow:_-1px_-1px_0_#000,1px_-1px_0_#000,-1px_1px_0_#000,1px_1px_0_#000]')} ${v > 0 && v < 100 ? 'text-[9px]' : ''}`}>
+                          {stepVal !== null ? stepVal : (v === 100 ? '✔' : (v > 0 ? `${Math.round(v)}%` : '✘'))}
+                        </span>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              </div>
             </motion.div>
+          </motion.div>
         )}
 
         {/* MASTERY SLIDER OVERLAY - Optimized for Zero Lag */}
         {activeSlider && (
-          <motion.div 
-            initial={{ opacity: 0 }} 
-            animate={{ opacity: 1 }} 
-            exit={{ opacity: 0 }} 
-            className="fixed inset-0 z-[250] bg-black/80 backdrop-blur-md touch-none select-none" 
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[250] bg-black/80 backdrop-blur-md touch-none select-none"
             onPointerUp={() => {
               const barFill = document.getElementById(`bar-fill-${activeSlider.dateKey}`);
               if (barFill) {
-                barFill.style.backgroundColor = ''; 
-                barFill.style.height = ''; 
+                barFill.style.backgroundColor = '';
+                barFill.style.height = '';
               }
-              
+
               updateHabitValue(activeSlider.dateKey, activeSlider.habit, activeSlider.value);
               setActiveSlider(null);
             }}
           >
-            <div 
-              className="fixed flex flex-col items-center" 
-              style={{ 
-                left: activeSlider.x, top: activeSlider.y, 
-                transform: 'translate(-50%, -50%)', position: 'fixed', willChange: 'transform' 
-              }} 
+            <div
+              className="fixed flex flex-col items-center"
+              style={{
+                left: activeSlider.x, top: activeSlider.y,
+                transform: 'translate(-50%, -50%)', position: 'fixed', willChange: 'transform'
+              }}
               onPointerMove={(e) => {
                 if (e.buttons === 1 || e.pointerType === 'touch') {
-                  const track = document.getElementById('mastery-slider-track'); 
+                  const track = document.getElementById('mastery-slider-track');
                   const fill = document.getElementById('mastery-slider-fill');
                   const label = document.getElementById('mastery-slider-label');
                   if (!track || !fill || !label) return;
 
-                  const rect = track.getBoundingClientRect(); 
+                  const rect = track.getBoundingClientRect();
                   const percentage = Math.max(0, Math.min(100, Math.round(((rect.bottom - e.clientY) / rect.height) * 100)));
                   const config = habitConfigs[activeSlider.habit];
                   const finalVal = config?.steps > 1 ? (Math.round((percentage / 100) * config.steps) / config.steps) * 100 : percentage;
@@ -3344,7 +3823,7 @@ export default function App() {
                   const displayVal = config?.steps > 1 ? Math.round((finalVal / 100) * config.steps) : Math.round(finalVal) + '%';
                   label.innerText = displayVal;
                   label.style.color = finalVal >= 47 ? '#0f172a' : '#ffffff';
-                  
+
                   // 2. Update Activity Bar DOM Instantly (Zero Lag)
                   const barFill = document.getElementById(`bar-fill-${activeSlider.dateKey}`);
                   if (barFill) {
@@ -3360,26 +3839,26 @@ export default function App() {
             >
               <p className="absolute -top-12 text-white font-black uppercase text-xs tracking-widest whitespace-nowrap drop-shadow-xl z-10">{activeSlider.habit}</p>
               <div id="mastery-slider-track" className="relative w-24 h-64 bg-white/10 rounded-[2.5rem] border-4 border-white/30 overflow-hidden shadow-2xl backdrop-blur-3xl ring-8 ring-white/5 cursor-ns-resize">
-                  <div 
-                    id="mastery-slider-fill"
-                    className="absolute bottom-0 w-full bg-white transition-all duration-75 shadow-[0_0_25px_rgba(255,255,255,0.5)]" 
-                    style={{ height: `${activeSlider.value}%` }} 
-                  />
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <span 
-                      id="mastery-slider-label"
-                      className={`text-4xl font-black transition-colors ${activeSlider.value >= 47 ? 'text-slate-900' : 'text-white'}`}
-                    >
-                      {habitConfigs[activeSlider.habit]?.steps > 1 
-                        ? Math.round((activeSlider.value / 100) * habitConfigs[activeSlider.habit].steps) 
-                        : Math.round(activeSlider.value) + '%'}
-                    </span>
-                  </div>
+                <div
+                  id="mastery-slider-fill"
+                  className="absolute bottom-0 w-full bg-white transition-all duration-75 shadow-[0_0_25px_rgba(255,255,255,0.5)]"
+                  style={{ height: `${activeSlider.value}%` }}
+                />
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <span
+                    id="mastery-slider-label"
+                    className={`text-4xl font-black transition-colors ${activeSlider.value >= 47 ? 'text-slate-900' : 'text-white'}`}
+                  >
+                    {habitConfigs[activeSlider.habit]?.steps > 1
+                      ? Math.round((activeSlider.value / 100) * habitConfigs[activeSlider.habit].steps)
+                      : Math.round(activeSlider.value) + '%'}
+                  </span>
+                </div>
               </div>
             </div>
           </motion.div>
         )}
-          
+
 
         {/* Confirmation and Editor Modals */}
         {showDeleteConfirm && (
@@ -3396,24 +3875,24 @@ export default function App() {
           </motion.div>
         )}
 
-{/* --- MANAGE HYBRID MODAL --- */}
+        {/* --- MANAGE HYBRID MODAL --- */}
         {showManageModal && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[400] flex items-center justify-center bg-black/80 backdrop-blur-md p-4" onClick={() => setShowManageModal(false)}>
             <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} border rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl relative flex flex-col h-[560px]`} onClick={e => e.stopPropagation()}>
               <button onClick={() => setShowManageModal(false)} title="Close (ESC)" className="absolute -top-4 -right-4 z-10 p-2 rounded-full bg-slate-800 border border-slate-700 text-slate-400 hover:text-rose-500 hover:border-rose-500/50 hover:shadow-[0_0_16px_4px_rgba(239,68,68,0.5)] transition-all duration-200">
                 <XIcon />
               </button>
-              
+
               <div className="flex flex-col gap-4 mb-6 shrink-0 mt-2">
                 <div className="flex bg-slate-800/20 p-1 rounded-2xl border border-slate-200 dark:border-slate-800">
-                  <button 
+                  <button
                     onClick={() => setManageModalTab('categories')}
                     title="Switch to Categories tab"
                     className={`flex-1 py-2 text-[10px] md:text-xs font-black uppercase tracking-widest rounded-xl transition-all ${manageModalTab === 'categories' ? 'bg-emerald-500 text-white shadow-md' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
                   >
                     Categories
                   </button>
-                  <button 
+                  <button
                     onClick={() => setManageModalTab('habits')}
                     title="Switch to Habits tab"
                     className={`flex-1 py-2 text-[10px] md:text-xs font-black uppercase tracking-widest rounded-xl transition-all ${manageModalTab === 'habits' ? 'bg-emerald-500 text-white shadow-md' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
@@ -3440,13 +3919,12 @@ export default function App() {
                   <button
                     onClick={() => {
                       setSeenManageTip(true);
-                      try { localStorage.setItem('adib_seen_manage_tip', 'true'); } catch (e) {}
+                      try { localStorage.setItem('adib_seen_manage_tip', 'true'); } catch (e) { }
                     }}
-                    className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider shrink-0 border transition-all ${
-                      theme === 'dark'
-                        ? 'bg-amber-500/20 hover:bg-amber-500/30 border-amber-500/40 text-amber-300'
-                        : 'bg-amber-100 hover:bg-amber-200 border-amber-300 text-amber-800'
-                    }`}
+                    className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider shrink-0 border transition-all ${theme === 'dark'
+                      ? 'bg-amber-500/20 hover:bg-amber-500/30 border-amber-500/40 text-amber-300'
+                      : 'bg-amber-100 hover:bg-amber-200 border-amber-300 text-amber-800'
+                      }`}
                   >
                     Got It
                   </button>
@@ -3456,15 +3934,20 @@ export default function App() {
               {manageModalTab === 'habits' ? (
                 <div className="flex flex-col flex-1 min-h-0">
                   <div className="flex gap-2 mb-4 shrink-0">
-                    <input 
-                      type="text" 
-                      placeholder="New habit..." 
+                    <input
+                      type="text"
+                      placeholder="New habit..."
                       value={newHabitInput}
-                      onChange={(e) => setNewHabitInput(e.target.value)}
+                      onChange={(e) => {
+                        setNewHabitInput(e.target.value);
+                        if (habitInputError) setHabitInputError('');
+                      }}
                       onKeyDown={(e) => e.key === 'Enter' && handleAddHabitFromInput()}
-                      className={`flex-1 px-4 py-3 rounded-xl text-xs font-bold focus:outline-none border-2 transition-all ${theme === 'dark' ? 'bg-slate-800 border-slate-700 focus:border-emerald-500 text-white placeholder:text-slate-600' : 'bg-slate-50 border-slate-200 focus:border-emerald-500 text-slate-800'}`}
+                      className={`flex-1 px-4 py-3 rounded-xl text-xs font-bold focus:outline-none border-2 transition-all ${habitInputError ? 'border-rose-500/70 focus:border-rose-500' :
+                        theme === 'dark' ? 'bg-slate-800 border-slate-700 focus:border-emerald-500 text-white placeholder:text-slate-600' : 'bg-slate-50 border-slate-200 focus:border-emerald-500 text-slate-800'
+                        }`}
                     />
-                    <button 
+                    <button
                       onClick={handleAddHabitFromInput}
                       disabled={!newHabitInput.trim()}
                       title="Add new habit"
@@ -3473,25 +3956,31 @@ export default function App() {
                       <PlusIcon />
                     </button>
                   </div>
+                  {habitInputError && (
+                    <p className="text-[11px] font-bold text-rose-500 mb-3 px-1 flex items-center gap-1.5 shrink-0">
+                      <span>⚠️</span>
+                      <span>{habitInputError}</span>
+                    </p>
+                  )}
                   <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-2">
                     {habits.map((habit, index) => (
                       <div key={habit} className={`p-3 rounded-2xl border flex items-center justify-between transition-colors ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
                         <div className="flex items-center gap-3 flex-1 min-w-0 mr-2">
                           <span className={`text-xs font-black w-5 text-center shrink-0 ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>{index + 1}</span>
-                          
+
                           {/* INLINE EDITING LOGIC - Removed onBlur entirely to fix focus loops */}
                           {editingHabitName === habit ? (
-                            <input 
-                              autoFocus 
-                              className={`text-sm font-black uppercase w-full bg-transparent focus:outline-none border-b border-emerald-500 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`} 
-                              value={tempHabitName} 
-                              onChange={(e) => setTempHabitName(e.target.value)} 
+                            <input
+                              autoFocus
+                              className={`text-sm font-black uppercase w-full bg-transparent focus:outline-none border-b border-emerald-500 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}
+                              value={tempHabitName}
+                              onChange={(e) => setTempHabitName(e.target.value)}
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter') {
-                                    e.preventDefault(); 
-                                    handleDashboardRename(habit);
+                                  e.preventDefault();
+                                  handleDashboardRename(habit);
                                 }
-                              }} 
+                              }}
                             />
                           ) : (
                             <span className={`text-sm font-black uppercase truncate ${archivedHabits.includes(habit) ? 'opacity-40 line-through' : ''} ${theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>
@@ -3499,16 +3988,16 @@ export default function App() {
                             </span>
                           )}
                         </div>
-                        
+
                         <div className="flex items-center gap-1 shrink-0">
                           {/* EDIT / SAVE BUTTON - Back to reliable onClick */}
-                          <button 
+                          <button
                             onClick={(e) => {
-                              e.preventDefault(); 
+                              e.preventDefault();
                               if (editingHabitName === habit) {
                                 handleDashboardRename(habit);
                               } else {
-                                setEditingHabitName(habit); 
+                                setEditingHabitName(habit);
                                 setTempHabitName(habit);
                               }
                             }}
@@ -3516,14 +4005,14 @@ export default function App() {
                             title={editingHabitName === habit ? "Save Habit Name" : "Edit Habit Name"}
                           >
                             {editingHabitName === habit ? (
-                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-500"><polyline points="20 6 9 17 4 12"/></svg>
+                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-500"><polyline points="20 6 9 17 4 12" /></svg>
                             ) : (
                               <EditIcon />
                             )}
                           </button>
 
                           {/* DELETE BUTTON */}
-                          <button 
+                          <button
                             onClick={() => { setTempHabitName(habit); setShowDeleteConfirm(true); }}
                             className={`p-1.5 rounded-lg transition-all ${theme === 'dark' ? 'hover:bg-slate-700 hover:text-rose-400 text-slate-400' : 'hover:bg-slate-200 hover:text-rose-600 text-slate-500'}`}
                             title="Delete Habit"
@@ -3534,7 +4023,7 @@ export default function App() {
                           <div className={`w-px h-4 mx-1 ${theme === 'dark' ? 'bg-slate-700' : 'bg-slate-300'}`} />
 
                           {/* UP BUTTON */}
-                          <button 
+                          <button
                             onClick={() => {
                               if (index === 0) return;
                               const newHabits = [...habits];
@@ -3550,7 +4039,7 @@ export default function App() {
                           </button>
 
                           {/* DOWN BUTTON */}
-                          <button 
+                          <button
                             onClick={() => {
                               if (index === habits.length - 1) return;
                               const newHabits = [...habits];
@@ -3572,15 +4061,20 @@ export default function App() {
               ) : (
                 <div className="flex flex-col flex-1 min-h-0">
                   <div className="flex gap-2 mb-4 shrink-0">
-                    <input 
-                      type="text" 
-                      placeholder="New category..." 
+                    <input
+                      type="text"
+                      placeholder="New category..."
                       value={newCatInput}
-                      onChange={(e) => setNewCatInput(e.target.value)}
+                      onChange={(e) => {
+                        setNewCatInput(e.target.value);
+                        if (catInputError) setCatInputError('');
+                      }}
                       onKeyDown={(e) => e.key === 'Enter' && handleManualAddCategory()}
-                      className={`flex-1 px-4 py-3 rounded-xl text-xs font-bold focus:outline-none border-2 transition-all ${theme === 'dark' ? 'bg-slate-800 border-slate-700 focus:border-emerald-500 text-white placeholder:text-slate-600' : 'bg-slate-50 border-slate-200 focus:border-emerald-500 text-slate-800'}`}
+                      className={`flex-1 px-4 py-3 rounded-xl text-xs font-bold focus:outline-none border-2 transition-all ${catInputError ? 'border-rose-500/70 focus:border-rose-500' :
+                        theme === 'dark' ? 'bg-slate-800 border-slate-700 focus:border-emerald-500 text-white placeholder:text-slate-600' : 'bg-slate-50 border-slate-200 focus:border-emerald-500 text-slate-800'
+                        }`}
                     />
-                    <button 
+                    <button
                       onClick={handleManualAddCategory}
                       disabled={!newCatInput.trim()}
                       title="Add new category"
@@ -3589,15 +4083,21 @@ export default function App() {
                       <PlusIcon />
                     </button>
                   </div>
+                  {catInputError && (
+                    <p className="text-[11px] font-bold text-rose-500 mb-3 px-1 flex items-center gap-1.5 shrink-0">
+                      <span>⚠️</span>
+                      <span>{catInputError}</span>
+                    </p>
+                  )}
 
                   <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-2">
                     {categories.map((cat, index) => (
                       <div key={cat} className={`flex items-center justify-between p-3 rounded-xl border ${theme === 'dark' ? 'bg-slate-800/40 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                        
+
                         {editingCat?.name === cat ? (
-                          <input 
+                          <input
                             autoFocus
-                            type="text" 
+                            type="text"
                             value={editingCat.temp}
                             onChange={(e) => setEditingCat({ ...editingCat, temp: e.target.value })}
                             onBlur={() => handleCategoryRename(cat, editingCat.temp)}
@@ -3611,7 +4111,7 @@ export default function App() {
                         <div className="flex items-center gap-1">
                           {cat !== 'all' && (
                             <>
-                              <button 
+                              <button
                                 onClick={() => moveCategoryUp(index)}
                                 disabled={index === 1}
                                 title="Move category up"
@@ -3619,7 +4119,7 @@ export default function App() {
                               >
                                 <ArrowUpIcon />
                               </button>
-                              <button 
+                              <button
                                 onClick={() => moveCategoryDown(index)}
                                 disabled={index === categories.length - 1}
                                 title="Move category down"
@@ -3627,14 +4127,14 @@ export default function App() {
                               >
                                 <ArrowDownIcon />
                               </button>
-                              <button 
+                              <button
                                 onClick={() => setEditingCat({ name: cat, temp: cat })}
                                 title="Edit category name"
                                 className={`p-1.5 rounded-lg transition-all ${theme === 'dark' ? 'text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10' : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'}`}
                               >
                                 <EditIcon />
                               </button>
-                              <button 
+                              <button
                                 onClick={() => deleteCategory(cat)}
                                 title="Delete category"
                                 className={`p-1.5 rounded-lg transition-all ${theme === 'dark' ? 'text-slate-500 hover:text-rose-400 hover:bg-rose-500/10' : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'}`}
@@ -3653,12 +4153,12 @@ export default function App() {
           </motion.div>
         )}
 
-{/* --- ARCHIVE MODAL --- */}
+        {/* --- ARCHIVE MODAL --- */}
         {showArchiveModal && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[350] flex items-center justify-center bg-black/70 backdrop-blur-md p-4" onClick={() => setShowArchiveModal(false)}>
             <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} border rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl relative flex flex-col max-h-[85vh]`} onClick={e => e.stopPropagation()}>
               <button onClick={() => setShowArchiveModal(false)} title="Close (ESC)" className={`absolute top-6 right-6 p-2 ${getTextMuted()} hover:text-rose-500 transition-all`}><XIcon /></button>
-              
+
               <div className="mb-6 shrink-0">
                 <p className={`text-[10px] font-black ${getTextMuted()} uppercase tracking-[0.2em] mb-1`}>Hidden Habits</p>
                 <h3 className={`text-3xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Archived List</h3>
@@ -3669,7 +4169,7 @@ export default function App() {
                   archivedHabits.map(habit => (
                     <div key={habit} className={`p-4 rounded-2xl border flex items-center justify-between ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
                       <span className={`text-sm font-black uppercase ${theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>{habit}</span>
-                      <button 
+                      <button
                         onClick={() => toggleArchiveHabit(habit)}
                         title="Unarchive habit"
                         className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${theme === 'dark' ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-white border border-emerald-500/20' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white border border-emerald-200'}`}
@@ -3693,9 +4193,9 @@ export default function App() {
         {/* --- LEVEL UP MODAL --- */}
         {showLevelUpModal && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[400] flex items-center justify-center bg-black/90 backdrop-blur-xl p-4" onClick={() => setShowLevelUpModal(false)}>
-            <motion.div 
-              initial={{ scale: 0.5, y: 100 }} 
-              animate={{ scale: 1, y: 0 }} 
+            <motion.div
+              initial={{ scale: 0.5, y: 100 }}
+              animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.8, opacity: 0 }}
               transition={{ type: "spring", bounce: 0.5 }}
               className="relative w-full max-w-sm bg-slate-900 border-2 border-emerald-500/50 rounded-[3rem] p-10 text-center overflow-hidden shadow-[0_0_50px_rgba(16,185,129,0.4)]"
@@ -3703,26 +4203,26 @@ export default function App() {
             >
               {/* Radial Burst Background */}
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-emerald-500/20 via-slate-900/50 to-slate-900 z-0 animate-pulse"></div>
-              
+
               <div className="relative z-10 flex flex-col items-center">
                 <div className="w-24 h-24 mb-6 rounded-full bg-gradient-to-tr from-emerald-400 to-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-500/30 animate-bounce">
                   {/* Big Custom Trophy Icon */}
-                  <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" /><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" /></svg>
                 </div>
-                
+
                 <h2 className="text-4xl font-black text-white italic tracking-tighter mb-2 drop-shadow-md">
                   LEVEL UP!
                 </h2>
-                
+
                 <div className="text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-emerald-300 to-emerald-600 mb-4 filter drop-shadow-[0_4px_0_rgba(6,78,59,0.5)]">
                   {xpStats.level}
                 </div>
-                
+
                 <p className="text-emerald-400 font-black uppercase tracking-[0.3em] text-xs mb-8">
                   Keep Crushing It
                 </p>
-                
-                <button 
+
+                <button
                   onClick={() => setShowLevelUpModal(false)}
                   className="w-full py-4 rounded-2xl bg-white text-emerald-600 font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl"
                 >
@@ -3736,13 +4236,13 @@ export default function App() {
         {/* --- LEVEL DETAILS MODAL --- */}
         {showLevelDetailsModal && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[400] flex items-center justify-center bg-black/80 backdrop-blur-md p-4" onClick={() => setShowLevelDetailsModal(false)}>
-            <motion.div 
-              initial={{ scale: 0.95, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0 }} 
-              className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} border rounded-[2rem] w-full max-w-sm p-8 shadow-2xl relative overflow-hidden`} 
+            <motion.div
+              initial={{ scale: 0.95, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0 }}
+              className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} border rounded-[2rem] w-full max-w-sm p-8 shadow-2xl relative overflow-hidden`}
               onClick={e => e.stopPropagation()}
             >
               <button onClick={() => setShowLevelDetailsModal(false)} title="Close (ESC)" className={`absolute top-6 right-6 p-2 ${getTextMuted()} hover:text-rose-500 transition-all`}><XIcon /></button>
-              
+
               <div className="mb-8 shrink-0">
                 <p className={`text-[10px] font-black ${getTextMuted()} uppercase tracking-[0.2em] mb-1`}>Mastery Engine</p>
                 <h3 className={`text-2xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Level Details</h3>
@@ -3774,23 +4274,22 @@ export default function App() {
               <div className="mt-8 flex flex-col gap-5 relative px-2">
                 {/* The vertical line */}
                 <div className="absolute left-[17px] top-2 bottom-2 w-[2px] bg-slate-200 dark:bg-slate-700/50" />
-                
+
                 {[Math.max(1, xpStats.level - 1), Math.max(1, xpStats.level - 1) + 1, Math.max(1, xpStats.level - 1) + 2, Math.max(1, xpStats.level - 1) + 3].map((l) => {
                   const isPast = l < xpStats.level;
                   const isCurrent = l === xpStats.level;
                   const targetXP = Math.pow(l - 1, 2) * 100;
-                  
+
                   return (
                     <div key={l} className={`relative flex items-center gap-5 ${isPast ? 'opacity-50' : ''}`}>
-                      <div className={`w-5 h-5 rounded-full border-2 z-10 shrink-0 ${
-                        isPast ? 'bg-emerald-500 border-emerald-500' : 
-                        isCurrent ? 'bg-white dark:bg-slate-900 border-emerald-500 ring-4 ring-emerald-500/20' : 
-                        'bg-slate-100 border-slate-300 dark:bg-slate-800 dark:border-slate-600'
-                      } flex items-center justify-center transition-all`}>
-                        {isPast && <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                      <div className={`w-5 h-5 rounded-full border-2 z-10 shrink-0 ${isPast ? 'bg-emerald-500 border-emerald-500' :
+                        isCurrent ? 'bg-white dark:bg-slate-900 border-emerald-500 ring-4 ring-emerald-500/20' :
+                          'bg-slate-100 border-slate-300 dark:bg-slate-800 dark:border-slate-600'
+                        } flex items-center justify-center transition-all`}>
+                        {isPast && <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>}
                         {isCurrent && <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />}
                       </div>
-                      
+
                       <div className="flex-1 flex items-center justify-between">
                         <div className="flex flex-col">
                           <span className={`text-[11px] font-black uppercase tracking-widest ${isCurrent ? (theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600') : (theme === 'dark' ? 'text-slate-300' : 'text-slate-600')}`}>
@@ -3813,13 +4312,13 @@ export default function App() {
         {/* --- TROPHY DETAILS MODAL --- */}
         {showTrophyDetailsModal && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[400] flex items-center justify-center bg-black/80 backdrop-blur-md p-4" onClick={() => setShowTrophyDetailsModal(false)}>
-            <motion.div 
-              initial={{ scale: 0.95, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0 }} 
-              className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} border rounded-[2rem] w-full max-w-sm p-8 shadow-2xl relative overflow-hidden`} 
+            <motion.div
+              initial={{ scale: 0.95, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0 }}
+              className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} border rounded-[2rem] w-full max-w-sm p-8 shadow-2xl relative overflow-hidden`}
               onClick={e => e.stopPropagation()}
             >
               <button onClick={() => setShowTrophyDetailsModal(false)} title="Close (ESC)" className={`absolute top-6 right-6 p-2 ${getTextMuted()} hover:text-rose-500 transition-all`}><XIcon /></button>
-              
+
               <div className="mb-8 shrink-0">
                 <p className={`text-[10px] font-black ${getTextMuted()} uppercase tracking-[0.2em] mb-1`}>Monthly Activity</p>
                 <h3 className={`text-2xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Win Milestones</h3>
@@ -3840,7 +4339,7 @@ export default function App() {
 
               <div className="flex flex-col items-center mb-8">
                 <div className={`w-24 h-24 rounded-full flex items-center justify-center mb-4 border-4 shadow-xl bg-yellow-500/10 border-yellow-500/40 text-yellow-500`}>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" /><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" /></svg>
                 </div>
                 <p className={`text-xs font-black uppercase tracking-widest ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
                   Completed: <span className={theme === 'dark' ? 'text-yellow-400' : 'text-yellow-600'}>{analytics.totalDone}</span>
@@ -3851,10 +4350,10 @@ export default function App() {
                 const milestones = [5, 10, 25, 50, 75, 100, 150, 200, 250, 300, 400, 500, 750, 1000];
                 let nextIdx = milestones.findIndex(m => analytics.totalDone < m);
                 if (nextIdx === -1) nextIdx = milestones.length - 1;
-                
+
                 const nextTarget = milestones[nextIdx];
                 const prevTarget = nextIdx > 0 ? milestones[nextIdx - 1] : 0;
-                
+
                 const progressXP = analytics.totalDone - prevTarget;
                 const requiredXP = nextTarget - prevTarget;
                 const progressPct = requiredXP > 0 ? Math.min(100, Math.max(0, Math.round((progressXP / requiredXP) * 100))) : 100;
@@ -3883,18 +4382,17 @@ export default function App() {
                     {/* Timeline Roadmap */}
                     <div className="mt-8 flex flex-col gap-5 relative px-2">
                       <div className="absolute left-[17px] top-2 bottom-2 w-[2px] bg-slate-200 dark:bg-slate-700/50" />
-                      
+
                       {displayNodes.map((node, i) => (
                         <div key={i} className={`relative flex items-center gap-5 ${node.state === 'past' ? 'opacity-50' : ''}`}>
-                          <div className={`w-5 h-5 rounded-full border-2 z-10 shrink-0 ${
-                            node.state === 'past' ? 'bg-yellow-500 border-yellow-500' : 
-                            node.state === 'current' ? 'bg-white dark:bg-slate-900 border-yellow-500 ring-4 ring-yellow-500/20' : 
-                            'bg-slate-100 border-slate-300 dark:bg-slate-800 dark:border-slate-600'
-                          } flex items-center justify-center transition-all`}>
-                            {node.state === 'past' && <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                          <div className={`w-5 h-5 rounded-full border-2 z-10 shrink-0 ${node.state === 'past' ? 'bg-yellow-500 border-yellow-500' :
+                            node.state === 'current' ? 'bg-white dark:bg-slate-900 border-yellow-500 ring-4 ring-yellow-500/20' :
+                              'bg-slate-100 border-slate-300 dark:bg-slate-800 dark:border-slate-600'
+                            } flex items-center justify-center transition-all`}>
+                            {node.state === 'past' && <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>}
                             {node.state === 'current' && <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />}
                           </div>
-                          
+
                           <div className="flex-1 flex items-center justify-between">
                             <div className="flex flex-col">
                               <span className={`text-[11px] font-black uppercase tracking-widest ${node.state === 'current' ? (theme === 'dark' ? 'text-yellow-400' : 'text-yellow-600') : (theme === 'dark' ? 'text-slate-300' : 'text-slate-600')}`}>
@@ -3920,7 +4418,7 @@ export default function App() {
         {showTextSizeModal && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[400] flex items-center justify-center bg-black/80 backdrop-blur-md p-4" onClick={() => setShowTextSizeModal(false)}>
             <motion.div initial={{ scale: 0.95, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0 }} className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} border rounded-[2rem] w-full max-w-sm p-6 shadow-2xl overflow-hidden`} onClick={e => e.stopPropagation()}>
-              
+
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
                   <div className={`p-2 rounded-xl ${theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-50 text-emerald-600'}`}><TextSizeIcon /></div>
@@ -3969,11 +4467,11 @@ export default function App() {
 
               {/* Restore Defaults Button */}
               <div className={`mt-8 pt-6 border-t ${theme === 'dark' ? 'border-slate-800' : 'border-slate-100'}`}>
-                <button 
+                <button
                   onClick={() => {
                     const defaults = { habit: 14, table1: 12, table2: 11, tabSize: 110 };
                     setTextSizes(defaults); // setTextSizes already calls savePartialToIDB which persists to IDB + Firebase
-                  }} 
+                  }}
                   title="Reset text sizes to default"
                   className={`w-full py-3 rounded-xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all ${theme === 'dark' ? 'bg-slate-800/50 text-slate-400 hover:bg-slate-800 hover:text-white' : 'bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-800'}`}
                 >
@@ -4020,9 +4518,8 @@ export default function App() {
               <div className="flex gap-3">
                 <button
                   onClick={() => setCategoryToDelete(null)}
-                  className={`flex-1 py-3 rounded-2xl text-sm font-black uppercase tracking-wider transition-all border ${
-                    theme === 'dark' ? 'border-slate-700 text-slate-400 hover:bg-slate-800' : 'border-slate-200 text-slate-500 hover:bg-slate-50'
-                  }`}
+                  className={`flex-1 py-3 rounded-2xl text-sm font-black uppercase tracking-wider transition-all border ${theme === 'dark' ? 'border-slate-700 text-slate-400 hover:bg-slate-800' : 'border-slate-200 text-slate-500 hover:bg-slate-50'
+                    }`}
                 >
                   Cancel
                 </button>
@@ -4039,16 +4536,78 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      <AuthModal 
-        isOpen={showAuthModal} 
-        onClose={() => setShowAuthModal(false)} 
-      />
+      {/* 08/10 Session Expired Safe-Save Modal */}
+      <AnimatePresence>
+        {sessionExpiredModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[300] flex items-center justify-center bg-black/75 backdrop-blur-md p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className={`border rounded-3xl w-full max-w-md p-7 shadow-2xl relative ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+                }`}
+            >
+              <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-center justify-center text-2xl mx-auto mb-4 shadow-lg shadow-amber-500/10">
+                🔒
+              </div>
+              <h3 className={`text-xl font-black text-center mb-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                Session Security Notice
+              </h3>
+              <p className={`text-xs text-center font-medium leading-relaxed mb-4 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>
+                For security, sensitive account operations require a fresh sign-in.
+              </p>
+              <div className={`p-3.5 rounded-2xl border text-xs font-semibold mb-6 flex items-start gap-2.5 ${theme === 'dark' ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-300' : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                }`}>
+                <span className="text-base">🛡️</span>
+                <span>
+                  <strong>Your data is 100% safe!</strong> All habit logs, streaks, and reflections have been securely preserved in offline storage on this device.
+                </span>
+              </div>
+              <div className="flex flex-col gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSessionExpiredModal(false);
+                    setShowAuthModal(true);
+                  }}
+                  className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black uppercase tracking-wider transition-all shadow-lg shadow-emerald-500/20"
+                >
+                  Sign In &amp; Continue
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSessionExpiredModal(false)}
+                  className={`w-full py-2.5 rounded-xl border text-xs font-black uppercase tracking-wider transition-all ${theme === 'dark' ? 'border-slate-700 text-slate-400 hover:bg-slate-800' : 'border-slate-200 text-slate-600 hover:bg-slate-100'
+                    }`}
+                >
+                  Stay in Offline Mode
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {!isHydrating && authInitialized && !isAuthenticated && !guestName && (
-        <NamePromptModal onOpenAuthModal={() => setShowAuthModal(true)} />
+        <NamePromptModal />
       )}
 
-      <style dangerouslySetInnerHTML={{ __html: `
+      <NamePromptModal
+        isOpen={showWelcomeModal || showGuestPicker || showAuthModal}
+        onClose={() => {
+          setShowWelcomeModal(false);
+          setShowGuestPicker(false);
+          setShowAuthModal(false);
+        }}
+      />
+
+      <style dangerouslySetInnerHTML={{
+        __html: `
         .custom-scrollbar::-webkit-scrollbar-track { background: ${theme === 'dark' ? '#0f172a' : '#f1f5f9'}; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: ${theme === 'dark' ? '#334155' : '#cbd5e1'}; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: ${theme === 'dark' ? '#475569' : '#94a3b8'}; }
