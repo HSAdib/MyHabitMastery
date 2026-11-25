@@ -1,6 +1,6 @@
 /* Credit: Adib | APM | RU | Bangladesh | email: hasanshahriaradib@gmail.com | updated:22-01-2026 */
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Analytics } from "@vercel/analytics/react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { signOut } from 'firebase/auth';
@@ -11,6 +11,8 @@ import { useNavigate } from 'react-router-dom';
 import HeaderProfile from './components/HeaderProfile';
 import NamePromptModal from './components/NamePromptModal';
 import { SUPER_ADMIN_EMAIL } from './components/ProtectedAdminRoute';
+import AutoFitText from './components/AutoFitText';
+import ActivityHeatmap from './components/ActivityHeatmap';
 import {
   ResponsiveContainer, AreaChart, BarChart, CartesianGrid,
   XAxis, YAxis, Area, Bar, Tooltip as RechartsTooltip, Cell
@@ -434,8 +436,6 @@ export default function App() {
   const setCurrentDate = useHabitStore(state => state.setCurrentDate);
   const viewingHabitMap = useHabitStore(state => state.viewingHabitMap);
   const setViewingHabitMap = useHabitStore(state => state.setViewingHabitMap);
-  const heatmapFilter = useHabitStore(state => state.heatmapFilter);
-  const setHeatmapFilter = useHabitStore(state => state.setHeatmapFilter);
   const weeklyGraphFilter = useHabitStore(state => state.weeklyGraphFilter);
   const setWeeklyGraphFilter = useHabitStore(state => state.setWeeklyGraphFilter);
   const dashboardGraphFilter = useHabitStore(state => state.dashboardGraphFilter);
@@ -492,7 +492,13 @@ export default function App() {
   };
 
   // Welcome card status: 'pending' | 'visible' | 'snapping' | 'gone'
-  const [welcomeCardStatus, setWelcomeCardStatus] = useState('pending');
+  const [welcomeCardStatus, setWelcomeCardStatus] = useState(() => {
+    try {
+      return localStorage.getItem('adib_dismissed_welcome') === 'true' ? 'gone' : 'pending';
+    } catch {
+      return 'pending';
+    }
+  });
   const [editingHabitName, setEditingHabitName] = useState(null);
   const [habitToDelete, setHabitToDelete] = useState(null);
   const [tempHabitName, setTempHabitName] = useState("");
@@ -548,8 +554,9 @@ export default function App() {
   const [tableHeight, setTableHeight] = useState(484);
   const [tempGoalVal, setTempGoalVal] = useState("");
   const [categoryToDelete, setCategoryToDelete] = useState(null);
-  const [hoveredHeatmapCell, setHoveredHeatmapCell] = useState(null);
   const [selectedHeatmapDay, setSelectedHeatmapDay] = useState(null);
+  const handleOpenNotes = useCallback(() => setShowAllNotes(true), []);
+  const handleOpenInsights = useCallback(() => setShowInsightsModal(true), []);
   const noteSaveTimer = useRef(null); // Fix #15
 
   const longPressTimer = useRef(null);
@@ -812,7 +819,7 @@ export default function App() {
   useEffect(() => {
     if (!showAllNotes) return;
     setJournalSearchQuery('');
-    const todayNote = trackerData[todayDateKey]?.note || '';
+    const todayNote = useHabitStore.getState().trackerData[todayDateKey]?.note || '';
     if (!todayNote.trim()) {
       setInlineEditingJournalKey(todayDateKey);
       setInlineJournalDraft('');
@@ -1005,6 +1012,12 @@ export default function App() {
       title: 'Renamed Successfully',
       subtitle: `Renamed "${oldName}" to "${newName}".`,
     }, 3000);
+    const st = useHabitStore.getState();
+    const filterUpdates = {};
+    if (st.heatmapFilter === oldName) filterUpdates.heatmapFilter = newName;
+    if (st.weeklyGraphFilter === oldName) filterUpdates.weeklyGraphFilter = newName;
+    if (st.dashboardGraphFilter === oldName) filterUpdates.dashboardGraphFilter = newName;
+    if (Object.keys(filterUpdates).length > 0) setStorePartial(filterUpdates);
     return true;
   };
 
@@ -1028,6 +1041,12 @@ export default function App() {
       trackerData: newData,
       archivedHabits: newArchived,
     });
+    const st = useHabitStore.getState();
+    const filterUpdates = {};
+    if (st.heatmapFilter === name) filterUpdates.heatmapFilter = 'all';
+    if (st.weeklyGraphFilter === name) filterUpdates.weeklyGraphFilter = 'all';
+    if (st.dashboardGraphFilter === name) filterUpdates.dashboardGraphFilter = 'all';
+    if (Object.keys(filterUpdates).length > 0) setStorePartial(filterUpdates);
     if (viewingHabitMap === name) setViewingHabitMap(null);
     if (editingHabitName === name) setEditingHabitName(null);
     setHabitToDelete(null);
@@ -1041,6 +1060,12 @@ export default function App() {
     } else {
       newArchived = [...archivedHabits, name];
       setViewingHabitMap(null);
+      const st = useHabitStore.getState();
+      const filterUpdates = {};
+      if (st.heatmapFilter === name) filterUpdates.heatmapFilter = 'all';
+      if (st.weeklyGraphFilter === name) filterUpdates.weeklyGraphFilter = 'all';
+      if (st.dashboardGraphFilter === name) filterUpdates.dashboardGraphFilter = 'all';
+      if (Object.keys(filterUpdates).length > 0) setStorePartial(filterUpdates);
     }
     // Single atomic save — setArchivedHabits would fire two writes (setStorePartial + savePartialToIDB)
     savePartialToIDB({ archivedHabits: newArchived });
@@ -1349,7 +1374,7 @@ export default function App() {
   const allHabitStreaks = useMemo(() => {
     const streaks = {};
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    today.setHours(12, 0, 0, 0);
     habits.forEach(habit => {
       let streak = 0;
       let checkDate = new Date(today);
@@ -1388,15 +1413,15 @@ export default function App() {
     const allKeys = Object.keys(trackerData).sort();
     if (allKeys.length > 0) {
       const startDate = parseLocalDate(allKeys[0]);
-      startDate.setHours(0, 0, 0, 0);
       const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      today.setHours(12, 0, 0, 0);
+      const todayStr = getSafeKey(today);
 
       let cursor = new Date(startDate);
       while (cursor <= today) {
         const dateStr = getSafeKey(cursor);
         const isShielded = shieldedDates.includes(dateStr);
-        const isToday = cursor.getTime() === today.getTime();
+        const isToday = dateStr === todayStr;
         const dayOfWeek = cursor.getDay();
 
         let dayScore = 0;
@@ -1483,7 +1508,7 @@ export default function App() {
     const score = Math.round((monthlyEarned / (daysInMonth.length * 100)) * 100);
 
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    today.setHours(12, 0, 0, 0);
 
     let currentStreak = 0;
     let bestStreak = 0;
@@ -1565,57 +1590,6 @@ export default function App() {
     };
   }, [viewingHabitMap, trackerData, daysInMonth, shieldedDates]);
 
-  const heatmapConfig = useMemo(() => {
-    const year = currentDate.getFullYear();
-    const firstDayOfYear = new Date(year, 0, 1).getDay();
-    const cells = Array(firstDayOfYear).fill(null);
-    const daysInYear = (((year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0)) ? 366 : 365);
-
-    for (let i = 0; i < daysInYear; i++) {
-      const d = new Date(year, 0, 1, 12); d.setDate(d.getDate() + i); const key = getSafeKey(d);
-      let intensity = 0;
-      const isShielded = shieldedDates.includes(key);
-      const hasNote = Boolean(trackerData[key]?.note && trackerData[key].note.trim());
-      let pct = 0;
-      let doneCount = 0;
-      const totalCount = heatmapFilter === 'all' ? activeHabitsList.length : 1;
-
-      if (heatmapFilter === 'all') {
-        let totalPct = 0;
-        activeHabitsList.forEach(h => {
-          const r = trackerData[key]?.[h] ?? 0;
-          const v = typeof r === 'number' ? r : (r ? 100 : 0);
-          totalPct += v;
-          if (v >= 100) doneCount++;
-        });
-        const avg = activeHabitsList.length > 0 ? totalPct / (activeHabitsList.length * 100) : 0;
-        pct = Math.round(avg * 100);
-        intensity = avg === 0 ? 0 : avg <= 0.25 ? 1 : avg <= 0.5 ? 2 : avg <= 0.75 ? 3 : 4;
-      } else {
-        const r = trackerData[key]?.[heatmapFilter] ?? 0;
-        const val = typeof r === 'number' ? r : (r ? 100 : 0);
-        pct = Math.round(val);
-        if (val >= 100) doneCount = 1;
-        const ratio = val / 100;
-        intensity = ratio === 0 ? 0 : ratio <= 0.25 ? 1 : ratio <= 0.5 ? 2 : ratio <= 0.75 ? 3 : 4;
-      }
-      cells.push({ date: d, key, intensity, pct, doneCount, totalCount, hasNote, isShielded });
-    }
-
-    const monthLabels = []; const addedMonths = new Set();
-    cells.forEach((cell, index) => {
-      if (cell && cell.date) {
-        const m = cell.date.getMonth();
-        if (!addedMonths.has(m)) {
-          const weekIndex = Math.floor(index / 7);
-          monthLabels.push({ label: cell.date.toLocaleString('default', { month: 'short' }), weekIndex: weekIndex });
-          addedMonths.add(m);
-        }
-      }
-    });
-    return { cells, monthLabels };
-  }, [currentDate, trackerData, activeHabitsList, heatmapFilter, shieldedDates]);
-
   const monthlyGraphData = useMemo(() => {
     return daysInMonth.map((day) => {
       const key = getSafeKey(day);
@@ -1690,9 +1664,6 @@ export default function App() {
   const getCardStyle = () => theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-sm' : 'bg-white border-slate-200 shadow-sm';
   const getTextMuted = () => theme === 'dark' ? 'text-slate-500' : 'text-slate-400';
   const getTableHeadStyle = () => theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200';
-
-  const CELL_SIZE = isMobileMode ? 9 : 11;
-  const CELL_GAP = isMobileMode ? 2 : 3;
 
   const outerPadding = isMobileMode ? 'px-1 pt-4' : 'px-2 md:px-4 pt-8';
   const cardPadding = isMobileMode ? 'p-3 rounded-2xl' : 'p-6 rounded-[2.5rem]';
@@ -2056,164 +2027,39 @@ export default function App() {
 
           {/* Activity Section */}
           <div className={`${isMobileMode ? 'flex flex-col' : 'grid grid-cols-3'} ${sectionGap} items-stretch`}>
-            <motion.div variants={itemVariants} className={`${isMobileMode ? '' : 'col-span-2'} ${getCardStyle()} ${cardPadding} border overflow-hidden flex flex-col transition-colors h-full min-w-0`}>
-              <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-2 md:gap-4">
-                <div className="flex items-center gap-2 md:gap-4">
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-2 md:gap-3">
-                      <span className={`hidden md:block text-[8px] md:text-[9px] font-black uppercase tracking-widest shrink-0 ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                        Activity Heatmap
-                      </span>
-                      {/* Mobile Label (Icon only to save space) */}
-                      <span className={`md:hidden text-emerald-500`}><ActivityIcon /></span>
-
-                      <select
-                        value={heatmapFilter}
-                        onChange={(e) => setHeatmapFilter(e.target.value)}
-                        className={`text-[11px] font-black uppercase px-2 py-1 rounded-full border transition-all duration-500 cursor-pointer focus:outline-none max-w-[80px] md:max-w-[120px] truncate
-      ${theme === 'dark'
-                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.2)] hover:bg-emerald-500/20'
-                            : 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:border-emerald-300 shadow-sm'}`}
-                      >
-                        <option value="all" className={theme === 'dark' ? 'bg-slate-900' : 'bg-white'}>Overall</option>
-                        {habits.filter(h => !archivedHabits.includes(h)).map(h => (
-                          <option key={h} value={h} className={theme === 'dark' ? 'bg-slate-900' : 'bg-white'}>{h}</option>
-                        ))}
-                      </select>
-                    </div> </div>
-                  <div className="flex items-center gap-1.5 md:gap-3 pl-2 md:pl-4">
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => setShowAllNotes(true)}
-                      title="View all journal entries"
-                      className={`flex items-center gap-1.5 transition-all px-2.5 py-1.5 rounded-xl border relative
-      ${analytics.noteCount > 0 ? 'animate-glow-blue' : ''} 
-      ${theme === 'dark'
-                          ? 'bg-blue-900/20 text-blue-400 border-blue-500/30'
-                          : 'bg-blue-50 text-blue-600 border-blue-200 shadow-sm'}`}
-                    >
-                      <NoteIcon />
-                      <span className={`text-[10px] md:text-xs font-black`}>{analytics.noteCount}</span>
-
-                      {analytics.noteCount > 0 && (
-                        <span className="absolute -top-1 -right-1 flex h-2 w-2">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-                        </span>
-                      )}
-                    </motion.button>
-
-                    {hoveredHeatmapCell ? (
-                      <div className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-bold ${theme === 'dark' ? 'bg-slate-800/90 border-slate-700 text-slate-200' : 'bg-slate-100 border-slate-200 text-slate-700'}`}>
-                        <span className="font-mono text-emerald-400">{hoveredHeatmapCell.key}</span>
-                        <span>•</span>
-                        <span className="font-black text-emerald-500">{hoveredHeatmapCell.pct}%</span>
-                        <span className="opacity-70 text-[9px]">({hoveredHeatmapCell.doneCount}/{hoveredHeatmapCell.totalCount})</span>
-                        {hoveredHeatmapCell.isShielded && <span title="Streak Shield Active" className="text-cyan-400">🛡️</span>}
-                        {hoveredHeatmapCell.hasNote && <span title="Has Journal Note" className="text-blue-400">📝</span>}
+            <ActivityHeatmap
+              noteCount={analytics.noteCount}
+              availableShields={shieldStats.availableCount}
+              onOpenNotes={handleOpenNotes}
+              onOpenInsights={handleOpenInsights}
+              onSelectDay={setSelectedHeatmapDay}
+              onboardingBanner={
+                (welcomeCardStatus === 'visible' || welcomeCardStatus === 'snapping') ? (
+                  <ThanosDisintegrate shouldDisintegrate={welcomeCardStatus === 'snapping'}>
+                    <div className={`mb-3 p-3 rounded-2xl border ${theme === 'dark' ? 'bg-slate-800/70 border-slate-700' : 'bg-emerald-50/80 border-emerald-200'} flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-sm`}>
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-500 flex items-center justify-center shrink-0 text-sm">
+                          🌱
+                        </div>
+                        <div>
+                          <p className={`text-[10px] font-black uppercase tracking-wider ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-700'}`}>Heatmap Visual Guide</p>
+                          <p className={`text-[11px] font-medium leading-tight ${getTextMuted()}`}>Each square is a day. Color intensifies from light to deep emerald as you log habits.</p>
+                        </div>
                       </div>
-                    ) : (
-                      <div className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-bold ${theme === 'dark' ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400' : 'bg-cyan-50 border-cyan-200 text-cyan-600'}`}>
-                        <ShieldIcon />
-                        <span>{shieldStats.availableCount} Shields</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Right Side: Insights Button */}
-                <div className="flex items-center justify-end">
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setShowInsightsModal(true)}
-                    title="Year in Review Insights"
-                    className={`flex items-center gap-1.5 transition-all px-3 py-1.5 rounded-xl border relative
-                      ${theme === 'dark'
-                        ? 'bg-purple-900/20 text-purple-400 border-purple-500/30 hover:bg-purple-500/20'
-                        : 'bg-purple-50 text-purple-600 border-purple-200 shadow-sm hover:bg-purple-100'}`}
-                  >
-                    <span className="text-[11px] font-black uppercase tracking-widest hidden sm:block">Insights</span>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18" /><path d="m19 9-5 5-4-4-3 3" /></svg>
-                  </motion.button>
-                </div>
-              </div>
-
-              {/* Heatmap Visual Guide Onboarding Banner */}
-              {(welcomeCardStatus === 'visible' || welcomeCardStatus === 'snapping') && (
-                <ThanosDisintegrate
-                  shouldDisintegrate={welcomeCardStatus === 'snapping'}
-                >
-                  <div className={`mb-3 p-3 rounded-2xl border ${theme === 'dark' ? 'bg-slate-800/70 border-slate-700' : 'bg-emerald-50/80 border-emerald-200'} flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-sm`}>
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-500 flex items-center justify-center shrink-0 text-sm">
-                        🌱
-                      </div>
-                      <div>
-                        <p className={`text-[10px] font-black uppercase tracking-wider ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-700'}`}>Heatmap Visual Guide</p>
-                        <p className={`text-[11px] font-medium leading-tight ${getTextMuted()}`}>Each square is a day. Color intensifies from light to deep emerald as you log habits.</p>
+                      <div className="flex items-center gap-1.5 self-start md:self-auto shrink-0 text-[9px] font-black uppercase tracking-wider">
+                        <span className={getTextMuted()}>Key:</span>
+                        <span className={`w-3.5 h-3.5 rounded-[2px] ${theme === 'dark' ? 'bg-slate-800' : 'bg-slate-200'}`} title="0% Empty" />
+                        <span className={`w-3.5 h-3.5 rounded-[2px] ${theme === 'dark' ? 'bg-emerald-900/60' : 'bg-emerald-200'}`} title="25% Light" />
+                        <span className={`w-3.5 h-3.5 rounded-[2px] ${theme === 'dark' ? 'bg-emerald-700' : 'bg-emerald-400'}`} title="50% Medium" />
+                        <span className={`w-3.5 h-3.5 rounded-[2px] ${theme === 'dark' ? 'bg-emerald-500' : 'bg-emerald-600'}`} title="75% Strong" />
+                        <span className={`w-3.5 h-3.5 rounded-[2px] ${theme === 'dark' ? 'bg-emerald-400' : 'bg-emerald-700'}`} title="100% Perfect" />
+                        <span className="text-[8px] font-bold text-emerald-500 ml-1">More Active</span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5 self-start md:self-auto shrink-0 text-[9px] font-black uppercase tracking-wider">
-                      <span className={getTextMuted()}>Key:</span>
-                      <span className={`w-3.5 h-3.5 rounded-[2px] ${theme === 'dark' ? 'bg-slate-800' : 'bg-slate-200'}`} title="0% Empty" />
-                      <span className={`w-3.5 h-3.5 rounded-[2px] ${theme === 'dark' ? 'bg-emerald-900/60' : 'bg-emerald-200'}`} title="25% Light" />
-                      <span className={`w-3.5 h-3.5 rounded-[2px] ${theme === 'dark' ? 'bg-emerald-700' : 'bg-emerald-400'}`} title="50% Medium" />
-                      <span className={`w-3.5 h-3.5 rounded-[2px] ${theme === 'dark' ? 'bg-emerald-500' : 'bg-emerald-600'}`} title="75% Strong" />
-                      <span className={`w-3.5 h-3.5 rounded-[2px] ${theme === 'dark' ? 'bg-emerald-400' : 'bg-emerald-700'}`} title="100% Perfect" />
-                      <span className="text-[8px] font-bold text-emerald-500 ml-1">More Active</span>
-                    </div>
-                  </div>
-                </ThanosDisintegrate>
-              )}
-
-              <div className={`overflow-x-auto custom-scrollbar pb-2 ${isMobileMode ? 'whitespace-nowrap' : ''}`}>
-                <div className="inline-block min-w-full">
-                  <div className="relative h-3 mb-1" style={{ marginLeft: `${isMobileMode ? 16 : 24}px` }}>
-                    {heatmapConfig.monthLabels.map((m, idx) => (
-                      <span key={idx} className={`absolute text-[7px] md:text-[8px] font-black ${getTextMuted()} uppercase tracking-tighter text-left`} style={{ left: `${m.weekIndex * (CELL_SIZE + CELL_GAP)}px` }}>
-                        {m.label}
-                      </span>
-                    ))}
-                  </div>
-                  <div className="flex gap-1 md:gap-2">
-                    <div className="grid grid-rows-7 gap-[2px] md:gap-[3px] text-[6px] md:text-[7px] font-black opacity-60 uppercase tracking-tighter text-slate-500 w-3 md:w-4 shrink-0 text-right pr-1" style={{ height: `${7 * CELL_SIZE + 6 * CELL_GAP}px`, lineHeight: `${CELL_SIZE}px` }}>
-                      <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
-                    </div>
-                    <div className="grid grid-rows-7 grid-flow-col gap-[2px] md:gap-[3px] min-h-[70px] md:min-h-[95px]">
-                      {heatmapConfig.cells.map((cell, idx) => {
-                        const intensityStyles = theme === 'dark'
-                          ? ['bg-slate-800', 'bg-emerald-900/40', 'bg-emerald-800', 'bg-emerald-600', 'bg-emerald-400']
-                          : ['bg-slate-100', 'bg-emerald-100', 'bg-emerald-300', 'bg-emerald-500', 'bg-emerald-700'];
-                        if (!cell) {
-                          return <div key={`empty-${idx}`} style={{ width: `${CELL_SIZE}px`, height: `${CELL_SIZE}px` }} className="opacity-0 pointer-events-none"></div>;
-                        }
-                        const cellColor = (cell.isShielded && cell.intensity === 0)
-                          ? 'bg-cyan-500/30 ring-1 ring-cyan-400/60'
-                          : intensityStyles[cell.intensity];
-                        const noteHighlight = cell.hasNote ? 'ring-1 ring-blue-400/80' : '';
-
-                        return (
-                          <motion.div
-                            key={cell.key}
-                            initial={{ scale: 0.5, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            transition={{ delay: idx * 0.001 }}
-                            style={{ width: `${CELL_SIZE}px`, height: `${CELL_SIZE}px` }}
-                            className={`rounded-[1px] md:rounded-[2px] border-[0.5px] border-black/5 shadow-sm transition-all cursor-pointer hover:scale-125 z-10 ${cellColor} ${noteHighlight}`}
-                            title={`${cell.key}: ${cell.pct}% (${cell.doneCount}/${cell.totalCount})${cell.isShielded ? ' [Shielded 🛡️]' : ''}${cell.hasNote ? ' [Note 📝]' : ''} - Click to inspect`}
-                            onMouseEnter={() => setHoveredHeatmapCell(cell)}
-                            onMouseLeave={() => setHoveredHeatmapCell(null)}
-                            onClick={() => setSelectedHeatmapDay(cell.key)}
-                          />
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
+                  </ThanosDisintegrate>
+                ) : null
+              }
+            />
 
             <motion.div variants={itemVariants} className={`${isMobileMode ? '' : 'col-span-1'} ${getCardStyle()} ${cardPadding} border relative overflow-hidden flex flex-col justify-between transition-colors h-full min-w-0`}>
               <div className="flex items-start mb-2 md:mb-4 justify-between">
@@ -2395,13 +2241,12 @@ export default function App() {
                     variants={itemVariants}
                     whileHover={{ y: -5, scale: 1.05 }}
                     key={habit}
-                    className={`${getCardStyle()} cursor-pointer overflow-hidden group transition-all relative flex flex-col items-center justify-center rounded-full aspect-square border-0`}
+                    className={`${getCardStyle()} habit-card-container cursor-pointer overflow-hidden group transition-all relative flex flex-col items-center justify-center rounded-full aspect-square border-0 select-none`}
                     onClick={() => setViewingHabitMap(habit)}
-                    title={`${pct}% this month${allHabitStreaks[habit] > 0 ? ` · 🔥 ${allHabitStreaks[habit]} day streak` : ''}`}
+                    title={`${habit} · ${pct}% this month${allHabitStreaks[habit] > 0 ? ` · 🔥 ${allHabitStreaks[habit]} day streak` : ''}`}
                   >
-
                     <svg
-                      className={`absolute transition-all duration-500 -rotate-90 inset-0 w-full h-full p-1`}
+                      className="absolute transition-all duration-500 -rotate-90 inset-0 w-full h-full p-1"
                       viewBox="0 0 100 100"
                     >
                       <circle cx="50" cy="50" r="47" fill="none" stroke={theme === 'dark' ? '#1e293b' : '#f1f5f9'} strokeWidth="4" />
@@ -2413,11 +2258,31 @@ export default function App() {
                       />
                     </svg>
 
-                    <div className="z-10 text-center flex flex-col items-center px-2 w-full relative">
+                    {/* Non-overlapping top-center hover edit trigger */}
+                    {!isEditing && (
+                      <button
+                        className={`opacity-0 group-hover:opacity-100 absolute top-[10%] left-1/2 -translate-x-1/2 z-20 p-1 rounded-full transition-all ${
+                          theme === 'dark'
+                            ? 'bg-slate-800/90 text-slate-400 hover:text-emerald-400'
+                            : 'bg-white/90 text-slate-400 hover:text-emerald-600 shadow-sm'
+                        }`}
+                        title="Edit habit name"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingHabitName(habit);
+                          setTempHabitName(habit);
+                        }}
+                      >
+                        <EditIcon className="w-3 h-3" />
+                      </button>
+                    )}
+
+                    {/* Inner safe inscribed area so text never collides with the progress ring */}
+                    <div className="z-10 text-center flex flex-col items-center justify-center w-[76%] px-0.5 relative">
                       {isEditing ? (
                         <input
                           autoFocus
-                          style={{ fontSize: `${textSizes.habit}px` }}
+                          style={{ fontSize: `clamp(9px, 11cqw, ${textSizes.habit || 14}px)` }}
                           className={`font-black uppercase w-full text-center bg-transparent focus:outline-none border-b-2 border-emerald-500 mb-1 leading-[1.1] ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}
                           value={tempHabitName}
                           onChange={(e) => setTempHabitName(e.target.value)}
@@ -2426,23 +2291,35 @@ export default function App() {
                           onClick={(e) => e.stopPropagation()}
                         />
                       ) : (
-                        <div className="relative flex items-center justify-center w-full group/name min-h-[14px]">
-                          <p style={{ fontSize: `${textSizes.habit}px` }} className="font-black uppercase opacity-80 leading-[1.1] line-clamp-2 text-center w-full px-1 break-words">{habit}</p>
-                          <button className="opacity-0 group-hover:opacity-100 p-0.5 text-slate-400 hover:text-emerald-500 transition-all absolute right-0" title="Edit habit name" onClick={(e) => { e.stopPropagation(); setEditingHabitName(habit); setTempHabitName(habit); }}><EditIcon /></button>
-                        </div>
+                        <AutoFitText
+                          text={habit}
+                          maxFontSize={textSizes.habit || 14}
+                          minFontSize={7}
+                          maxLines={2}
+                          className="font-black uppercase opacity-80"
+                          style={{ height: '28cqw' }}
+                        />
                       )}
-                      <span className={`text-[19px] font-black mt-1 ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>
+
+                      <span
+                        style={{ fontSize: 'clamp(12px, 18cqw, 26px)' }}
+                        className={`font-black leading-none mt-[3cqw] ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}
+                      >
                         <AnimatedNumber value={pct} />
                       </span>
-                      {/* Streak badge */}
+
                       {allHabitStreaks[habit] > 0 && (
-                        <div className="flex items-center gap-0.5 mt-0.5">
-                          <span className="text-[11px] leading-none">🔥</span>
-                          <span className={`text-[8px] font-black leading-none ${theme === 'dark' ? 'text-orange-400' : 'text-orange-500'}`}>{allHabitStreaks[habit]}d</span>
+                        <div className="flex items-center gap-0.5 mt-[3cqw]">
+                          <span style={{ fontSize: 'clamp(8px, 9cqw, 12px)' }} className="leading-none">🔥</span>
+                          <span
+                            style={{ fontSize: 'clamp(7px, 8cqw, 11px)' }}
+                            className={`font-black leading-none ${theme === 'dark' ? 'text-orange-400' : 'text-orange-500'}`}
+                          >
+                            {allHabitStreaks[habit]}d
+                          </span>
                         </div>
                       )}
                     </div>
-
                   </motion.div>
                 );
               })}
@@ -3039,7 +2916,10 @@ export default function App() {
                   <div className="flex justify-center">
                     <button
                       type="button"
-                      onClick={() => setWelcomeCardStatus('snapping')}
+                      onClick={() => {
+                        try { localStorage.setItem('adib_dismissed_welcome', 'true'); } catch { /* ignore */ }
+                        setWelcomeCardStatus('snapping');
+                      }}
                       className={`text-xs font-bold px-4 py-2 rounded-xl transition-all border ${theme === 'dark'
                         ? 'bg-slate-800/80 hover:bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
                         : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-600 hover:text-slate-900'
@@ -4401,16 +4281,16 @@ export default function App() {
                     <label className={`text-[10px] font-black uppercase tracking-widest ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>Habit Card Size</label>
                     <span className="text-[10px] font-black text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-md">{textSizes.tabSize || 110}px</span>
                   </div>
-                  <input type="range" min="60" max="200" step="5" value={textSizes.tabSize || 110} onChange={(e) => updateTextSize('tabSize', e.target.value)} className="w-full h-1 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500" />
+                  <input type="range" min="75" max="200" step="5" value={textSizes.tabSize || 110} onChange={(e) => updateTextSize('tabSize', e.target.value)} className="w-full h-1 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500" />
                 </div>
 
                 {/* Habit Tab Size */}
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
-                    <label className={`text-[10px] font-black uppercase tracking-widest ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>Habit Text</label>
+                    <label className={`text-[10px] font-black uppercase tracking-widest ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>Habit Text (Max Auto-Fit)</label>
                     <span className="text-[10px] font-black text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-md">{textSizes.habit}px</span>
                   </div>
-                  <input type="range" min="5" max="24" step="1" value={textSizes.habit} onChange={(e) => updateTextSize('habit', e.target.value)} className="w-full h-1 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500" />
+                  <input type="range" min="8" max="24" step="1" value={textSizes.habit} onChange={(e) => updateTextSize('habit', e.target.value)} className="w-full h-1 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500" />
                 </div>
 
                 {/* Table 1 (Vertical) Size */}

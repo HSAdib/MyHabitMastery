@@ -42,3 +42,7 @@ tr[id^="row-"] { scroll-margin-top: 150px; scroll-margin-bottom: 150px; }
 .dark .custom-scrollbar::-webkit-scrollbar-track { background: #0f172a; }
 .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; }
 .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+.habit-card-container {
+  container-type: inline-size;
+}

@@ -544,6 +544,7 @@ export default function AdminPanel() {
 
                       <div className="flex items-center gap-3 text-[11px] text-slate-500 font-mono mt-0.5 flex-wrap">
                         <span>UID: {user.id}</span>
+                        {user.email && <span>• {user.email}</span>}
                         {user.lastUpdated && (
                           <span>• Updated: {new Date(user.lastUpdated).toLocaleString()}</span>
                         )}

@@ -18,7 +18,7 @@ const UI_ONLY_FIELDS = [
 ];
 
 const PROFILE_SCOPED_KEYS = [
-  'trackerData', 'habits', 'habitConfigs', 'categories',
+  'trackerData', 'dayUpdatedAt', 'habits', 'habitConfigs', 'categories',
   'archivedHabits', 'shieldedDates', 'savedLevel',
   'manualXPOffset', 'manualStreakOffset',
 ];
@@ -76,6 +76,7 @@ const extractProfileSnapshot = (source, fallbackName = 'Main Profile', id = 'mai
     createdAt: source?.createdAt || Date.now(),
     updatedAt: Date.now(),
     trackerData: source?.trackerData && typeof source.trackerData === 'object' ? source.trackerData : {},
+    dayUpdatedAt: source?.dayUpdatedAt && typeof source.dayUpdatedAt === 'object' ? source.dayUpdatedAt : {},
     habits: Array.isArray(source?.habits) ? source.habits : defaults.habits,
     habitConfigs: source?.habitConfigs && typeof source.habitConfigs === 'object' ? source.habitConfigs : defaults.habitConfigs,
     categories: Array.isArray(source?.categories) ? source.categories : defaults.categories,
@@ -110,6 +111,7 @@ const toPersistedData = (state) => {
 
   return {
     trackerData: state.trackerData || {},
+    dayUpdatedAt: state.dayUpdatedAt || {},
     habits: Array.isArray(state.habits) ? state.habits : defaults.habits,
     habitConfigs: state.habitConfigs || defaults.habitConfigs,
     categories: Array.isArray(state.categories) ? state.categories : defaults.categories,
@@ -125,6 +127,7 @@ const toPersistedData = (state) => {
     manualXPOffset: Number(state.manualXPOffset) || 0,
     manualStreakOffset: Number(state.manualStreakOffset) || 0,
     lastUpdated: state.lastUpdated || Date.now(),
+    lastSyncedAt: Number(state.lastSyncedAt) || 0,
     currentUid: state.currentUid || null,
     activeProfileId: activeId,
     cloudProfiles: existingProfiles,
@@ -142,12 +145,112 @@ const withMainMirroredAtRoot = (persisted, activeProfileId) => {
   return result;
 };
 
+const stampChangedDays = (prevTracker = {}, nextTracker = {}, prevDayUpdatedAt = {}, now = Date.now()) => {
+  const nextStamps = { ...(prevDayUpdatedAt || {}) };
+  const allKeys = new Set([...Object.keys(prevTracker || {}), ...Object.keys(nextTracker || {})]);
+  allKeys.forEach((dateKey) => {
+    const prevVal = prevTracker?.[dateKey];
+    const nextVal = nextTracker?.[dateKey];
+    if (prevVal !== nextVal && JSON.stringify(prevVal || {}) !== JSON.stringify(nextVal || {})) {
+      nextStamps[dateKey] = now;
+    }
+  });
+  return nextStamps;
+};
+
+const mergeProfileSnapshots = (localSnap, remoteSnap) => {
+  if (!localSnap) return remoteSnap;
+  if (!remoteSnap) return localSnap;
+
+  const localUpdated = Number(localSnap.updatedAt) || 0;
+  const remoteUpdated = Number(remoteSnap.updatedAt) || 0;
+  const localNewer = localUpdated >= remoteUpdated;
+
+  const localTracker = localSnap.trackerData || {};
+  const remoteTracker = remoteSnap.trackerData || {};
+  const localDayStamps = localSnap.dayUpdatedAt || {};
+  const remoteDayStamps = remoteSnap.dayUpdatedAt || {};
+
+  const mergedTracker = {};
+  const mergedDayStamps = {};
+  const allDateKeys = new Set([...Object.keys(localTracker), ...Object.keys(remoteTracker)]);
+
+  allDateKeys.forEach((dateKey) => {
+    const lDay = localTracker[dateKey];
+    const rDay = remoteTracker[dateKey];
+    const lTs = Number(localDayStamps[dateKey]) || 0;
+    const rTs = Number(remoteDayStamps[dateKey]) || 0;
+
+    if (lDay && !rDay) {
+      mergedTracker[dateKey] = lDay;
+      if (lTs) mergedDayStamps[dateKey] = lTs;
+    } else if (rDay && !lDay) {
+      mergedTracker[dateKey] = rDay;
+      if (rTs) mergedDayStamps[dateKey] = rTs;
+    } else if (lTs > rTs) {
+      mergedTracker[dateKey] = lDay;
+      mergedDayStamps[dateKey] = lTs;
+    } else if (rTs > lTs) {
+      mergedTracker[dateKey] = rDay;
+      mergedDayStamps[dateKey] = rTs;
+    } else {
+      // Equal or missing per-day timestamps: merge per-habit keys keeping higher progress / non-empty note
+      const base = localNewer ? { ...rDay, ...lDay } : { ...lDay, ...rDay };
+      const allFields = new Set([...Object.keys(lDay || {}), ...Object.keys(rDay || {})]);
+      allFields.forEach((field) => {
+        if (field === 'note' || field === 'noteTime') {
+          if (!base.note?.trim() && (lDay?.note?.trim() || rDay?.note?.trim())) {
+            base.note = lDay?.note?.trim() ? lDay.note : rDay.note;
+            base.noteTime = lDay?.note?.trim() ? (lDay.noteTime || null) : (rDay.noteTime || null);
+          }
+        } else {
+          const lv = typeof lDay?.[field] === 'number' ? lDay[field] : (lDay?.[field] ? 100 : 0);
+          const rv = typeof rDay?.[field] === 'number' ? rDay[field] : (rDay?.[field] ? 100 : 0);
+          base[field] = Math.max(lv, rv);
+        }
+      });
+      mergedTracker[dateKey] = base;
+      if (Math.max(lTs, rTs) > 0) mergedDayStamps[dateKey] = Math.max(lTs, rTs);
+    }
+  });
+
+  const primaryHabits = localNewer ? (localSnap.habits || []) : (remoteSnap.habits || []);
+  const secondaryHabits = localNewer ? (remoteSnap.habits || []) : (localSnap.habits || []);
+  const mergedHabits = [...primaryHabits];
+  secondaryHabits.forEach((h) => { if (!mergedHabits.includes(h)) mergedHabits.push(h); });
+
+  const primaryCats = localNewer ? (localSnap.categories || []) : (remoteSnap.categories || []);
+  const secondaryCats = localNewer ? (remoteSnap.categories || []) : (localSnap.categories || []);
+  const mergedCats = [...primaryCats];
+  secondaryCats.forEach((c) => { if (!mergedCats.includes(c)) mergedCats.push(c); });
+
+  const mergedConfigs = localNewer
+    ? { ...(remoteSnap.habitConfigs || {}), ...(localSnap.habitConfigs || {}) }
+    : { ...(localSnap.habitConfigs || {}), ...(remoteSnap.habitConfigs || {}) };
+
+  const mergedShields = Array.from(new Set([...(remoteSnap.shieldedDates || []), ...(localSnap.shieldedDates || [])]));
+
+  return {
+    ...(localNewer ? remoteSnap : localSnap),
+    ...(localNewer ? localSnap : remoteSnap),
+    trackerData: mergedTracker,
+    dayUpdatedAt: mergedDayStamps,
+    habits: mergedHabits,
+    categories: mergedCats,
+    habitConfigs: mergedConfigs,
+    shieldedDates: mergedShields,
+    savedLevel: Math.max(Number(localSnap.savedLevel) || 1, Number(remoteSnap.savedLevel) || 1),
+    updatedAt: Math.max(localUpdated, remoteUpdated, Date.now()),
+  };
+};
+
 export const useHabitStore = create((setStore, getStore) => ({
   isHydrating: true,
   user: null,
   isAuthenticated: false,
   authInitialized: false,
   lastUpdated: 0,
+  lastSyncedAt: 0,
   currentUid: null,
 
   // Multi-Profile State (1 Main + Sub-Profiles for signed-in users)
@@ -158,6 +261,7 @@ export const useHabitStore = create((setStore, getStore) => ({
 
   // Data State (Active Profile)
   trackerData: {},
+  dayUpdatedAt: {},
   habits: DEFAULT_HABITS,
   habitConfigs: DEFAULT_CONFIGS,
   categories: DEFAULT_CATEGORIES,
@@ -210,6 +314,7 @@ export const useHabitStore = create((setStore, getStore) => ({
     const defaults = getGlobalDefaultsClone();
     const cleanData = {
       trackerData: {},
+      dayUpdatedAt: {},
       habits: defaults.habits,
       habitConfigs: defaults.habitConfigs,
       categories: defaults.categories,
@@ -225,6 +330,7 @@ export const useHabitStore = create((setStore, getStore) => ({
       manualXPOffset: 0,
       manualStreakOffset: 0,
       lastUpdated: 0,
+      lastSyncedAt: 0,
       currentUid: null,
       activeProfileId: 'main',
       cloudProfiles: {
@@ -391,10 +497,66 @@ export const useHabitStore = create((setStore, getStore) => ({
               if (docSnap.exists()) {
                 const remoteData = docSnap.data();
                 const remoteLastUpdated = remoteData.lastUpdated || 0;
+                const lastSyncedAt = currentStore.lastSyncedAt || 0;
                 const remoteTracker = remoteData.trackerData || {};
                 const hasRemoteData = Object.keys(remoteTracker).length > 0;
+                const hasDiverged = !isFirstSyncForUser && localLastUpdated > lastSyncedAt && remoteLastUpdated > lastSyncedAt;
 
-                if (isFirstSyncForUser || remoteLastUpdated > localLastUpdated || (hasRemoteData && !hasLocalData)) {
+                if (hasDiverged) {
+                  _isApplyingRemote = true;
+                  try {
+                    const localPersisted = toPersistedData(currentStore);
+                    const remoteProfiles = remoteData.cloudProfiles && typeof remoteData.cloudProfiles === 'object'
+                      ? { ...remoteData.cloudProfiles }
+                      : { main: extractProfileSnapshot(remoteData, remoteData.displayName || safeUser.displayName || 'Main Profile', 'main', true) };
+                    if (!remoteProfiles.main) {
+                      remoteProfiles.main = extractProfileSnapshot(remoteData, remoteData.displayName || safeUser.displayName || 'Main Profile', 'main', true);
+                    }
+
+                    const mergedProfiles = {};
+                    const allProfileIds = new Set([...Object.keys(localPersisted.cloudProfiles || {}), ...Object.keys(remoteProfiles)]);
+                    allProfileIds.forEach((pid) => {
+                      mergedProfiles[pid] = mergeProfileSnapshots(localPersisted.cloudProfiles?.[pid], remoteProfiles[pid]);
+                    });
+
+                    const activeId = mergedProfiles[currentStore.activeProfileId] ? currentStore.activeProfileId : 'main';
+                    const activeSnap = mergedProfiles[activeId] || mergedProfiles.main;
+                    const mergedNow = Math.max(Date.now(), localLastUpdated, remoteLastUpdated) + 1;
+                    const fbDefaults = getGlobalDefaultsClone();
+
+                    const mergedState = {
+                      currentUid: fbUser.uid,
+                      activeProfileId: activeId,
+                      cloudProfiles: mergedProfiles,
+                      trackerData: activeSnap.trackerData || {},
+                      dayUpdatedAt: activeSnap.dayUpdatedAt || {},
+                      habits: Array.isArray(activeSnap.habits) ? activeSnap.habits : fbDefaults.habits,
+                      habitConfigs: activeSnap.habitConfigs || fbDefaults.habitConfigs,
+                      categories: Array.isArray(activeSnap.categories) ? activeSnap.categories : fbDefaults.categories,
+                      archivedHabits: Array.isArray(activeSnap.archivedHabits) ? activeSnap.archivedHabits : [],
+                      shieldedDates: Array.isArray(activeSnap.shieldedDates) ? activeSnap.shieldedDates : [],
+                      savedLevel: Number(activeSnap.savedLevel) || 1,
+                      manualXPOffset: Number(activeSnap.manualXPOffset) || 0,
+                      manualStreakOffset: Number(activeSnap.manualStreakOffset) || 0,
+                      lastUpdated: mergedNow,
+                      lastSyncedAt: mergedNow,
+                    };
+
+                    setStore(mergedState);
+                    const persistedMerged = { ...toPersistedData(getStore()), lastUpdated: mergedNow, lastSyncedAt: mergedNow };
+                    await set('adib_habit_data', persistedMerged);
+                    await setDoc(
+                      userDocRef,
+                      withMainMirroredAtRoot(
+                        { ...persistedMerged, displayName: safeUser.displayName || currentStore.guestName || '', email: safeUser.email || '' },
+                        activeId
+                      ),
+                      { merge: true }
+                    );
+                  } finally {
+                    _isApplyingRemote = false;
+                  }
+                } else if (isFirstSyncForUser || remoteLastUpdated > localLastUpdated || (hasRemoteData && !hasLocalData)) {
                   _isApplyingRemote = true;
                   try {
                     const safeRemote = {};
@@ -426,6 +588,7 @@ export const useHabitStore = create((setStore, getStore) => ({
                       activeProfileId: activeId,
                       cloudProfiles: profilesMap,
                       trackerData: activeSnap.trackerData || {},
+                      dayUpdatedAt: activeSnap.dayUpdatedAt || {},
                       habits: Array.isArray(activeSnap.habits) ? activeSnap.habits : fbDefaults.habits,
                       habitConfigs: activeSnap.habitConfigs || fbDefaults.habitConfigs,
                       categories: Array.isArray(activeSnap.categories) ? activeSnap.categories : fbDefaults.categories,
@@ -434,6 +597,7 @@ export const useHabitStore = create((setStore, getStore) => ({
                       savedLevel: Number(activeSnap.savedLevel) || 1,
                       manualXPOffset: Number(activeSnap.manualXPOffset) || 0,
                       manualStreakOffset: Number(activeSnap.manualStreakOffset) || 0,
+                      lastSyncedAt: remoteLastUpdated,
                     };
 
                     setStore(mergedState);
@@ -444,7 +608,7 @@ export const useHabitStore = create((setStore, getStore) => ({
                   }
                 } else if (localLastUpdated > remoteLastUpdated) {
                   const localPersisted = withMainMirroredAtRoot(
-                    { ...toPersistedData(getStore()), currentUid: fbUser.uid },
+                    { ...toPersistedData(getStore()), currentUid: fbUser.uid, lastSyncedAt: localLastUpdated },
                     getStore().activeProfileId
                   );
                   await setDoc(
@@ -456,7 +620,7 @@ export const useHabitStore = create((setStore, getStore) => ({
                     },
                     { merge: true }
                   );
-                  setStore({ currentUid: fbUser.uid });
+                  setStore({ currentUid: fbUser.uid, lastSyncedAt: localLastUpdated });
                 }
               } else {
                 const defaultMainName = safeUser.displayName || currentStore.guestName || 'Main Profile';
@@ -538,7 +702,8 @@ export const useHabitStore = create((setStore, getStore) => ({
       );
       await setDoc(userDocRef, dataToSave, { merge: true });
       if (!isImpersonating) {
-        await set('adib_habit_data', persisted);
+        setStore({ lastSyncedAt: now });
+        await set('adib_habit_data', { ...persisted, lastSyncedAt: now });
       }
     } catch (err) {
       console.warn("Background cloud sync deferred:", err);
@@ -585,6 +750,7 @@ export const useHabitStore = create((setStore, getStore) => ({
       activeProfileId: newProfileId,
       cloudProfiles: updatedProfiles,
       trackerData: freshProfile.trackerData,
+      dayUpdatedAt: {},
       habits: freshProfile.habits,
       habitConfigs: freshProfile.habitConfigs,
       categories: freshProfile.categories,
@@ -593,6 +759,9 @@ export const useHabitStore = create((setStore, getStore) => ({
       savedLevel: freshProfile.savedLevel,
       manualXPOffset: freshProfile.manualXPOffset,
       manualStreakOffset: freshProfile.manualStreakOffset,
+      heatmapFilter: 'all',
+      weeklyGraphFilter: 'all',
+      dashboardGraphFilter: 'all',
       selectedCategory: 'all',
       viewingHabitMap: null,
     });
@@ -629,6 +798,7 @@ export const useHabitStore = create((setStore, getStore) => ({
       activeProfileId: targetProfileId,
       cloudProfiles: updatedProfiles,
       trackerData: target.trackerData || {},
+      dayUpdatedAt: target.dayUpdatedAt || {},
       habits: Array.isArray(target.habits) ? target.habits : defaults.habits,
       habitConfigs: target.habitConfigs || defaults.habitConfigs,
       categories: Array.isArray(target.categories) ? target.categories : defaults.categories,
@@ -637,6 +807,9 @@ export const useHabitStore = create((setStore, getStore) => ({
       savedLevel: Number(target.savedLevel) || 1,
       manualXPOffset: Number(target.manualXPOffset) || 0,
       manualStreakOffset: Number(target.manualStreakOffset) || 0,
+      heatmapFilter: 'all',
+      weeklyGraphFilter: 'all',
+      dashboardGraphFilter: 'all',
       selectedCategory: 'all',
       viewingHabitMap: null,
     });
@@ -680,6 +853,7 @@ export const useHabitStore = create((setStore, getStore) => ({
         activeProfileId: 'main',
         cloudProfiles: updatedProfiles,
         trackerData: mainProf.trackerData || {},
+        dayUpdatedAt: mainProf.dayUpdatedAt || {},
         habits: Array.isArray(mainProf.habits) ? mainProf.habits : defaults.habits,
         habitConfigs: mainProf.habitConfigs || defaults.habitConfigs,
         categories: Array.isArray(mainProf.categories) ? mainProf.categories : defaults.categories,
@@ -688,6 +862,9 @@ export const useHabitStore = create((setStore, getStore) => ({
         savedLevel: Number(mainProf.savedLevel) || 1,
         manualXPOffset: Number(mainProf.manualXPOffset) || 0,
         manualStreakOffset: Number(mainProf.manualStreakOffset) || 0,
+        heatmapFilter: 'all',
+        weeklyGraphFilter: 'all',
+        dashboardGraphFilter: 'all',
         selectedCategory: 'all',
         viewingHabitMap: null,
       });
@@ -777,7 +954,12 @@ export const useHabitStore = create((setStore, getStore) => ({
     const stateBefore = getStore();
     const now = Math.max(Date.now(), (stateBefore.lastUpdated || 0) + 1);
 
-    const nextStatePreview = { ...stateBefore, ...updates, lastUpdated: now };
+    const nextDayUpdatedAt = updates.trackerData
+      ? stampChangedDays(stateBefore.trackerData, updates.trackerData, stateBefore.dayUpdatedAt, now)
+      : (updates.dayUpdatedAt || stateBefore.dayUpdatedAt || {});
+    const enrichedUpdates = { ...updates, dayUpdatedAt: nextDayUpdatedAt };
+
+    const nextStatePreview = { ...stateBefore, ...enrichedUpdates, lastUpdated: now };
     const activeId = nextStatePreview.activeProfileId || 'main';
     const updatedCloudProfiles = { ...(nextStatePreview.cloudProfiles || {}) };
     updatedCloudProfiles[activeId] = extractProfileSnapshot(
@@ -787,7 +969,7 @@ export const useHabitStore = create((setStore, getStore) => ({
       activeId === 'main'
     );
 
-    setStore({ ...updates, cloudProfiles: updatedCloudProfiles, lastUpdated: now });
+    setStore({ ...enrichedUpdates, cloudProfiles: updatedCloudProfiles, lastUpdated: now });
 
     const state = getStore();
     const persisted = { ...toPersistedData(state), lastUpdated: now };
@@ -835,6 +1017,8 @@ export const useHabitStore = create((setStore, getStore) => ({
           },
           { merge: true }
         );
+        setStore({ lastSyncedAt: now });
+        await set('adib_habit_data', { ...persisted, lastSyncedAt: now });
       } catch (err) {
         console.error("Background sync failed:", err);
       }
@@ -1005,6 +1189,7 @@ export const useHabitStore = create((setStore, getStore) => ({
     const defaults = getGlobalDefaultsClone();
     const newGuestData = {
       trackerData: {},
+      dayUpdatedAt: {},
       habits: defaults.habits,
       habitConfigs: defaults.habitConfigs,
       categories: defaults.categories,
@@ -1036,7 +1221,18 @@ export const useHabitStore = create((setStore, getStore) => ({
     accounts.unshift(newEntry);
     await set('adib_guest_accounts', accounts);
     await set('adib_habit_data', newGuestData);
-    setStore({ ...newGuestData, user: null, isAuthenticated: false, currentUid: null, isHydrating: false });
+    setStore({
+      ...newGuestData,
+      user: null,
+      isAuthenticated: false,
+      currentUid: null,
+      isHydrating: false,
+      heatmapFilter: 'all',
+      weeklyGraphFilter: 'all',
+      dashboardGraphFilter: 'all',
+      selectedCategory: 'all',
+      viewingHabitMap: null,
+    });
   },
 
   renameGuestAccount: async (oldName, newName) => {
@@ -1100,12 +1296,24 @@ export const useHabitStore = create((setStore, getStore) => ({
     if (!Array.isArray(data.archivedHabits)) data.archivedHabits = [];
     if (!Array.isArray(data.shieldedDates)) data.shieldedDates = [];
     if (!data.trackerData) data.trackerData = {};
+    if (!data.dayUpdatedAt) data.dayUpdatedAt = {};
     if (!data.activeProfileId) data.activeProfileId = 'main';
     if (!data.cloudProfiles) {
       data.cloudProfiles = { main: extractProfileSnapshot(data, data.guestName || 'Main Profile', 'main', true) };
     }
     if (data.theme) applyThemeToDOM(data.theme);
-    setStore({ ...data, user: null, isAuthenticated: false, currentUid: null, isHydrating: false });
+    setStore({
+      ...data,
+      user: null,
+      isAuthenticated: false,
+      currentUid: null,
+      isHydrating: false,
+      heatmapFilter: 'all',
+      weeklyGraphFilter: 'all',
+      dashboardGraphFilter: 'all',
+      selectedCategory: 'all',
+      viewingHabitMap: null,
+    });
     await set('adib_habit_data', data);
   },
 
