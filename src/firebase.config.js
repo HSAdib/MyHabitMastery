@@ -1,5 +1,10 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider } from "firebase/auth";
+import {
+  getAuth,
+  initializeAuth,
+  indexedDBLocalPersistence,
+  GoogleAuthProvider,
+} from "firebase/auth";
 import {
   initializeFirestore,
   persistentLocalCache,
@@ -7,6 +12,7 @@ import {
   getFirestore,
 } from "firebase/firestore";
 import { getAnalytics, isSupported } from "firebase/analytics";
+import { isCapacitorNative } from "./platform/nativeAuth";
 
 // Credentials are loaded from .env (VITE_ prefix is required by Vite)
 // Copy .env.example → .env and paste your Firebase project values there.
@@ -48,7 +54,18 @@ let analytics = null;
 if (hasFirebaseConfig) {
   try {
     app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-    auth = getAuth(app);
+
+    if (isCapacitorNative()) {
+      try {
+        auth = initializeAuth(app, {
+          persistence: indexedDBLocalPersistence,
+        });
+      } catch {
+        auth = getAuth(app);
+      }
+    } else {
+      auth = getAuth(app);
+    }
 
     try {
       db = initializeFirestore(app, {
@@ -61,7 +78,7 @@ if (hasFirebaseConfig) {
       db = getFirestore(app);
     }
 
-    if (firebaseConfig.measurementId) {
+    if (firebaseConfig.measurementId && !isCapacitorNative()) {
       isSupported()
         .then((yes) => {
           if (yes) analytics = getAnalytics(app);

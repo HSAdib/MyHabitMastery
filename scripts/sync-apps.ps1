@@ -1,12 +1,13 @@
 param(
   [switch]$Update,
   [switch]$Local,
+  [string]$RunId = "",
   [string]$Destination = "C:\Users\hasan\MyHabitMastery"
 )
 
 $ErrorActionPreference = "Stop"
 
-$AppExtensions = @(".exe", ".msi", ".dmg", ".AppImage", ".deb", ".apk", ".ipa")
+$AppExtensions = @(".exe", ".msi", ".dmg", ".AppImage", ".deb", ".rpm", ".apk", ".ipa")
 
 if (-not (Test-Path $Destination)) {
   New-Item -ItemType Directory -Path $Destination -Force | Out-Null
@@ -61,8 +62,9 @@ if ($Local) {
   if (Test-Path "src-tauri\target\release\bundle") {
     $results += Copy-BuiltBinaries -SourceRoot "src-tauri\target\release\bundle"
   }
-  if (Test-Path (Join-Path $Destination "MyHabitMastery-Android.apk")) {
-    $apkItem = Get-Item (Join-Path $Destination "MyHabitMastery-Android.apk")
+  $apkPath = Join-Path $Destination "MyHabitMastery-Android.apk"
+  if (Test-Path $apkPath) {
+    $apkItem = Get-Item $apkPath
     $results += [PSCustomObject]@{
       File     = $apkItem.Name
       Size     = "$([Math]::Round($apkItem.Length / 1MB, 2)) MB"
@@ -82,31 +84,49 @@ if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
 
 if ($Update) {
   Write-Host "`nTriggering 5-platform build on GitHub Actions..." -ForegroundColor Cyan
+  $prevRunId = gh run list --workflow=release-apps.yml --limit 1 --json databaseId --jq ".[0].databaseId"
   gh workflow run release-apps.yml
-  Start-Sleep -Seconds 5
-  $latestRunId = gh run list --workflow=release-apps.yml --limit 1 --json databaseId --jq ".[0].databaseId"
-  if (-not $latestRunId) {
+
+  $targetRunId = ""
+  for ($i = 0; $i -lt 15; $i++) {
+    Start-Sleep -Seconds 3
+    $candidate = gh run list --workflow=release-apps.yml --limit 1 --json databaseId --jq ".[0].databaseId"
+    if ($candidate -and $candidate -ne $prevRunId) {
+      $targetRunId = $candidate
+      break
+    }
+  }
+
+  if (-not $targetRunId) {
+    $targetRunId = gh run list --workflow=release-apps.yml --limit 1 --json databaseId --jq ".[0].databaseId"
+  }
+  if (-not $targetRunId) {
     Write-Error "Could not find the triggered GitHub Actions workflow run."
     exit 1
   }
-  Write-Host "Watching run #$latestRunId until all 5 platforms finish building..." -ForegroundColor Yellow
-  gh run watch $latestRunId --exit-status
+
+  Write-Host "Watching run #$targetRunId until all 5 platforms finish building..." -ForegroundColor Yellow
+  gh run watch $targetRunId --exit-status
+  $RunId = $targetRunId
 }
 
-$runId = gh run list --workflow=release-apps.yml --status completed --limit 1 --json databaseId --jq ".[0].databaseId"
-if (-not $runId) {
+if (-not $RunId) {
+  $RunId = gh run list --workflow=release-apps.yml --status completed --limit 1 --json databaseId --jq ".[0].databaseId"
+}
+
+if (-not $RunId) {
   Write-Error "No completed 'release-apps.yml' runs found yet. Push your changes and run 'npm run apps:update'."
   exit 1
 }
 
-$tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("mhm_apps_" + $runId)
+$tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("mhm_apps_" + $RunId)
 if (Test-Path $tempDir) { Remove-Item $tempDir -Recurse -Force }
 New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
 
-Write-Host "`nDownloading all 5 platform apps from GitHub Actions run #$runId..." -ForegroundColor Cyan
-gh run download $runId --dir $tempDir
+Write-Host "`nDownloading all 5 platform apps from GitHub Actions run #$RunId..." -ForegroundColor Cyan
+gh run download $RunId --dir $tempDir
 
-# Clean older copied app binaries in destination before copying latest ones
+# Remove previous copied installers in destination before copying latest ones
 Get-ChildItem -Path $Destination -File -ErrorAction SilentlyContinue | Where-Object {
   $AppExtensions -contains $_.Extension
 } | Remove-Item -Force -ErrorAction SilentlyContinue
@@ -115,7 +135,7 @@ $copied = Copy-BuiltBinaries -SourceRoot $tempDir
 Remove-Item $tempDir -Recurse -Force
 
 if ($copied.Count -eq 0) {
-  Write-Warning "No app binaries were found in run #$runId."
+  Write-Warning "No app binaries were found in run #$RunId."
 } else {
   Write-Host "`nAll $($copied.Count) app files copied to $Destination :" -ForegroundColor Green
   $copied | Format-Table -AutoSize

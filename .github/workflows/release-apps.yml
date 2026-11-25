@@ -32,11 +32,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Linux Tauri dependencies
+      - name: Install Linux Tauri v2 dependencies
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            xdg-utils
 
       - uses: actions/setup-node@v4
         with:
@@ -55,9 +66,8 @@ jobs:
         run: npm ci
 
       - name: Build Desktop App (Tauri v2)
-        uses: tauri-apps/tauri-action@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NO_STRIP: true
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
           VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
           VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
@@ -65,25 +75,20 @@ jobs:
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
-        with:
-          tagName: v__VERSION__
-          releaseName: 'My Habit Mastery v__VERSION__'
-          releaseBody: 'Installers for Windows, Linux, macOS, Android, and iOS.'
-          releaseDraft: true
-          prerelease: false
-          args: ${{ matrix.args }}
+        run: npx tauri build ${{ matrix.args }}
 
       - name: Upload Desktop Installer Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
-          if-no-files-found: warn
+          if-no-files-found: error
           path: |
             src-tauri/target/**/release/bundle/**/*.exe
             src-tauri/target/**/release/bundle/**/*.msi
             src-tauri/target/**/release/bundle/**/*.dmg
             src-tauri/target/**/release/bundle/**/*.AppImage
             src-tauri/target/**/release/bundle/**/*.deb
+            src-tauri/target/**/release/bundle/**/*.rpm
 
   android-build:
     runs-on: ubuntu-latest
@@ -166,26 +171,36 @@ jobs:
           name: MyHabitMastery-iOS
           path: ios/App/MyHabitMastery-iOS-unsigned.ipa
 
-  attach-mobile-to-release:
+  publish-release:
+    if: startsWith(github.ref, 'refs/tags/v')
     needs: [desktop-builds, android-build, ios-build]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download Mobile Artifacts
+      - name: Download All Platform Artifacts
         uses: actions/download-artifact@v4
         with:
-          path: mobile-artifacts
+          path: release-artifacts
 
-      - name: Attach APK & IPA to Draft Release
+      - name: Collect Release Files & Publish Draft Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          TAG="v${VERSION}"
+          mkdir -p release-files
+          find release-artifacts -type f \( \
+            -name "*.exe" -o -name "*.msi" -o -name "*.dmg" -o \
+            -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o \
+            -name "*.apk" -o -name "*.ipa" \
+          \) -exec cp {} release-files/ \;
+          ls -lh release-files/
+
+          TAG="${GITHUB_REF_NAME}"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" \
-              mobile-artifacts/MyHabitMastery-Android/MyHabitMastery-Android.apk \
-              mobile-artifacts/MyHabitMastery-iOS/MyHabitMastery-iOS-unsigned.ipa \
-              --clobber
+            gh release upload "$TAG" release-files/* --clobber
+          else
+            gh release create "$TAG" release-files/* \
+              --title "My Habit Mastery ${TAG}" \
+              --notes "Installers for Windows, Linux, macOS (Apple Silicon & Intel), Android, and iOS." \
+              --draft
           fi
