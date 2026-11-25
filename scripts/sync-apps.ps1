@@ -7,6 +7,14 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Refresh PATH so newly installed tools (Rust, Java 21, gh) are detected immediately
+$machinePath = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+$userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
+$env:Path = "$machinePath;$userPath"
+if (Test-Path "$env:USERPROFILE\.cargo\bin") {
+  $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
+}
+
 $AppExtensions = @(".exe", ".msi", ".dmg", ".AppImage", ".deb", ".rpm", ".apk", ".ipa")
 
 if (-not (Test-Path $Destination)) {
@@ -34,15 +42,28 @@ function Copy-BuiltBinaries {
 }
 
 if ($Local) {
-  Write-Host "`n[1/2] Building Windows Desktop App (Tauri)..." -ForegroundColor Cyan
+  Write-Host "`n[1/2] Building Windows Desktop App (Tauri v2)..." -ForegroundColor Cyan
   if (Get-Command cargo -ErrorAction SilentlyContinue) {
     npm run tauri:build
   } else {
     Write-Warning "Rust/Cargo not found locally. Skipping local Windows Tauri build (use 'npm run apps:update' to build via GitHub Actions)."
   }
 
-  Write-Host "`n[2/2] Building Android APK (Capacitor)..." -ForegroundColor Cyan
-  if (Get-Command java -ErrorAction SilentlyContinue) {
+  Write-Host "`n[2/2] Building Android APK (Capacitor 8)..." -ForegroundColor Cyan
+  $sdkPath = if ($env:ANDROID_HOME -and (Test-Path $env:ANDROID_HOME)) {
+    $env:ANDROID_HOME
+  } elseif (Test-Path "$env:LOCALAPPDATA\Android\Sdk") {
+    "$env:LOCALAPPDATA\Android\Sdk"
+  } else {
+    $null
+  }
+
+  if ((Get-Command java -ErrorAction SilentlyContinue) -and $sdkPath) {
+    $env:ANDROID_HOME = $sdkPath
+    $env:ANDROID_SDK_ROOT = $sdkPath
+    $escapedSdk = $sdkPath -replace '\\', '\\'
+    Set-Content -Path "android\local.properties" -Value "sdk.dir=$escapedSdk" -Encoding ASCII
+
     npm run build:native
     npx cap sync android
     Push-Location android
@@ -55,7 +76,12 @@ if ($Local) {
       Copy-Item "android\app\build\outputs\apk\debug\app-debug.apk" (Join-Path $Destination "MyHabitMastery-Android.apk") -Force
     }
   } else {
-    Write-Warning "Java JDK not found locally. Skipping local Android build (use 'npm run apps:update' to build via GitHub Actions)."
+    if (-not (Get-Command java -ErrorAction SilentlyContinue)) {
+      Write-Warning "Java JDK not found locally. Skipping local Android build."
+    }
+    if (-not $sdkPath) {
+      Write-Warning "Android SDK not found at %LOCALAPPDATA%\Android\Sdk. Open Android Studio once to finish SDK setup, or use 'npm run apps:update'."
+    }
   }
 
   $results = @()
@@ -72,8 +98,12 @@ if ($Local) {
     }
   }
 
-  Write-Host "`nCopied local builds to $Destination :" -ForegroundColor Green
-  $results | Format-Table -AutoSize
+  if ($results.Count -eq 0) {
+    Write-Warning "No local app binaries were produced."
+  } else {
+    Write-Host "`nCopied local builds to $Destination :" -ForegroundColor Green
+    $results | Format-Table -AutoSize
+  }
   exit 0
 }
 
