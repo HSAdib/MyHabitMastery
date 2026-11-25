@@ -68,7 +68,7 @@ export default function HeaderProfile({ totalXP, bestStreak, handleLogin, handle
 
   const user = useHabitStore(state => state.user);
   const isAuthenticated = useHabitStore(state => state.isAuthenticated);
-  const isAdmin = isAuthenticated && user?.email?.toLowerCase() === SUPER_ADMIN_EMAIL;
+  const isAdmin = isAuthenticated && Boolean(user?.emailVerified) && user?.email?.toLowerCase() === SUPER_ADMIN_EMAIL;
   const theme = useHabitStore(state => state.theme);
   const syncToCloud = useHabitStore(state => state.syncToCloud);
   const importData = useHabitStore(state => state.importData);

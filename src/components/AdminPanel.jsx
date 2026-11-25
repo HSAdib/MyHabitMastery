@@ -276,6 +276,7 @@ export default function AdminPanel() {
   const handleSaveJson = async () => {
     try {
       const parsedData = JSON.parse(jsonText);
+      parsedData.lastUpdated = Math.max(Date.now(), (Number(parsedData.lastUpdated) || 0) + 1);
       await setDoc(doc(db, "users", editingJsonUser.id), parsedData);
       setEditingJsonUser(null);
     } catch (err) {
@@ -465,7 +466,7 @@ export default function AdminPanel() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search user, UID, or profile name..."
+                placeholder="Search user, email, UID, or profile..."
                 className="px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs font-bold text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 w-full sm:w-64"
               />
               <select

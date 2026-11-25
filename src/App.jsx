@@ -465,7 +465,7 @@ export default function App() {
   const saveCurrentGuestAccount = useHabitStore(state => state.saveCurrentGuestAccount);
   const activeProfileId = useHabitStore(state => state.activeProfileId || 'main');
   const cloudProfiles = useHabitStore(state => state.cloudProfiles || {});
-  const isSuperAdmin = isAuthenticated && user?.email?.toLowerCase() === SUPER_ADMIN_EMAIL;
+  const isSuperAdmin = isAuthenticated && Boolean(user?.emailVerified) && user?.email?.toLowerCase() === SUPER_ADMIN_EMAIL;
 
   const navigate = useNavigate();
 
@@ -1201,6 +1201,13 @@ export default function App() {
     [habits, archivedHabits]
   );
 
+  const effectiveDashboardFilter = dashboardGraphFilter === 'all' || activeHabitsList.includes(dashboardGraphFilter)
+    ? dashboardGraphFilter
+    : 'all';
+  const effectiveWeeklyFilter = weeklyGraphFilter === 'all' || activeHabitsList.includes(weeklyGraphFilter)
+    ? weeklyGraphFilter
+    : 'all';
+
   const xpStats = useMemo(() => {
     let totalXP = manualXPOffset || 0;
     Object.keys(trackerData).forEach(dateKey => {
@@ -1352,7 +1359,7 @@ export default function App() {
     return { topHabits, avgScore, weeklyStats };
   }, [trackerData, activeHabitsList]);
   const weeklyGraphData = useMemo(() => {
-    if (weeklyGraphFilter === 'all') return weeklySummary.weeklyStats;
+    if (effectiveWeeklyFilter === 'all') return weeklySummary.weeklyStats;
 
     // Generate last 7 days data for the selected habit
     const days = [];
@@ -1360,7 +1367,7 @@ export default function App() {
       const d = new Date();
       d.setDate(d.getDate() - i);
       const key = getSafeKey(d);
-      const valRaw = trackerData[key]?.[weeklyGraphFilter] ?? 0;
+      const valRaw = trackerData[key]?.[effectiveWeeklyFilter] ?? 0;
       const score = typeof valRaw === 'number' ? valRaw : (valRaw ? 100 : 0);
       days.push({
         name: d.toLocaleDateString(undefined, { weekday: 'short' }),
@@ -1368,7 +1375,7 @@ export default function App() {
       });
     }
     return days;
-  }, [weeklyGraphFilter, weeklySummary, trackerData]);
+  }, [effectiveWeeklyFilter, weeklySummary, trackerData]);
 
   // Per-habit current streak — powers the streak badge on habit cards
   const allHabitStreaks = useMemo(() => {
@@ -1595,12 +1602,12 @@ export default function App() {
       const key = getSafeKey(day);
       let pct = 0;
 
-      if (dashboardGraphFilter === 'all') {
+      if (effectiveDashboardFilter === 'all') {
         let totalPct = 0;
         activeHabitsList.forEach(h => { const r = trackerData[key]?.[h] ?? 0; totalPct += (typeof r === 'number' ? r : (r ? 100 : 0)); });
         pct = activeHabitsList.length > 0 ? totalPct / activeHabitsList.length : 0;
       } else {
-        const r = trackerData[key]?.[dashboardGraphFilter] ?? 0;
+        const r = trackerData[key]?.[effectiveDashboardFilter] ?? 0;
         pct = typeof r === 'number' ? r : (r ? 100 : 0);
       }
 
@@ -1610,7 +1617,7 @@ export default function App() {
         score: Math.round(pct)
       };
     });
-  }, [daysInMonth, trackerData, activeHabitsList, dashboardGraphFilter]);
+  }, [daysInMonth, trackerData, activeHabitsList, effectiveDashboardFilter]);
 
   const trendPoints = useMemo(() => {
     if (daysInMonth.length < 2) return [];
@@ -1618,18 +1625,18 @@ export default function App() {
       const key = getSafeKey(day);
       let pct = 0;
 
-      if (dashboardGraphFilter === 'all') {
+      if (effectiveDashboardFilter === 'all') {
         let totalPct = 0;
         activeHabitsList.forEach(h => { const r = trackerData[key]?.[h] ?? 0; totalPct += (typeof r === 'number' ? r : (r ? 100 : 0)); });
         pct = activeHabitsList.length > 0 ? totalPct / activeHabitsList.length : 0;
       } else {
-        const r = trackerData[key]?.[dashboardGraphFilter] ?? 0;
+        const r = trackerData[key]?.[effectiveDashboardFilter] ?? 0;
         pct = typeof r === 'number' ? r : (r ? 100 : 0);
       }
 
       return { x: (idx / (daysInMonth.length - 1)) * 100, y: 100 - pct };
     }).filter(p => !isNaN(p.x));
-  }, [daysInMonth, trackerData, activeHabitsList, dashboardGraphFilter]);
+  }, [daysInMonth, trackerData, activeHabitsList, effectiveDashboardFilter]);
 
   // (solveFluidPath is imported from ./utils — local duplicate removed)
 
@@ -2069,7 +2076,7 @@ export default function App() {
                   {/* Row 1: Slim Dropdown Only */}
                   <div className="flex items-center gap-2">
                     <select
-                      value={dashboardGraphFilter}
+                      value={effectiveDashboardFilter}
                       onChange={(e) => setDashboardGraphFilter(e.target.value)}
                       className={`text-[11px] font-black uppercase px-2 py-1 rounded-full border transition-all duration-500 cursor-pointer focus:outline-none max-w-[80px] md:max-w-[120px] truncate
                         ${theme === 'dark'
@@ -2085,7 +2092,7 @@ export default function App() {
 
                   {/* Row 2: Big Percentage */}
                   <span className={`text-lg md:text-xl font-black ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'} leading-none mt-1`}>
-                    {dashboardGraphFilter === 'all' ? analytics.monthlyPct : (analytics.habitPcts[dashboardGraphFilter] || 0)}%
+                    {effectiveDashboardFilter === 'all' ? analytics.monthlyPct : (analytics.habitPcts[effectiveDashboardFilter] || 0)}%
                   </span>
                 </div>
 
@@ -2370,7 +2377,7 @@ export default function App() {
                     </div>
 
                     <select
-                      value={dashboardGraphFilter}
+                      value={effectiveDashboardFilter}
                       onChange={(e) => setDashboardGraphFilter(e.target.value)}
                       className={`text-[11px] font-black uppercase px-3 py-2 rounded-full border transition-all duration-500 cursor-pointer focus:outline-none max-w-[120px] md:max-w-[160px] truncate shrink-0
                     ${theme === 'dark'
@@ -2492,11 +2499,11 @@ export default function App() {
                         <div className="flex items-center gap-2">
                           <ActivityIcon className="w-4 h-4 text-emerald-500" />
                           <p className={`text-[10px] font-black ${getTextMuted()} uppercase tracking-widest`}>
-                            {weeklyGraphFilter === 'all' ? 'Performance Graph' : `${weeklyGraphFilter} Trend`}
+                            {effectiveWeeklyFilter === 'all' ? 'Performance Graph' : `${effectiveWeeklyFilter} Trend`}
                           </p>
                         </div>
                         <select
-                          value={weeklyGraphFilter}
+                          value={effectiveWeeklyFilter}
                           onChange={(e) => setWeeklyGraphFilter(e.target.value)}
                           className={`text-[11px] font-black uppercase px-2 py-1 rounded-full border transition-all duration-500 cursor-pointer focus:outline-none max-w-[80px] md:max-w-[120px] truncate
                       ${theme === 'dark'

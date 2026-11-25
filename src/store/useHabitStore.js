@@ -426,6 +426,8 @@ export const useHabitStore = create((setStore, getStore) => ({
         if (!Array.isArray(data.shieldedDates)) data.shieldedDates = [];
         if (!Array.isArray(data.categories)) data.categories = defaults.categories;
         if (!data.trackerData || typeof data.trackerData !== 'object') data.trackerData = {};
+        if (!data.dayUpdatedAt || typeof data.dayUpdatedAt !== 'object') data.dayUpdatedAt = {};
+        if (typeof data.lastSyncedAt !== 'number') data.lastSyncedAt = Number(data.lastUpdated) || 0;
         if (!data.habitConfigs || typeof data.habitConfigs !== 'object') data.habitConfigs = defaults.habitConfigs;
         if (data.guestName === "Guest User") data.guestName = "";
         if (!data.activeProfileId) data.activeProfileId = 'main';
@@ -487,6 +489,7 @@ export const useHabitStore = create((setStore, getStore) => ({
             _unsubSnapshot = onSnapshot(userDocRef, async (docSnap) => {
               if (_isApplyingRemote) return;
               if (getStore().isImpersonating) return;
+              if (docSnap.metadata?.hasPendingWrites) return;
 
               const currentStore = getStore();
               const isFirstSyncForUser = currentStore.currentUid !== fbUser.uid;
@@ -500,7 +503,11 @@ export const useHabitStore = create((setStore, getStore) => ({
                 const lastSyncedAt = currentStore.lastSyncedAt || 0;
                 const remoteTracker = remoteData.trackerData || {};
                 const hasRemoteData = Object.keys(remoteTracker).length > 0;
-                const hasDiverged = !isFirstSyncForUser && localLastUpdated > lastSyncedAt && remoteLastUpdated > lastSyncedAt;
+                const hasDiverged =
+                  !isFirstSyncForUser &&
+                  localLastUpdated !== remoteLastUpdated &&
+                  localLastUpdated > lastSyncedAt &&
+                  remoteLastUpdated > lastSyncedAt;
 
                 if (hasDiverged) {
                   _isApplyingRemote = true;
@@ -621,6 +628,7 @@ export const useHabitStore = create((setStore, getStore) => ({
                     { merge: true }
                   );
                   setStore({ currentUid: fbUser.uid, lastSyncedAt: localLastUpdated });
+                  await set('adib_habit_data', toPersistedData(getStore()));
                 }
               } else {
                 const defaultMainName = safeUser.displayName || currentStore.guestName || 'Main Profile';
@@ -630,9 +638,11 @@ export const useHabitStore = create((setStore, getStore) => ({
                 const initialProfiles = {
                   main: extractProfileSnapshot(seedSource, defaultMainName, 'main', true),
                 };
+                const createdNow = Date.now();
                 setStore({
                   ...(canMigrateLocal ? {} : {
                     trackerData: {},
+                    dayUpdatedAt: {},
                     habits: seedSource.habits,
                     habitConfigs: seedSource.habitConfigs,
                     categories: seedSource.categories,
@@ -645,7 +655,8 @@ export const useHabitStore = create((setStore, getStore) => ({
                   currentUid: fbUser.uid,
                   activeProfileId: 'main',
                   cloudProfiles: initialProfiles,
-                  lastUpdated: Date.now(),
+                  lastUpdated: createdNow,
+                  lastSyncedAt: createdNow,
                 });
                 const localPersisted = withMainMirroredAtRoot(
                   { ...toPersistedData(getStore()), currentUid: fbUser.uid },
@@ -660,6 +671,7 @@ export const useHabitStore = create((setStore, getStore) => ({
                   },
                   { merge: true }
                 );
+                await set('adib_habit_data', toPersistedData(getStore()));
               }
             }, (syncErr) => {
               _isApplyingRemote = false;
@@ -702,8 +714,8 @@ export const useHabitStore = create((setStore, getStore) => ({
       );
       await setDoc(userDocRef, dataToSave, { merge: true });
       if (!isImpersonating) {
-        setStore({ lastSyncedAt: now });
-        await set('adib_habit_data', { ...persisted, lastSyncedAt: now });
+        setStore({ lastSyncedAt: Math.max(getStore().lastSyncedAt || 0, now) });
+        await set('adib_habit_data', toPersistedData(getStore()));
       }
     } catch (err) {
       console.warn("Background cloud sync deferred:", err);
@@ -935,6 +947,13 @@ export const useHabitStore = create((setStore, getStore) => ({
       archivedHabits: newArchivedHabits,
       shieldedDates: newShieldedDates,
       lastUpdated: timestamp,
+      ...(strategy === 'overwrite' ? {
+        heatmapFilter: 'all',
+        weeklyGraphFilter: 'all',
+        dashboardGraphFilter: 'all',
+        selectedCategory: 'all',
+        viewingHabitMap: null,
+      } : {}),
     };
 
     await state.saveToIDB(updatedPayload);
@@ -1007,21 +1026,22 @@ export const useHabitStore = create((setStore, getStore) => ({
     }
 
     if (db && state.isAuthenticated && state.user) {
-      try {
-        await setDoc(
-          doc(db, 'users', state.user.uid),
-          {
-            ...dataToSave,
-            displayName: state.user.displayName || state.guestName || "",
-            email: state.user.email || "",
-          },
-          { merge: true }
-        );
-        setStore({ lastSyncedAt: now });
-        await set('adib_habit_data', { ...persisted, lastSyncedAt: now });
-      } catch (err) {
-        console.error("Background sync failed:", err);
-      }
+      setDoc(
+        doc(db, 'users', state.user.uid),
+        {
+          ...dataToSave,
+          displayName: state.user.displayName || state.guestName || "",
+          email: state.user.email || "",
+        },
+        { merge: true }
+      )
+        .then(async () => {
+          setStore({ lastSyncedAt: Math.max(getStore().lastSyncedAt || 0, now) });
+          await set('adib_habit_data', toPersistedData(getStore()));
+        })
+        .catch((err) => {
+          console.error("Background sync failed:", err);
+        });
     }
   },
 
@@ -1088,6 +1108,7 @@ export const useHabitStore = create((setStore, getStore) => ({
     // Preserve original admin state if already impersonating another user
     const adminStateBackup = state.adminSavedState || {
       trackerData: state.trackerData,
+      dayUpdatedAt: state.dayUpdatedAt,
       habits: state.habits,
       habitConfigs: state.habitConfigs,
       categories: state.categories,
@@ -1104,6 +1125,7 @@ export const useHabitStore = create((setStore, getStore) => ({
       guestName: state.guestName,
       manualXPOffset: state.manualXPOffset,
       manualStreakOffset: state.manualStreakOffset,
+      lastSyncedAt: state.lastSyncedAt,
     };
 
     const userProfiles = targetUser.cloudProfiles && typeof targetUser.cloudProfiles === 'object'
@@ -1128,6 +1150,7 @@ export const useHabitStore = create((setStore, getStore) => ({
       activeProfileId: chosenId,
       cloudProfiles: userProfiles,
       trackerData: chosenSnap.trackerData || {},
+      dayUpdatedAt: chosenSnap.dayUpdatedAt || {},
       habits: chosenSnap.habits || defaults.habits,
       habitConfigs: chosenSnap.habitConfigs || defaults.habitConfigs,
       categories: chosenSnap.categories || defaults.categories,
@@ -1140,6 +1163,11 @@ export const useHabitStore = create((setStore, getStore) => ({
       guestName: targetUser.guestName || "",
       manualXPOffset: chosenSnap.manualXPOffset || 0,
       manualStreakOffset: chosenSnap.manualStreakOffset || 0,
+      heatmapFilter: 'all',
+      weeklyGraphFilter: 'all',
+      dashboardGraphFilter: 'all',
+      selectedCategory: 'all',
+      viewingHabitMap: null,
     });
   },
 
@@ -1152,13 +1180,23 @@ export const useHabitStore = create((setStore, getStore) => ({
         isImpersonating: null,
         impersonatedUserName: "",
         impersonatedProfileId: 'main',
-        adminSavedState: null
+        adminSavedState: null,
+        heatmapFilter: 'all',
+        weeklyGraphFilter: 'all',
+        dashboardGraphFilter: 'all',
+        selectedCategory: 'all',
+        viewingHabitMap: null,
       });
     } else {
       setStore({
         isImpersonating: null,
         impersonatedUserName: "",
         impersonatedProfileId: 'main',
+        heatmapFilter: 'all',
+        weeklyGraphFilter: 'all',
+        dashboardGraphFilter: 'all',
+        selectedCategory: 'all',
+        viewingHabitMap: null,
       });
     }
   },

@@ -27,7 +27,7 @@ export default function ProtectedAdminRoute({ children }) {
     );
   }
 
-  const isAdmin = isAuthenticated && user?.email?.toLowerCase() === SUPER_ADMIN_EMAIL;
+  const isAdmin = isAuthenticated && Boolean(user?.emailVerified) && user?.email?.toLowerCase() === SUPER_ADMIN_EMAIL;
 
   // 07/10 Permission Denied State: Explain why & give a way back
   if (!isAdmin) {
