@@ -4,22 +4,23 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Analytics } from "@vercel/analytics/react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { signOut } from 'firebase/auth';
-import { auth, googleProvider } from './firebase.config';
+import { auth } from './firebase.config';
 import { useHabitStore } from './store/useHabitStore';
 import { getSafeKey, parseLocalDate, loadConfettiScript, solveFluidPath, findClosestSuggestion } from './utils';
 import { useNavigate } from 'react-router-dom';
 import HeaderProfile from './components/HeaderProfile';
 import NamePromptModal from './components/NamePromptModal';
+import { SUPER_ADMIN_EMAIL } from './components/ProtectedAdminRoute';
 import {
   ResponsiveContainer, AreaChart, BarChart, CartesianGrid,
   XAxis, YAxis, Area, Bar, Tooltip as RechartsTooltip, Cell
 } from 'recharts';
 // --- Icons ---
-const CheckIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+const CheckIcon = ({ className = '' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="20 6 9 17 4 12" /></svg>
 );
-const ShieldIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
+const ShieldIcon = ({ className = '' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
 );
 
 const RefreshIcon = () => (
@@ -28,11 +29,11 @@ const RefreshIcon = () => (
 const ZapIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
 );
-const EditIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /><path d="m15 5 4 4" /></svg>
+const EditIcon = ({ className = '' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /><path d="m15 5 4 4" /></svg>
 );
-const TrashIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2m-6 5v6m4-6v6" /></svg>
+const TrashIcon = ({ className = '' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2m-6 5v6m4-6v6" /></svg>
 );
 const PlusIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
@@ -55,29 +56,20 @@ const ArrowDownIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m19 9-7 7-7-7" /></svg>
 );
 
-const XIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+const XIcon = ({ className = '' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M18 6 6 18M6 6l12 12" /></svg>
 );
-const TrophyIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" /><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" /></svg>
+const TrophyIcon = ({ className = '' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" /><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" /></svg>
 );
-const ActivityIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>
+const ActivityIcon = ({ className = '' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>
 );
-const NoteIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+const NoteIcon = ({ className = '' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
 );
-const TargetIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" /></svg>
-);
-const SquareTargetIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="20" x="2" y="2" rx="2" /><rect width="12" height="12" x="6" y="6" rx="1.5" /><rect width="4" height="4" x="10" y="10" rx="1" /></svg>
-);
-const FlameIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" /></svg>
-);
-const ExportIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" x2="12" y1="15" y2="3" /></svg>
+const FlameIcon = ({ className = '' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" /></svg>
 );
 const MaximizeIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3" /><path d="M21 8V5a2 2 0 0 0-2-2h-3" /><path d="M3 16v3a2 2 0 0 0 2 2h3" /><path d="M16 21h3a2 2 0 0 0 2-2v-3" /></svg>
@@ -98,23 +90,11 @@ const TableRotateIcon = () => (
 const TextSizeIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 7 4 4 20 4 20 7" /><line x1="9" x2="15" y1="20" y2="20" /><line x1="12" x2="12" y1="4" y2="20" /></svg>
 );
-const UserIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
-);
-const LogoutIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" x2="9" y1="12" y2="12" /></svg>
-);
-const ImportIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" x2="12" y1="3" y2="15" /></svg>
-);
-const OrderIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="10" x2="21" y1="6" y2="6" /><line x1="10" x2="21" y1="12" y2="12" /><line x1="10" x2="21" y1="18" y2="18" /><path d="M4 6h1v4" /><path d="M4 10h2" /><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1" /></svg>
-);
 const ChevronUpIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6" /></svg>
 );
-const ArchiveIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="5" x="2" y="3" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /><path d="M10 12h4" /></svg>
+const ArchiveIcon = ({ className = '' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="20" height="5" x="2" y="3" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /><path d="M10 12h4" /></svg>
 );
 const ChevronDownIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
@@ -427,18 +407,6 @@ const ThanosDisintegrate = ({ children, shouldDisintegrate, onDone }) => {
 };
 // ────────────────────────────────────────────────────────────────────────────
 
-
-const DEFAULT_HABITS = ["sleep 7h", "calisthenics", "meditation", "dept study", "coding", "vocab", "audiobook"];
-const DEFAULT_CONFIGS = {
-  "sleep 7h": { steps: 1 },
-  "calisthenics": { steps: 1 },
-  "meditation": { steps: 1 },
-  "dept study": { steps: 1 },
-  "coding": { steps: 1 },
-  "vocab": { steps: 15 },
-  "audiobook": { steps: 1 }
-};
-
 // Animation Variants
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -484,7 +452,8 @@ export default function App() {
   const setTheme = useHabitStore(state => state.setTheme);
   const setStorePartial = useHabitStore(state => state.setStorePartial);
   const savePartialToIDB = useHabitStore(state => state.savePartialToIDB);
-  const initStore = useHabitStore(state => state.init);
+  const resetLocalSession = useHabitStore(state => state.resetLocalSession);
+  const mobileModeLocked = useHabitStore(state => state.mobileModeLocked);
   const user = useHabitStore(state => state.user);
   const isAuthenticated = useHabitStore(state => state.isAuthenticated);
   const authInitialized = useHabitStore(state => state.authInitialized);
@@ -497,7 +466,7 @@ export default function App() {
   const saveCurrentGuestAccount = useHabitStore(state => state.saveCurrentGuestAccount);
   const activeProfileId = useHabitStore(state => state.activeProfileId || 'main');
   const cloudProfiles = useHabitStore(state => state.cloudProfiles || {});
-  const isSuperAdmin = isAuthenticated && user?.email?.toLowerCase() === 'hasanshahriaradib@gmail.com';
+  const isSuperAdmin = isAuthenticated && user?.email?.toLowerCase() === SUPER_ADMIN_EMAIL;
 
   const navigate = useNavigate();
 
@@ -517,28 +486,16 @@ export default function App() {
   const handleLogout = async () => {
     try {
       if (auth) await signOut(auth);
-      setStorePartial({ user: null, isAuthenticated: false, guestName: "" });
-      await savePartialToIDB({ guestName: "" });
+      await resetLocalSession();
     } catch (error) {
       console.error('Logout Failed', error);
     }
   };
 
-  // Welcome card status: 'visible' | 'snapping' | 'gone'
-  const [welcomeCardStatus, setWelcomeCardStatus] = useState(() => {
-    try {
-      const saved = localStorage.getItem('habit_tracker_master_v9_data');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Object.values(parsed).some(day => Object.values(day).some(v => typeof v === 'number' ? v > 0 : !!v))) {
-          return 'gone';
-        }
-      }
-    } catch (e) { }
-    return 'visible';
-  });
+  // Welcome card status: 'pending' | 'visible' | 'snapping' | 'gone'
+  const [welcomeCardStatus, setWelcomeCardStatus] = useState('pending');
   const [editingHabitName, setEditingHabitName] = useState(null);
-  const [editingManageListHabitName, setEditingManageListHabitName] = useState(null);
+  const [habitToDelete, setHabitToDelete] = useState(null);
   const [tempHabitName, setTempHabitName] = useState("");
   const [editingNoteDate, setEditingNoteDate] = useState(null);
   const [confirmDeleteNoteDate, setConfirmDeleteNoteDate] = useState(null);
@@ -596,7 +553,6 @@ export default function App() {
   const [selectedHeatmapDay, setSelectedHeatmapDay] = useState(null);
   const noteSaveTimer = useRef(null); // Fix #15
 
-  const prevLevelRef = useRef(savedLevel);
   const longPressTimer = useRef(null);
   const scrollContainerRef = useRef(null);
   const isDraggingTable = useRef(false);
@@ -639,12 +595,10 @@ export default function App() {
 
   const toggleMobileMode = () => {
     const newMode = !isMobileMode;
-    savePartialToIDB({ isMobileMode: newMode });
-    if (newMode) {
-      setTextSizes({ ...textSizes, habit: 10, table1: 9, table2: 9, tabSize: 75 });
-    } else {
-      setTextSizes({ ...textSizes, habit: 14, table1: 12, table2: 11, tabSize: 110 });
-    }
+    const nextSizes = newMode
+      ? { ...textSizes, habit: 10, table1: 9, table2: 9, tabSize: 75 }
+      : { ...textSizes, habit: 14, table1: 12, table2: 11, tabSize: 110 };
+    savePartialToIDB({ isMobileMode: newMode, mobileModeLocked: true, textSizes: nextSizes });
   };
 
   const updateTextSize = (key, value) => {
@@ -687,21 +641,39 @@ export default function App() {
     setCategoryToDelete(null);
   };
 
+  const closeManageModal = () => {
+    setShowManageModal(false);
+    setEditingHabitName(null);
+    setEditingCat(null);
+    setManageSearchQuery('');
+    setHabitInputError('');
+    setCatInputError('');
+  };
+
   const handleCategoryRename = (oldName, newName) => {
     const formattedName = newName.toLowerCase().trim();
-    if (!formattedName || formattedName === oldName || categories.includes(formattedName)) return;
+    if (!formattedName || formattedName === oldName) {
+      setEditingCat(null);
+      return;
+    }
+    if (categories.includes(formattedName)) {
+      triggerActionToast({
+        type: 'error',
+        title: 'Category Already Exists',
+        subtitle: `A category named "${formattedName}" already exists.`,
+      }, 3000);
+      setEditingCat(null);
+      return;
+    }
 
     const newCats = categories.map(c => c === oldName ? formattedName : c);
-    setCategories(newCats);
-
     const newConfigs = { ...habitConfigs };
     Object.keys(newConfigs).forEach(h => {
       if (newConfigs[h].category === oldName) {
-        newConfigs[h].category = formattedName;
+        newConfigs[h] = { ...newConfigs[h], category: formattedName };
       }
     });
-    // Save configs directly without a redundant setHabitConfigs call (saves one extra IDB write)
-    save(trackerData, habits, newConfigs);
+    savePartialToIDB({ categories: newCats, habitConfigs: newConfigs });
 
     if (selectedCategory === oldName) setSelectedCategory(formattedName);
     setEditingCat(null);
@@ -753,14 +725,13 @@ export default function App() {
 
   useEffect(() => {
     const handleResize = () => {
-      const saved = localStorage.getItem('adib_mobile_mode');
-      if (!saved) {
+      if (!mobileModeLocked) {
         setStorePartial({ isMobileMode: window.innerWidth <= 768 });
       }
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [setStorePartial]);
+  }, [setStorePartial, mobileModeLocked]);
 
   // 04/10 Online / Offline Network State Listener
   useEffect(() => {
@@ -872,7 +843,7 @@ export default function App() {
     }
   }, [viewingHabitMap, habitConfigs]);
 
-  // Auto-scroll to today
+  // Auto-scroll to today (only when month or table orientation changes)
   useEffect(() => {
     const scrollToToday = () => {
       const todayKey = getSafeKey(new Date());
@@ -897,36 +868,29 @@ export default function App() {
     };
 
     const timer = setTimeout(scrollToToday, 500);
+    return () => clearTimeout(timer);
+  }, [currentDate, tableOrientation]);
 
-    const handleTableScroll = () => {
+  // Update vertical table height on resize only
+  useEffect(() => {
+    const handleTableHeight = () => {
       if (!isMobileMode) {
-        let minHeightLimit = 350;
-        let diffOffset = window.innerHeight - 350;
-        let targetHeight = diffOffset - 120;
-        if (targetHeight < minHeightLimit) targetHeight = minHeightLimit;
-
+        const targetHeight = Math.max(350, window.innerHeight - 470);
         setTableHeight(targetHeight);
       }
     };
-    handleTableScroll();
-    window.addEventListener('resize', handleTableScroll);
-    const container = scrollContainerRef.current;
-    if (container) container.addEventListener('scroll', handleTableScroll);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('resize', handleTableScroll);
-      if (container) container.removeEventListener('scroll', handleTableScroll);
-    };
-  }, [currentDate, habits, tableOrientation, isMobileMode]);
+    handleTableHeight();
+    window.addEventListener('resize', handleTableHeight);
+    return () => window.removeEventListener('resize', handleTableHeight);
+  }, [isMobileMode]);
 
-  // Grab-to-scroll on the table container
+  // Grab-to-scroll on the table container (ignore interactive elements & don't trap vertical wheel scroll)
   useEffect(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
 
     const onMouseDown = (e) => {
-      // Only trigger on the container itself or tbody cells, not thead
-      if (e.target.closest('thead')) return;
+      if (e.target.closest('thead, button, input, select, textarea, a')) return;
       isDraggingTable.current = true;
       dragStart.current = { x: e.clientX, y: e.clientY, scrollLeft: el.scrollLeft, scrollTop: el.scrollTop };
       el.style.cursor = 'grabbing';
@@ -945,24 +909,12 @@ export default function App() {
       el.style.userSelect = '';
     };
 
-    // Block wheel scroll when hovering the header row or sticky name column — must use native listener with passive:false
-    const onWheel = (e) => {
-      const overHeader = e.target.closest('thead');
-      const overNameCol = e.target.closest('[data-no-scroll]');
-      if (overHeader || overNameCol) {
-        e.stopPropagation();
-        e.preventDefault();
-      }
-    };
-
     el.style.cursor = 'grab';
     el.addEventListener('mousedown', onMouseDown);
-    el.addEventListener('wheel', onWheel, { passive: false });
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
     return () => {
       el.removeEventListener('mousedown', onMouseDown);
-      el.removeEventListener('wheel', onWheel);
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
     };
@@ -972,19 +924,20 @@ export default function App() {
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key !== 'Escape') return;
-      if (showWelcomeModal || showGuestPicker) {
+      if (showWelcomeModal || showGuestPicker || showAuthModal) {
         setShowWelcomeModal(false);
         setShowGuestPicker(false);
+        setShowAuthModal(false);
         return;
       }
       if (viewingHabitMap) { setViewingHabitMap(null); setIsEditingTabName(false); return; }
       if (editingNoteDate) { setEditingNoteDate(null); return; }
-      if (showDeleteConfirm) { setShowDeleteConfirm(false); return; }
+      if (showDeleteConfirm) { setShowDeleteConfirm(false); setHabitToDelete(null); return; }
       if (showWeeklyModal) { setShowWeeklyModal(false); return; }
       if (showMonthlyGraphModal) { setShowMonthlyGraphModal(false); return; }
       if (showAllNotes) { setShowAllNotes(false); return; }
       if (showInsightsModal) { setShowInsightsModal(false); return; }
-      if (showManageModal) { setShowManageModal(false); return; }
+      if (showManageModal) { closeManageModal(); return; }
       if (showTextSizeModal) { setShowTextSizeModal(false); return; }
       if (showArchiveModal) { setShowArchiveModal(false); return; }
       if (showLevelDetailsModal) { setShowLevelDetailsModal(false); return; }
@@ -995,26 +948,32 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [viewingHabitMap, editingNoteDate, showDeleteConfirm, showWeeklyModal, showMonthlyGraphModal, showAllNotes, showInsightsModal, showManageModal, showTextSizeModal, showArchiveModal, showLevelDetailsModal, showTrophyDetailsModal, showLevelUpModal, categoryToDelete, selectedHeatmapDay, showWelcomeModal, showGuestPicker]);
+  }, [viewingHabitMap, editingNoteDate, showDeleteConfirm, showWeeklyModal, showMonthlyGraphModal, showAllNotes, showInsightsModal, showManageModal, showTextSizeModal, showArchiveModal, showLevelDetailsModal, showTrophyDetailsModal, showLevelUpModal, categoryToDelete, selectedHeatmapDay, showWelcomeModal, showGuestPicker, showAuthModal]);
 
   // Logic Handlers
   const handleDashboardRename = (oldName) => {
     const newName = tempHabitName.trim();
-    if (newName === oldName) { setEditingHabitName(null); return; }
+    setEditingHabitName(null);
+    if (newName === oldName) return;
     if (!newName) {
+      setHabitToDelete(oldName);
       setShowDeleteConfirm(true);
     } else {
       executeRename(oldName, newName);
-      setEditingHabitName(null);
     }
   };
 
   const handleTabRename = () => {
     const oldName = viewingHabitMap;
     const newName = tempHabitName.trim();
-    if (newName === oldName) { setIsEditingTabName(false); return; }
-    if (!newName) { setShowDeleteConfirm(true); } else { executeRename(oldName, newName); setViewingHabitMap(newName); }
     setIsEditingTabName(false);
+    if (newName === oldName) return;
+    if (!newName) {
+      setHabitToDelete(oldName);
+      setShowDeleteConfirm(true);
+    } else if (executeRename(oldName, newName)) {
+      setViewingHabitMap(newName);
+    }
   };
 
   const executeRename = (oldName, newName) => {
@@ -1024,11 +983,11 @@ export default function App() {
         title: 'Habit Already Exists',
         subtitle: `A habit named "${newName}" already exists.`,
       }, 4000);
-      return;
+      return false;
     }
     const newHabits = [...habits];
     const idx = newHabits.indexOf(oldName);
-    if (idx === -1) return;
+    if (idx === -1) return false;
     newHabits[idx] = newName;
     const newConfigs = { ...habitConfigs };
     newConfigs[newName] = newConfigs[oldName] || { steps: 1 };
@@ -1036,21 +995,23 @@ export default function App() {
     const newData = { ...trackerData };
     Object.keys(newData).forEach(k => {
       if (newData[k] && newData[k][oldName] !== undefined) {
-        newData[k][newName] = newData[k][oldName];
+        newData[k] = { ...newData[k], [newName]: newData[k][oldName] };
         delete newData[k][oldName];
       }
     });
-    // Single atomic save — avoids 3 separate setStorePartial calls + a save()
+    const newArchived = archivedHabits.map(h => h === oldName ? newName : h);
     savePartialToIDB({
       habits: newHabits,
       habitConfigs: newConfigs,
       trackerData: newData,
+      archivedHabits: newArchived,
     });
     triggerActionToast({
       type: 'success',
       title: 'Renamed Successfully',
       subtitle: `Renamed "${oldName}" to "${newName}".`,
     }, 3000);
+    return true;
   };
 
   const deleteHabit = (name) => {
@@ -1059,17 +1020,23 @@ export default function App() {
     const newConfigs = { ...habitConfigs };
     delete newConfigs[name];
     const newData = { ...trackerData };
-    Object.keys(newData).forEach(k => { if (newData[k]) delete newData[k][name]; });
+    Object.keys(newData).forEach(k => {
+      if (newData[k] && newData[k][name] !== undefined) {
+        const dayCopy = { ...newData[k] };
+        delete dayCopy[name];
+        newData[k] = dayCopy;
+      }
+    });
     const newArchived = archivedHabits.filter(h => h !== name);
-    // Single batched save — avoids two concurrent IDB/Firebase writes
     savePartialToIDB({
       habits: newHabits,
       habitConfigs: newConfigs,
       trackerData: newData,
       archivedHabits: newArchived,
     });
-    setViewingHabitMap(null);
-    setEditingHabitName(null);
+    if (viewingHabitMap === name) setViewingHabitMap(null);
+    if (editingHabitName === name) setEditingHabitName(null);
+    setHabitToDelete(null);
     setShowDeleteConfirm(false);
   };
 
@@ -1086,48 +1053,55 @@ export default function App() {
   };
 
   const saveNote = (dateKey, noteText) => {
+    const latest = useHabitStore.getState();
     const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const latestDay = latest.trackerData[dateKey] || {};
     const newTrackerData = {
-      ...trackerData,
+      ...latest.trackerData,
       [dateKey]: {
-        ...(trackerData[dateKey] || {}),
+        ...latestDay,
         note: noteText,
-        noteTime: noteText.trim() ? (trackerData[dateKey]?.noteTime || nowTime) : null
-      }
+        noteTime: noteText.trim() ? (latestDay.noteTime || nowTime) : null,
+      },
     };
-    setTrackerData(newTrackerData);
-    save(newTrackerData, habits, habitConfigs);
+    savePartialToIDB({ trackerData: newTrackerData });
   };
 
   const deleteNote = (dateKey) => {
+    clearTimeout(noteSaveTimer.current);
+    const latest = useHabitStore.getState();
+    const latestDay = latest.trackerData[dateKey] || {};
     const newTrackerData = {
-      ...trackerData,
+      ...latest.trackerData,
       [dateKey]: {
-        ...(trackerData[dateKey] || {}),
+        ...latestDay,
         note: '',
         noteTime: null,
       },
     };
-    setTrackerData(newTrackerData);
-    save(newTrackerData, habits, habitConfigs);
+    savePartialToIDB({ trackerData: newTrackerData });
   };
 
   const handleNoteChange = (dateKey, value) => {
-    // Instant local state update
+    const latest = useHabitStore.getState();
+    const latestDay = latest.trackerData[dateKey] || {};
     const newTrackerData = {
-      ...trackerData,
+      ...latest.trackerData,
       [dateKey]: {
-        ...(trackerData[dateKey] || {}),
+        ...latestDay,
         note: value,
-        noteTime: value.trim() ? (trackerData[dateKey]?.noteTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })) : null
-      }
+        noteTime: value.trim() ? (latestDay.noteTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })) : null,
+      },
     };
     setTrackerData(newTrackerData);
 
-    // Debounced IDB/Firebase save
     clearTimeout(noteSaveTimer.current);
     noteSaveTimer.current = setTimeout(() => saveNote(dateKey, value), 500);
   };
+
+  useEffect(() => {
+    return () => clearTimeout(noteSaveTimer.current);
+  }, []);
   const handleExport = () => {
     const data = {
       trackerData,
@@ -1146,40 +1120,6 @@ export default function App() {
     link.download = `habit-mastery-backup-${new Date().toISOString().split('T')[0]}.json`;
     link.click();
     URL.revokeObjectURL(url);
-  };
-
-  const importStore = useHabitStore(state => state.importData);
-
-  const handleImport = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    // Reset file input so the same file can be re-imported if needed
-    e.target.value = '';
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        const imported = JSON.parse(event.target.result);
-        if (
-          imported &&
-          typeof imported === 'object' &&
-          imported.trackerData &&
-          typeof imported.trackerData === 'object' &&
-          Array.isArray(imported.habits)
-        ) {
-          // Use the store action for a single, atomic save (avoids multiple concurrent writes)
-          await importStore(imported, 'overwrite');
-          setImportStatus('success');
-          setTimeout(() => setImportStatus(null), 3000);
-        } else {
-          setImportStatus('error');
-          setTimeout(() => setImportStatus(null), 3000);
-        }
-      } catch (err) {
-        setImportStatus('error');
-        setTimeout(() => setImportStatus(null), 3000);
-      }
-    };
-    reader.readAsText(file);
   };
 
   // Slider Interaction
@@ -1246,14 +1186,13 @@ export default function App() {
     let totalXP = manualXPOffset || 0;
     Object.keys(trackerData).forEach(dateKey => {
       habits.forEach(habit => {
-        const val = trackerData[dateKey]?.[habit] ?? 0;
+        const raw = trackerData[dateKey]?.[habit] ?? 0;
+        const val = typeof raw === 'number' ? raw : (raw ? 100 : 0);
         const priority = habitConfigs[habit]?.priority || 1;
-        // Now accurately scales from 1x to 10x XP
         totalXP += (val / 100) * 10 * priority;
       });
     });
 
-    // Growth logic: Level 2 at 100 XP, Level 3 at 400 XP, etc.
     const level = Math.floor(Math.sqrt(totalXP / 100)) + 1;
     const currentLevelXP = Math.pow(level - 1, 2) * 100;
     const nextLevelXP = Math.pow(level, 2) * 100;
@@ -1270,23 +1209,23 @@ export default function App() {
     };
   }, [trackerData, habits, habitConfigs, manualXPOffset]);
 
-  // --- LEVEL UP EFFECT ---
-  useEffect(() => {
-    // ১. লোকাল স্টোরেজ থেকে লাস্ট সেভ করা লেভেল চেক করো
-    const storedLevel = parseInt(localStorage.getItem('adib_habit_saved_level'));
+  const prevLevelRef = useRef(null);
+  const levelContextRef = useRef(null);
+  const currentUid = useHabitStore(state => state.currentUid);
 
-    // ২. পেজ লোড হওয়ার সময় Ref সেট করো (যাতে রিলোড দিলে পপ-আপ না আসে)
-    if (prevLevelRef.current === null) {
-      // যদি আগে সেভ করা থাকে সেটা নাও, না থাকলে বর্তমান লেভেলই সেট করো
-      prevLevelRef.current = !isNaN(storedLevel) ? storedLevel : xpStats.level;
+  useEffect(() => {
+    if (isHydrating || isImpersonating) return;
+
+    const contextKey = `${currentUid || guestName || 'anon'}:${activeProfileId}`;
+    if (levelContextRef.current !== contextKey || prevLevelRef.current === null) {
+      levelContextRef.current = contextKey;
+      prevLevelRef.current = Math.max(savedLevel || 1, xpStats.level);
       return;
     }
 
-    // ৩. এখন মেইন লজিক: বর্তমান লেভেল কি আগের চেয়ে বেশি?
     if (xpStats.level > prevLevelRef.current) {
       setShowLevelUpModal(true);
 
-      // Sound Effect
       try {
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         const playNote = (freq, time, duration) => {
@@ -1305,9 +1244,9 @@ export default function App() {
         playNote(659.25, 0.1, 0.2);
         playNote(783.99, 0.2, 0.2);
         playNote(1046.50, 0.4, 0.8);
+        setTimeout(() => audioCtx.close().catch(() => {}), 1500);
       } catch (e) { console.error("Audio play failed", e); }
 
-      // Confetti Effect — using the utility to avoid raw <script> injection
       loadConfettiScript(() => {
         const duration = 3000;
         const end = Date.now() + duration;
@@ -1321,14 +1260,11 @@ export default function App() {
       });
     }
 
-    // ৪. আপডেট লজিক: লেভেল বাড়ুক বা কমুক, বর্তমান অবস্থা সেভ করে রাখো।
     if (xpStats.level !== prevLevelRef.current) {
       prevLevelRef.current = xpStats.level;
-      // Persist to IDB + Firebase (not just localStorage) so the level survives cross-device
       savePartialToIDB({ savedLevel: xpStats.level });
     }
-
-  }, [xpStats.level]);
+  }, [xpStats.level, isHydrating, isImpersonating, currentUid, guestName, activeProfileId, savedLevel]);
 
   const analytics = useMemo(() => {
     let totalEarnedWeight = 0; let totalPossibleWeight = 0; let totalDone = manualStreakOffset || 0; let noteCount = 0; const stats = {};
@@ -1384,7 +1320,8 @@ export default function App() {
     const weeklyStats = activeHabitsList.map(habit => {
       let earned = 0;
       last7Days.forEach(date => {
-        const val = trackerData[date]?.[habit] ?? 0;
+        const raw = trackerData[date]?.[habit] ?? 0;
+        const val = typeof raw === 'number' ? raw : (raw ? 100 : 0);
         earned += (val / 100);
       });
       return { name: habit, score: Math.round((earned / 7) * 100) };
@@ -1531,26 +1468,14 @@ export default function App() {
       habits.some(h => { const v = day[h]; return typeof v === 'number' ? v > 0 : !!v; })
     ), [trackerData, habits]);
 
-  // Track initial hydration: if returning user has data, ensure card is gone
-  const initialDataCheckedRef = useRef(false);
   useEffect(() => {
     if (isHydrating) return;
-    if (!initialDataCheckedRef.current) {
-      initialDataCheckedRef.current = true;
-      if (hasAnyData) {
-        setWelcomeCardStatus('gone');
-      }
+    if (welcomeCardStatus === 'pending') {
+      setWelcomeCardStatus(hasAnyData ? 'gone' : 'visible');
+    } else if (hasAnyData && welcomeCardStatus === 'visible') {
+      setWelcomeCardStatus('snapping');
     }
-  }, [isHydrating, hasAnyData]);
-
-  // When user logs their first habit (transitions from empty to having data), trigger the Thanos snap!
-  useEffect(() => {
-    if (!isHydrating && initialDataCheckedRef.current) {
-      if (hasAnyData && welcomeCardStatus === 'visible') {
-        setWelcomeCardStatus('snapping');
-      }
-    }
-  }, [hasAnyData, welcomeCardStatus, isHydrating]);
+  }, [isHydrating, hasAnyData, welcomeCardStatus]);
 
   const habitInsights = useMemo(() => {
     if (!viewingHabitMap) return null;
@@ -1599,11 +1524,10 @@ export default function App() {
     // Calculate all-time best streak
     const allDates = Object.keys(trackerData).sort();
     if (allDates.length > 0) {
-      // Parse date locally to prevent UTC timezone offset bugs
-      const [y, m, d_str] = allDates[0].split('-');
-      let d = new Date(parseInt(y), parseInt(m) - 1, parseInt(d_str), 0, 0, 0, 0);
+      const d = parseLocalDate(allDates[0]);
+      const todayNoon = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12, 0, 0, 0);
 
-      while (d <= today) {
+      while (d <= todayNoon) {
         const key = getSafeKey(d);
         const valRaw = trackerData[key]?.[viewingHabitMap] ?? 0;
         const val = typeof valRaw === 'number' ? valRaw : (valRaw ? 100 : 0);
@@ -1741,10 +1665,6 @@ export default function App() {
 
   // (solveFluidPath is imported from ./utils — local duplicate removed)
 
-  const currentMonthNotes = useMemo(() => {
-    return daysInMonth.map(d => ({ date: d, key: getSafeKey(d), note: trackerData[getSafeKey(d)]?.note })).filter(e => e.note && e.note.trim() !== "");
-  }, [daysInMonth, trackerData]);
-
   // Styling Helpers
   const getButtonStyles = (val, dateKey) => {
     const isToday = new Date().toDateString() === parseLocalDate(dateKey).toDateString();
@@ -1830,7 +1750,7 @@ export default function App() {
   }
 
   return (
-    <div className={`min-h-screen ${getContainerBg()} font-sans pb-6 md:pb-20 select-none overflow-x-hidden ${isImpersonating ? 'pt-12' : ''}`}>
+    <div className={`min-h-screen ${getContainerBg()} font-sans pb-6 md:pb-20 overflow-x-hidden ${isImpersonating ? 'pt-12' : ''}`}>
       <Analytics />
 
       {/* 04/10 Offline / Reconnected Banner */}
@@ -2227,10 +2147,9 @@ export default function App() {
               </div>
 
               {/* Heatmap Visual Guide Onboarding Banner */}
-              {welcomeCardStatus !== 'gone' && (
+              {(welcomeCardStatus === 'visible' || welcomeCardStatus === 'snapping') && (
                 <ThanosDisintegrate
                   shouldDisintegrate={welcomeCardStatus === 'snapping'}
-                  onDone={() => setWelcomeCardStatus('gone')}
                 >
                   <div className={`mb-3 p-3 rounded-2xl border ${theme === 'dark' ? 'bg-slate-800/70 border-slate-700' : 'bg-emerald-50/80 border-emerald-200'} flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-sm`}>
                     <div className="flex items-center gap-2.5">
@@ -2354,25 +2273,29 @@ export default function App() {
                       <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
                     </linearGradient>
                   </defs>
-                  {/* The Shadow Fill */}
-                  <motion.path
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 2 }}
-                    d={`${solveFluidPath(trendPoints)} L 100,100 L 0,100 Z`}
-                    fill="url(#greenTrendShadow)"
-                  />
-                  {/* The Main Line */}
-                  <motion.path
-                    initial={{ pathLength: 0 }}
-                    animate={{ pathLength: 1 }}
-                    transition={{ duration: 2 }}
-                    d={solveFluidPath(trendPoints)}
-                    fill="none"
-                    stroke="#10b981"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                  />
+                  {trendPoints.length >= 2 && (
+                    <>
+                      {/* The Shadow Fill */}
+                      <motion.path
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 2 }}
+                        d={`${solveFluidPath(trendPoints)} L 100,100 L 0,100 Z`}
+                        fill="url(#greenTrendShadow)"
+                      />
+                      {/* The Main Line */}
+                      <motion.path
+                        initial={{ pathLength: 0 }}
+                        animate={{ pathLength: 1 }}
+                        transition={{ duration: 2 }}
+                        d={solveFluidPath(trendPoints)}
+                        fill="none"
+                        stroke="#10b981"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                      />
+                    </>
+                  )}
                 </svg>
               </div>
               <div className={`flex justify-between mt-1 md:mt-2 px-1 text-[6px] md:text-[8px] font-black ${theme === 'dark' ? 'text-slate-600' : 'text-slate-300'} uppercase tracking-widest`}>
@@ -2531,13 +2454,18 @@ export default function App() {
               })}
             </AnimatePresence>
             <motion.button layout whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => {
-              const name = `Habit ${habits.length + 1}`;
+              let n = habits.length + 1;
+              while (
+                habits.some(h => h.toLowerCase() === `habit ${n}`) ||
+                archivedHabits.some(h => h.toLowerCase() === `habit ${n}`)
+              ) {
+                n++;
+              }
+              const name = `Habit ${n}`;
               const categoryToAssign = selectedCategory === 'all' ? 'all' : selectedCategory;
               const newHabits = [...habits, name];
               const newConfigs = { ...habitConfigs, [name]: { steps: 1, category: categoryToAssign } };
-              setHabits(newHabits);
-              setHabitConfigs(newConfigs);
-              save(trackerData, newHabits, newConfigs);
+              savePartialToIDB({ habits: newHabits, habitConfigs: newConfigs });
               setEditingHabitName(name);
               setTempHabitName(name);
             }}
@@ -2548,6 +2476,7 @@ export default function App() {
             </motion.button>
           </motion.div>
           {/* Monthly Graph Detailed Modal */}
+          <AnimatePresence>
           {showMonthlyGraphModal && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowMonthlyGraphModal(false)}>
               <motion.div initial={{ scale: 0.9, opacity: 0, y: 50 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 50 }} className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} border rounded-[1.2rem] md:rounded-[2rem] w-full max-w-4xl p-6 md:p-8 shadow-2xl relative flex flex-col`} onClick={e => e.stopPropagation()}>
@@ -2652,8 +2581,10 @@ export default function App() {
               </motion.div>
             </motion.div>
           )}
+          </AnimatePresence>
 
           {/* Weekly Summary Popup Modal */}
+          <AnimatePresence>
           {showWeeklyModal && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[150] flex items-center justify-center bg-black/70 backdrop-blur-md p-4" onClick={() => setShowWeeklyModal(false)}>
               <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} border rounded-[2.5rem] w-full max-w-2xl p-8 shadow-2xl relative`} onClick={e => e.stopPropagation()}>
@@ -2760,9 +2691,11 @@ export default function App() {
               </motion.div>
             </motion.div>
           )}
+          </AnimatePresence>
 
           {/* --- JOURNAL HISTORY MODAL --- */}
           {/* --- 51-ENTRY CENTERED JOURNAL HISTORY MODAL --- */}
+          <AnimatePresence>
           {showAllNotes && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[180] flex items-center justify-center bg-black/70 backdrop-blur-md p-4" onClick={() => setShowAllNotes(false)}>
               <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} border rounded-[2.5rem] w-full max-w-xl p-6 md:p-8 shadow-2xl relative flex flex-col max-h-[88vh]`} onClick={e => e.stopPropagation()}>
@@ -2991,8 +2924,10 @@ export default function App() {
               </motion.div>
             </motion.div>
           )}
+          </AnimatePresence>
 
           {/* --- INSIGHTS MODAL --- */}
+          <AnimatePresence>
           {showInsightsModal && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[180] flex items-center justify-center bg-black/70 backdrop-blur-md p-4" onClick={() => setShowInsightsModal(false)}>
               <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} border rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl relative flex flex-col max-h-[85vh]`} onClick={e => e.stopPropagation()}>
@@ -3067,8 +3002,9 @@ export default function App() {
               </motion.div>
             </motion.div>
           )}
+          </AnimatePresence>
           {/* Empty State Onboarding — Thanos snap out when first habit is logged */}
-          {welcomeCardStatus !== 'gone' && (
+          {(welcomeCardStatus === 'visible' || welcomeCardStatus === 'snapping') && (
             <ThanosDisintegrate
               shouldDisintegrate={welcomeCardStatus === 'snapping'}
               onDone={() => setWelcomeCardStatus('gone')}
@@ -3161,7 +3097,7 @@ export default function App() {
                         </th>
 
                         {/* FILTERED HABITS HEADER */}
-                        {habits.filter(h => !archivedHabits.includes(h)).map((h, i) => <th key={i} className={`p-2 border-r border-b uppercase text-center font-black transition-colors ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'}`} style={{ fontSize: `${textSizes.table1}px`, minWidth: isMobileMode ? '90px' : 'auto' }}><div className="px-1 leading-tight break-words" title={h}>{h}</div></th>)}
+                        {habits.filter(h => !archivedHabits.includes(h)).map((h) => <th key={h} className={`p-2 border-r border-b uppercase text-center font-black transition-colors ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'}`} style={{ fontSize: `${textSizes.table1}px`, minWidth: isMobileMode ? '90px' : 'auto' }}><div className="px-1 leading-tight break-words" title={h}>{h}</div></th>)}
                         <th className={`p-4 font-black text-emerald-600 text-[14px] sticky top-0 right-0 border-l border-b ${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} w-[100px] z-40 text-center`}>Efficiency</th>
                       </tr>
                     </thead>
@@ -3201,10 +3137,10 @@ export default function App() {
                             </td>
 
                             {/* FILTERED HABITS CELLS */}
-                            {activeHabits.map((h, i) => {
+                            {activeHabits.map((h) => {
                               const rawVal = dayData[h] ?? 0; const val = typeof rawVal === 'number' ? rawVal : (rawVal ? 100 : 0);
                               return (
-                                <td key={i} className={`p-2 border-r border-b transition-all duration-500 text-center ${rowBgStyle} ${isToday ? 'border-y-2 border-emerald-500/20' : ''}`}>
+                                <td key={h} className={`p-2 border-r border-b transition-all duration-500 text-center ${rowBgStyle} ${isToday ? 'border-y-2 border-emerald-500/20' : ''}`}>
                                   <motion.button whileTap={{ scale: 0.9 }} title="Mark habit completion" className={`w-11 h-11 rounded-2xl transition-all flex flex-col items-center justify-center mx-auto border-2 text-xl font-black ${getButtonStyles(val, key)} touch-none select-none ${parseLocalDate(key).setHours(0, 0, 0, 0) > new Date().setHours(0, 0, 0, 0) ? 'opacity-20 cursor-not-allowed grayscale' : ''}`} onPointerDown={(e) => handleHabitPressStart(e, key, h, val)} onPointerUp={(e) => handleHabitPressEnd(e, key, h, val)}>
                                     <span className={`text-[7px] font-black leading-none mb-0.5 pointer-events-none ${val > 0 ? 'text-white/60' : (theme === 'dark' ? 'text-slate-600' : 'text-slate-300')}`}>{day.getDate()}</span>
                                     <span className="pointer-events-none font-bold">
@@ -3307,8 +3243,8 @@ export default function App() {
                         })}
                       </tr>
                       {/* FILTERED HABITS ROWS */}
-                      {habits.filter(h => !archivedHabits.includes(h)).map((habit, hIdx) => (
-                        <tr key={hIdx} className="h-[68px]">
+                      {habits.filter(h => !archivedHabits.includes(h)).map((habit) => (
+                        <tr key={habit} className="h-[68px]">
                           <td data-no-scroll className={`p-1 font-black uppercase sticky left-0 z-20 border-r border-b text-center transition-colors ${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} text-slate-400 shadow-[4px_0_8px_rgba(0,0,0,0.3)]`} style={{ fontSize: `${textSizes.table2}px` }}>
                             <div className="truncate w-full px-1 font-black leading-tight">{habit}</div>
                           </td>
@@ -3316,8 +3252,8 @@ export default function App() {
                             const key = getSafeKey(day); const val = typeof trackerData[key]?.[habit] === 'number' ? trackerData[key][habit] : (trackerData[key]?.[habit] ? 100 : 0);
                             return (
                               <td key={key} className={`p-1.5 border-r border-b text-center transition-all duration-500 ${new Date().toDateString() === day.toDateString() ? (theme === 'dark' ? 'bg-emerald-900/20 border-emerald-500/30 shadow-[inset_0_0_20px_rgba(16,185,129,0.08)]' : 'bg-emerald-50/50 border-emerald-400/30 shadow-[inset_0_0_20px_rgba(16,185,129,0.08)]') : (theme === 'dark' ? 'border-r-slate-800 border-b-slate-800' : 'border-r-slate-100 border-b-slate-100')}`} style={{ width: horizontalColWidth, minWidth: horizontalColWidth }}>
-                                <motion.button whileTap={{ scale: 0.9 }} title="Mark habit completion" onPointerDown={(e) => handleHabitPressStart(e, key, habit, val)} onPointerUp={(e) => handleHabitPressEnd(e, key, habit, val)} className={`w-11 h-11 rounded-2xl mx-auto border-2 flex items-center justify-center font-black transition-all text-xl ${getButtonStyles(val, key)} ${parseLocalDate(key).setHours(0, 0, 0, 0) > new Date().setHours(0, 0, 0, 0) ? 'opacity-20 grayscale' : ''}`}>
-                                  <span>
+                                <motion.button whileTap={{ scale: 0.9 }} title="Mark habit completion" onPointerDown={(e) => handleHabitPressStart(e, key, habit, val)} onPointerUp={(e) => handleHabitPressEnd(e, key, habit, val)} className={`w-11 h-11 rounded-2xl mx-auto border-2 flex items-center justify-center font-black transition-all text-xl touch-none select-none ${getButtonStyles(val, key)} ${parseLocalDate(key).setHours(0, 0, 0, 0) > new Date().setHours(0, 0, 0, 0) ? 'opacity-20 cursor-not-allowed grayscale' : ''}`}>
+                                  <span className="pointer-events-none">
                                     {(() => {
                                       const config = habitConfigs[habit];
                                       const stepVal = config?.steps > 1 ? Math.round((val / 100) * config.steps) : null;
@@ -3361,15 +3297,17 @@ export default function App() {
           const dayDate = parseLocalDate(selectedHeatmapDay);
           const isShielded = shieldedDates.includes(selectedHeatmapDay);
           const dayData = trackerData[selectedHeatmapDay] || {};
-          let totalPct = 0;
+          let totalEarnedWeight = 0;
+          let totalPossibleWeight = 0;
           let doneCount = 0;
           activeHabitsList.forEach(h => {
             const r = dayData[h] ?? 0;
             const v = typeof r === 'number' ? r : (r ? 100 : 0);
-            totalPct += v;
+            totalEarnedWeight += (v / 100);
+            if (!isShielded || v >= 100) totalPossibleWeight += 1;
             if (v >= 100) doneCount++;
           });
-          const dayPct = activeHabitsList.length > 0 ? Math.round(totalPct / activeHabitsList.length) : 0;
+          const dayPct = totalPossibleWeight > 0 ? Math.round((totalEarnedWeight / totalPossibleWeight) * 100) : (isShielded ? 100 : 0);
           const hasNote = Boolean(dayData.note && dayData.note.trim());
           const isFutureDay = new Date(dayDate).setHours(0, 0, 0, 0) > new Date().setHours(0, 0, 0, 0);
           const canToggleShield = !isFutureDay && (isShielded || shieldStats.availableCount > 0);
@@ -3462,7 +3400,14 @@ export default function App() {
                       >
                         <span className="text-xs font-bold uppercase tracking-wide truncate">{h}</span>
                         <span className={`text-xs font-black px-2 py-0.5 rounded-md ${isDone ? 'bg-emerald-500 text-white' : (theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-200 text-slate-600')}`}>
-                          {val}%
+                          {(() => {
+                            const cfg = habitConfigs[h];
+                            if (cfg?.steps > 1) {
+                              const stepVal = Math.round((val / 100) * cfg.steps);
+                              return `${stepVal}/${cfg.steps}`;
+                            }
+                            return `${Math.round(val)}%`;
+                          })()}
                         </span>
                       </div>
                     );
@@ -3650,7 +3595,7 @@ export default function App() {
                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v3" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7" /><path d="M9 13v-3" /><path d="M15 13v-3" /></svg>
                     Archive
                   </motion.button>
-                  <motion.button whileTap={{ scale: 0.95 }} title="Delete habit" onClick={() => setShowDeleteConfirm(true)} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 md:py-3 px-3 md:px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white border border-rose-500/20">
+                  <motion.button whileTap={{ scale: 0.95 }} title="Delete habit" onClick={() => { setHabitToDelete(viewingHabitMap); setShowDeleteConfirm(true); }} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 md:py-3 px-3 md:px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white border border-rose-500/20">
                     <TrashIcon /> Delete
                   </motion.button>
                 </div>
@@ -3866,10 +3811,10 @@ export default function App() {
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} border p-8 rounded-[2rem] max-w-sm w-full shadow-2xl text-center`}>
               <div className="bg-rose-500/20 text-rose-500 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6"><TrashIcon /></div>
               <h4 className="text-xl font-black mb-2">Delete Habit?</h4>
-              <p className={`text-sm ${getTextMuted()} mb-8 font-medium`}>This will permanently delete data for <span className="text-rose-500 font-bold">"{viewingHabitMap || editingHabitName || tempHabitName}"</span>.</p>
+              <p className={`text-sm ${getTextMuted()} mb-8 font-medium`}>This will permanently delete data for <span className="text-rose-500 font-bold">"{habitToDelete}"</span>.</p>
               <div className="flex gap-4">
-                <button onClick={() => setShowDeleteConfirm(false)} title="Cancel delete" className={`flex-1 py-4 rounded-2xl font-black uppercase text-xs tracking-widest ${theme === 'dark' ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>Cancel</button>
-                <button onClick={() => deleteHabit(viewingHabitMap || editingHabitName || tempHabitName)} title="Confirm delete" className="flex-1 py-4 rounded-2xl font-black uppercase text-xs tracking-widest bg-rose-500 text-white shadow-lg shadow-rose-500/20">Delete</button>
+                <button onClick={() => { setShowDeleteConfirm(false); setHabitToDelete(null); }} title="Cancel delete" className={`flex-1 py-4 rounded-2xl font-black uppercase text-xs tracking-widest ${theme === 'dark' ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>Cancel</button>
+                <button onClick={() => deleteHabit(habitToDelete)} title="Confirm delete" className="flex-1 py-4 rounded-2xl font-black uppercase text-xs tracking-widest bg-rose-500 text-white shadow-lg shadow-rose-500/20">Delete</button>
               </div>
             </motion.div>
           </motion.div>
@@ -3877,9 +3822,9 @@ export default function App() {
 
         {/* --- MANAGE HYBRID MODAL --- */}
         {showManageModal && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[400] flex items-center justify-center bg-black/80 backdrop-blur-md p-4" onClick={() => setShowManageModal(false)}>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[400] flex items-center justify-center bg-black/80 backdrop-blur-md p-4" onClick={closeManageModal}>
             <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} border rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl relative flex flex-col h-[560px]`} onClick={e => e.stopPropagation()}>
-              <button onClick={() => setShowManageModal(false)} title="Close (ESC)" className="absolute -top-4 -right-4 z-10 p-2 rounded-full bg-slate-800 border border-slate-700 text-slate-400 hover:text-rose-500 hover:border-rose-500/50 hover:shadow-[0_0_16px_4px_rgba(239,68,68,0.5)] transition-all duration-200">
+              <button onClick={closeManageModal} title="Close (ESC)" className="absolute -top-4 -right-4 z-10 p-2 rounded-full bg-slate-800 border border-slate-700 text-slate-400 hover:text-rose-500 hover:border-rose-500/50 hover:shadow-[0_0_16px_4px_rgba(239,68,68,0.5)] transition-all duration-200">
                 <XIcon />
               </button>
 
@@ -3962,8 +3907,24 @@ export default function App() {
                       <span>{habitInputError}</span>
                     </p>
                   )}
+                  <input
+                    type="text"
+                    placeholder="Filter habits..."
+                    value={manageSearchQuery}
+                    onChange={(e) => setManageSearchQuery(e.target.value)}
+                    className={`w-full mb-3 px-3.5 py-2 rounded-xl text-xs font-bold focus:outline-none border transition-all ${
+                      theme === 'dark'
+                        ? 'bg-slate-800/60 border-slate-700 focus:border-emerald-500 text-white placeholder:text-slate-500'
+                        : 'bg-slate-50 border-slate-200 focus:border-emerald-500 text-slate-800 placeholder:text-slate-400'
+                    }`}
+                  />
                   <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-2">
-                    {habits.map((habit, index) => (
+                    {(() => {
+                      const filteredManageHabits = habits.filter(h =>
+                        !manageSearchQuery.trim() || h.toLowerCase().includes(manageSearchQuery.trim().toLowerCase())
+                      );
+                      const isSearching = Boolean(manageSearchQuery.trim());
+                      return filteredManageHabits.map((habit, index) => (
                       <div key={habit} className={`p-3 rounded-2xl border flex items-center justify-between transition-colors ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
                         <div className="flex items-center gap-3 flex-1 min-w-0 mr-2">
                           <span className={`text-xs font-black w-5 text-center shrink-0 ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>{index + 1}</span>
@@ -4011,9 +3972,22 @@ export default function App() {
                             )}
                           </button>
 
+                          {/* ARCHIVE / RESTORE BUTTON */}
+                          <button
+                            onClick={() => toggleArchiveHabit(habit)}
+                            className={`p-1.5 rounded-lg transition-all ${
+                              archivedHabits.includes(habit)
+                                ? 'text-emerald-500 hover:bg-emerald-500/10'
+                                : (theme === 'dark' ? 'hover:bg-slate-700 hover:text-amber-400 text-slate-400' : 'hover:bg-slate-200 hover:text-amber-600 text-slate-500')
+                            }`}
+                            title={archivedHabits.includes(habit) ? 'Restore Habit' : 'Archive Habit'}
+                          >
+                            <ArchiveIcon />
+                          </button>
+
                           {/* DELETE BUTTON */}
                           <button
-                            onClick={() => { setTempHabitName(habit); setShowDeleteConfirm(true); }}
+                            onClick={() => { setHabitToDelete(habit); setShowDeleteConfirm(true); }}
                             className={`p-1.5 rounded-lg transition-all ${theme === 'dark' ? 'hover:bg-slate-700 hover:text-rose-400 text-slate-400' : 'hover:bg-slate-200 hover:text-rose-600 text-slate-500'}`}
                             title="Delete Habit"
                           >
@@ -4025,15 +3999,15 @@ export default function App() {
                           {/* UP BUTTON */}
                           <button
                             onClick={() => {
-                              if (index === 0) return;
+                              if (isSearching || index === 0) return;
                               const newHabits = [...habits];
                               [newHabits[index - 1], newHabits[index]] = [newHabits[index], newHabits[index - 1]];
                               setHabits(newHabits);
                               save(trackerData, newHabits, habitConfigs);
                             }}
-                            disabled={index === 0}
+                            disabled={isSearching || index === 0}
                             title="Move habit up"
-                            className={`p-1.5 rounded-lg transition-all ${index === 0 ? 'opacity-30 cursor-not-allowed' : (theme === 'dark' ? 'hover:bg-slate-700 hover:text-emerald-400' : 'hover:bg-slate-200 hover:text-emerald-600')} ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}
+                            className={`p-1.5 rounded-lg transition-all ${(isSearching || index === 0) ? 'opacity-30 cursor-not-allowed' : (theme === 'dark' ? 'hover:bg-slate-700 hover:text-emerald-400' : 'hover:bg-slate-200 hover:text-emerald-600')} ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}
                           >
                             <ChevronUpIcon />
                           </button>
@@ -4041,21 +4015,22 @@ export default function App() {
                           {/* DOWN BUTTON */}
                           <button
                             onClick={() => {
-                              if (index === habits.length - 1) return;
+                              if (isSearching || index === habits.length - 1) return;
                               const newHabits = [...habits];
                               [newHabits[index + 1], newHabits[index]] = [newHabits[index], newHabits[index + 1]];
                               setHabits(newHabits);
                               save(trackerData, newHabits, habitConfigs);
                             }}
-                            disabled={index === habits.length - 1}
+                            disabled={isSearching || index === habits.length - 1}
                             title="Move habit down"
-                            className={`p-1.5 rounded-lg transition-all ${index === habits.length - 1 ? 'opacity-30 cursor-not-allowed' : (theme === 'dark' ? 'hover:bg-slate-700 hover:text-emerald-400' : 'hover:bg-slate-200 hover:text-emerald-600')} ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}
+                            className={`p-1.5 rounded-lg transition-all ${(isSearching || index === habits.length - 1) ? 'opacity-30 cursor-not-allowed' : (theme === 'dark' ? 'hover:bg-slate-700 hover:text-emerald-400' : 'hover:bg-slate-200 hover:text-emerald-600')} ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}
                           >
                             <ChevronDownIcon />
                           </button>
                         </div>
                       </div>
-                    ))}
+                      ));
+                    })()}
                   </div>
                 </div>
               ) : (
@@ -4332,7 +4307,7 @@ export default function App() {
                   </div>
                   <div>
                     <p className={`text-[10px] font-black uppercase tracking-wider ${theme === 'dark' ? 'text-yellow-400' : 'text-yellow-700'}`}>Win Milestones Roadmap</p>
-                    <p className={`text-xs font-medium leading-relaxed ${getTextMuted()}`}>Every completed habit increases your total win count. Reach Milestone 1 (5 completions) to earn bonus rank XP!</p>
+                    <p className={`text-xs font-medium leading-relaxed ${getTextMuted()}`}>Every completed habit this month increases your win count. Hit Milestone 1 (5 wins) and climb the monthly leaderboard!</p>
                   </div>
                 </div>
               )}
@@ -4593,25 +4568,22 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {!isHydrating && authInitialized && !isAuthenticated && !guestName && (
-        <NamePromptModal />
-      )}
-
-      <NamePromptModal
-        isOpen={showWelcomeModal || showGuestPicker || showAuthModal}
-        onClose={() => {
-          setShowWelcomeModal(false);
-          setShowGuestPicker(false);
-          setShowAuthModal(false);
-        }}
-      />
-
-      <style dangerouslySetInnerHTML={{
-        __html: `
-        .custom-scrollbar::-webkit-scrollbar-track { background: ${theme === 'dark' ? '#0f172a' : '#f1f5f9'}; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: ${theme === 'dark' ? '#334155' : '#cbd5e1'}; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: ${theme === 'dark' ? '#475569' : '#94a3b8'}; }
-      `}} />
+      {(() => {
+        const mustPrompt = !isHydrating && authInitialized && !isAuthenticated && !guestName;
+        const modalOpen = mustPrompt || showWelcomeModal || showGuestPicker || showAuthModal;
+        const modalInitialMode = showGuestPicker ? 'guest' : 'home';
+        return (
+          <NamePromptModal
+            isOpen={modalOpen}
+            initialMode={modalInitialMode}
+            onClose={mustPrompt ? undefined : () => {
+              setShowWelcomeModal(false);
+              setShowGuestPicker(false);
+              setShowAuthModal(false);
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }

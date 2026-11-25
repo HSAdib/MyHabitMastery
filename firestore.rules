@@ -3,18 +3,22 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // Each user can only read and write their own document.
-    // Admin (hasanshahriaradib@gmail.com) can access all user documents.
+    // Verified Super Admin can access all user documents.
     match /users/{userId} {
-      allow read, write: if request.auth != null && (request.auth.uid == userId || request.auth.token.email == 'hasanshahriaradib@gmail.com');
+      allow read, write: if request.auth != null && (
+        request.auth.uid == userId ||
+        (request.auth.token.email == 'hasanshahriaradib@gmail.com' && request.auth.token.email_verified == true)
+      );
     }
 
     // Global Settings (Default Habits)
-    // Anyone can read the defaults, but ONLY the Admin can edit/write them.
+    // Anyone can read the defaults, but ONLY the verified Admin can edit/write them.
     match /settings/{document} {
-      allow read: if true; 
-      allow write: if request.auth != null && request.auth.token.email == 'hasanshahriaradib@gmail.com';
+      allow read: if true;
+      allow write: if request.auth != null &&
+        request.auth.token.email == 'hasanshahriaradib@gmail.com' &&
+        request.auth.token.email_verified == true;
     }
 
   }
 }
-

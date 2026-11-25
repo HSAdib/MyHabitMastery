@@ -2,10 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { useHabitStore } from '../store/useHabitStore';
-import { updateProfile, deleteUser, signOut } from 'firebase/auth';
+import { useHabitStore, serializeUser } from '../store/useHabitStore';
+import { updateProfile, deleteUser, signOut, reauthenticateWithPopup } from 'firebase/auth';
 import { doc, deleteDoc } from 'firebase/firestore';
-import { auth, db } from '../firebase.config';
+import { auth, db, googleProvider } from '../firebase.config';
 import { SUPER_ADMIN_EMAIL } from './ProtectedAdminRoute';
 
 const EditIcon = () => (
@@ -76,6 +76,7 @@ export default function HeaderProfile({ totalXP, bestStreak, handleLogin, handle
   const savePartialToIDB = useHabitStore(state => state.savePartialToIDB);
   const setStorePartial = useHabitStore(state => state.setStorePartial);
   const renameGuestAccount = useHabitStore(state => state.renameGuestAccount);
+  const resetLocalSession = useHabitStore(state => state.resetLocalSession);
 
   const activeProfileId = useHabitStore(state => state.activeProfileId || 'main');
   const cloudProfiles = useHabitStore(state => state.cloudProfiles || {});
@@ -145,9 +146,9 @@ export default function HeaderProfile({ totalXP, bestStreak, handleLogin, handle
     if (!tempName.trim()) { setIsEditingName(false); return; }
     const newName = tempName.trim();
     try {
-      if (isAuthenticated && auth.currentUser) {
+      if (isAuthenticated && auth?.currentUser) {
         await updateProfile(auth.currentUser, { displayName: newName });
-        setStorePartial({ user: { ...auth.currentUser, displayName: newName } });
+        setStorePartial({ user: serializeUser(auth.currentUser, { displayName: newName }) });
         if (activeProfileId === 'main') {
           await renameCloudProfile('main', newName);
         }
@@ -189,23 +190,46 @@ export default function HeaderProfile({ totalXP, bestStreak, handleLogin, handle
   };
 
   const handleDeleteAccount = async () => {
-    if (!isAuthenticated || !auth.currentUser) return;
+    if (!isAuthenticated || !auth?.currentUser) return;
     setIsDeleting(true);
     try {
-      await deleteDoc(doc(db, 'users', auth.currentUser.uid));
-      await deleteUser(auth.currentUser);
-      setStorePartial({ user: null, isAuthenticated: false, guestName: '' });
+      const currentUser = auth.currentUser;
+      const lastSignInMs = currentUser.metadata?.lastSignInTime
+        ? new Date(currentUser.metadata.lastSignInTime).getTime()
+        : 0;
+      const isRecentLogin = lastSignInMs > 0 && (Date.now() - lastSignInMs) < 4 * 60 * 1000;
+
+      if (!isRecentLogin) {
+        const isGoogleProvider = currentUser.providerData?.some(p => p.providerId === 'google.com');
+        if (isGoogleProvider) {
+          await reauthenticateWithPopup(currentUser, googleProvider);
+        } else {
+          // Preserve offline data and prompt fresh sign-in BEFORE touching Firestore
+          await savePartialToIDB({});
+          useHabitStore.getState().setSessionExpiredModal(true);
+          setIsDeleteModalOpen(false);
+          return;
+        }
+      }
+
+      await deleteDoc(doc(db, 'users', currentUser.uid));
+      await deleteUser(currentUser);
+      await resetLocalSession();
       setIsDeleteModalOpen(false);
       setIsOpen(false);
       window.location.href = '/';
     } catch (err) {
       console.error('Failed to delete account:', err);
-      if (err.code === 'auth/requires-recent-login') {
+      if (
+        err.code === 'auth/requires-recent-login' ||
+        err.code === 'auth/popup-closed-by-user' ||
+        err.code === 'auth/cancelled-popup-request'
+      ) {
         await savePartialToIDB({});
         useHabitStore.getState().setSessionExpiredModal(true);
         setIsDeleteModalOpen(false);
       } else {
-        alert('An error occurred. Please try again.');
+        alert('An error occurred while deleting your account. Please try again.');
       }
     } finally {
       setIsDeleting(false);
@@ -608,7 +632,7 @@ export default function HeaderProfile({ totalXP, bestStreak, handleLogin, handle
             >
               <motion.div
                 initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-                className="bg-slate-900 z-[101] border border-slate-700/50 shadow-2xl rounded-2xl w-full max-w-md p-6"
+                className={`${dk ? 'bg-slate-900 border-slate-700/50' : 'bg-white border-slate-200'} z-[101] border shadow-2xl rounded-2xl w-full max-w-md p-6`}
               >
                 <h2 className={`text-xl font-black mb-2 ${dk ? 'text-white' : 'text-slate-900'}`}>Restore Backup</h2>
                 <p className={`text-sm mb-6 ${dk ? 'text-slate-400' : 'text-slate-600'}`}>How would you like to load this data into {activeProfileObj?.name || 'this profile'}?</p>
@@ -651,7 +675,7 @@ export default function HeaderProfile({ totalXP, bestStreak, handleLogin, handle
             >
               <motion.div
                 initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-                className={`bg-slate-900 z-[101] border ${dk ? 'border-red-900/50' : 'border-red-200'} shadow-2xl rounded-2xl w-full max-w-md p-6`}
+                className={`${dk ? 'bg-slate-900 border-red-900/50' : 'bg-white border-red-200'} z-[101] border shadow-2xl rounded-2xl w-full max-w-md p-6`}
               >
                 <h2 className="text-xl font-black mb-2 text-red-500">Delete Account?</h2>
                 <p className={`text-sm mb-6 ${dk ? 'text-slate-400' : 'text-slate-600'}`}>
@@ -679,7 +703,8 @@ export default function HeaderProfile({ totalXP, bestStreak, handleLogin, handle
         </AnimatePresence>,
         document.body
       )}
-      {/* 03/10 Backup Error State Modal */}
+
+      {/* Backup Error State Modal */}
       {typeof document !== 'undefined' && createPortal(
         <AnimatePresence>
           {backupErrorInfo && (
@@ -691,19 +716,19 @@ export default function HeaderProfile({ totalXP, bestStreak, handleLogin, handle
               <motion.div
                 initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
                 onClick={(e) => e.stopPropagation()}
-                className={`bg-slate-900 border ${dk ? 'border-amber-500/40' : 'border-amber-400'} shadow-2xl rounded-2xl w-full max-w-md p-6`}
+                className={`${dk ? 'bg-slate-900 border-amber-500/40' : 'bg-white border-amber-400'} border shadow-2xl rounded-2xl w-full max-w-md p-6`}
               >
-                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mb-4 text-2xl">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-center justify-center mb-4 text-2xl">
                   ⚠️
                 </div>
-                <h2 className="text-lg font-black mb-1.5 text-white">Invalid Backup File</h2>
-                <p className="text-xs text-slate-400 mb-1">
-                  File: <span className="font-mono text-slate-300 font-bold">{backupErrorInfo.fileName}</span>
+                <h2 className={`text-lg font-black mb-1.5 ${dk ? 'text-white' : 'text-slate-900'}`}>Invalid Backup File</h2>
+                <p className={`text-xs mb-1 ${dk ? 'text-slate-400' : 'text-slate-500'}`}>
+                  File: <span className={`font-mono font-bold ${dk ? 'text-slate-300' : 'text-slate-700'}`}>{backupErrorInfo.fileName}</span>
                 </p>
-                <p className="text-xs text-slate-300 mb-3 leading-relaxed">
+                <p className={`text-xs mb-3 leading-relaxed ${dk ? 'text-slate-300' : 'text-slate-600'}`}>
                   {backupErrorInfo.reason}
                 </p>
-                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-400 font-medium mb-6">
+                <div className={`p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-[11px] font-medium mb-6 ${dk ? 'text-emerald-400' : 'text-emerald-700'}`}>
                   🛡️ {backupErrorInfo.reassurance}
                 </div>
                 <div className="flex gap-2.5">
@@ -718,7 +743,7 @@ export default function HeaderProfile({ totalXP, bestStreak, handleLogin, handle
                   </button>
                   <button
                     onClick={() => setBackupErrorInfo(null)}
-                    className="px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider border border-slate-700 text-slate-300 hover:bg-slate-800 transition-colors"
+                    className={`px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider border transition-colors ${dk ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-slate-200 text-slate-600 hover:bg-slate-100'}`}
                   >
                     Cancel
                   </button>

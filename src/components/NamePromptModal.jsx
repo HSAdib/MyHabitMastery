@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase.config';
-import { useHabitStore } from '../store/useHabitStore';
+import { useHabitStore, serializeUser } from '../store/useHabitStore';
 
 const GoogleIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -22,20 +22,23 @@ const SparklesIcon = () => (
 const CloseIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
 );
-const PlusIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-);
 const TrashIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
 );
 const ArrowLeftIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
 );
-const MailIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
-);
 const GuestIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+);
+const EyeIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></svg>
+);
+const EyeOffIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" /><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" /><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" /><line x1="2" x2="22" y1="2" y2="22" /></svg>
+);
+const CheckCircleIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
 );
 
 const PERSONAS = [
@@ -74,24 +77,18 @@ function timeAgo(ms) {
   return `${d}d ago`;
 }
 
-/**
- * NamePromptModal — Unified Auth Modal
- *
- * Supports two modes:
- *  - Uncontrolled (legacy): rendered by App when !guestName && !isAuthenticated → always visible
- *  - Controlled: pass `isOpen` + `onClose` to open/close on demand (e.g. from profile dropdown)
- *
- * Handles: Google SSO, Email/Password Login & Sign Up, Guest profile creation & switching.
- * The `onOpenAuthModal` prop is accepted but ignored (kept for backwards compat with App.jsx).
- */
-export default function NamePromptModal({ isOpen, onClose, initialMode = 'home', onOpenAuthModal: _ignored }) {
+export default function NamePromptModal({ isOpen, onClose, initialMode = 'home' }) {
   const [viewMode, setViewMode] = useState(initialMode); // 'home' | 'login' | 'signup' | 'guest'
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [googleLoading, setGoogleLoading] = useState(false);
   const [emailLoading, setEmailLoading] = useState(false);
+  const [isSlowNetwork, setIsSlowNetwork] = useState(false);
+  const [popupBlocked, setPopupBlocked] = useState(false);
   const [savedAccounts, setSavedAccounts] = useState([]);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [loadingAccountId, setLoadingAccountId] = useState(null);
@@ -106,6 +103,14 @@ export default function NamePromptModal({ isOpen, onClose, initialMode = 'home',
   const controlled = isOpen !== undefined;
   const visible = controlled ? isOpen : true;
   const dk = theme === 'dark';
+  const isBusy = googleLoading || emailLoading;
+
+  const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const isEmailInvalid = email.length > 0 && !isEmailValid;
+  const isPasswordValid = password.length >= 6;
+  const isPasswordInvalid = password.length > 0 && password.length < 6;
+  const isConfirmValid = viewMode === 'signup' && confirmPassword.length > 0 && confirmPassword === password;
+  const isConfirmInvalid = viewMode === 'signup' && confirmPassword.length > 0 && confirmPassword !== password;
 
   const loadAccounts = useCallback(async () => {
     try {
@@ -124,9 +129,23 @@ export default function NamePromptModal({ isOpen, onClose, initialMode = 'home',
       setName('');
       setEmail('');
       setPassword('');
+      setConfirmPassword('');
+      setShowPassword(false);
       setError('');
+      setPopupBlocked(false);
+      setIsSlowNetwork(false);
     }
   }, [visible, initialMode, loadAccounts]);
+
+  useEffect(() => {
+    let timer;
+    if (isBusy) {
+      timer = setTimeout(() => setIsSlowNetwork(true), 3500);
+    } else {
+      setIsSlowNetwork(false);
+    }
+    return () => clearTimeout(timer);
+  }, [isBusy]);
 
   const handleGuestSubmit = async (e) => {
     e.preventDefault();
@@ -143,17 +162,32 @@ export default function NamePromptModal({ isOpen, onClose, initialMode = 'home',
   const handleEmailAuth = async (e) => {
     e.preventDefault();
     setError('');
-    if (!email || !password) {
-      setError('Please fill in all fields.');
+    setPopupBlocked(false);
+
+    if (!auth) {
+      setError('Cloud sync is not configured in this build. Please continue in Guest (Offline) mode.');
       return;
     }
+    if (!isEmailValid) {
+      setError('Please provide a valid email address.');
+      return;
+    }
+    if (!isPasswordValid) {
+      setError('Password should be at least 6 characters.');
+      return;
+    }
+    if (viewMode === 'signup' && password !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+
     setEmailLoading(true);
     try {
       if (viewMode === 'signup') {
         const userCred = await createUserWithEmailAndPassword(auth, email, password);
         if (name.trim()) {
           await updateProfile(userCred.user, { displayName: name.trim() });
-          useHabitStore.getState().setStorePartial({ user: { ...userCred.user, displayName: name.trim() } });
+          useHabitStore.getState().setStorePartial({ user: serializeUser(userCred.user, { displayName: name.trim() }) });
         }
       } else {
         await signInWithEmailAndPassword(auth, email, password);
@@ -165,7 +199,7 @@ export default function NamePromptModal({ isOpen, onClose, initialMode = 'home',
       else if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') setError('Invalid email or password.');
       else if (err.code === 'auth/user-not-found') setError('No account found with this email.');
       else if (err.code === 'auth/weak-password') setError('Password should be at least 6 characters.');
-      else setError(err.message || 'Authentication failed.');
+      else setError('Authentication failed. Please check your credentials or continue offline.');
     } finally {
       setEmailLoading(false);
     }
@@ -190,14 +224,21 @@ export default function NamePromptModal({ isOpen, onClose, initialMode = 'home',
 
   const handleGoogleSignIn = async () => {
     setError('');
+    setPopupBlocked(false);
+    if (!auth) {
+      setError('Cloud sync is not configured in this build. Please continue in Guest (Offline) mode.');
+      return;
+    }
     setGoogleLoading(true);
     try {
       await signInWithPopup(auth, googleProvider);
       if (controlled && onClose) onClose();
     } catch (err) {
       console.error('Google Sign-in failed:', err);
-      if (err.code !== 'auth/popup-closed-by-user') {
-        setError('Google Sign-In failed. Please try again.');
+      if (err.code === 'auth/popup-blocked' || err.code === 'auth/cancelled-popup-request' || err.code === 'auth/unauthorized-domain') {
+        setPopupBlocked(true);
+      } else if (err.code !== 'auth/popup-closed-by-user') {
+        setError('Google Sign-In failed. Please try again or use email below.');
       }
     } finally {
       setGoogleLoading(false);
@@ -206,9 +247,15 @@ export default function NamePromptModal({ isOpen, onClose, initialMode = 'home',
 
   const handlePersonaSelect = (persona) => {
     if (!name.trim()) {
-      setName(persona.label);
+      setName(`${persona.emoji} ${persona.label}`);
     } else {
-      const cleanName = name.replace(/[^\w\s-]/gi, '').trim();
+      let cleanName = name.trim();
+      for (const p of PERSONAS) {
+        if (cleanName.startsWith(p.emoji)) {
+          cleanName = cleanName.slice(p.emoji.length).trim();
+          break;
+        }
+      }
       setName(`${persona.emoji} ${cleanName || persona.label}`);
     }
     setError('');
@@ -240,11 +287,9 @@ export default function NamePromptModal({ isOpen, onClose, initialMode = 'home',
             }`}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Ambient Lighting Orbs */}
             <div className="absolute -top-24 -right-24 w-60 h-60 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
             <div className="absolute -bottom-24 -left-24 w-60 h-60 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
 
-            {/* Close button */}
             {controlled && onClose && (
               <button
                 onClick={onClose}
@@ -257,7 +302,6 @@ export default function NamePromptModal({ isOpen, onClose, initialMode = 'home',
               </button>
             )}
 
-            {/* Modal Header */}
             <div className="text-center mb-6 relative z-10">
               <div className={`w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg transition-transform hover:scale-105 ${
                 dk
@@ -280,10 +324,58 @@ export default function NamePromptModal({ isOpen, onClose, initialMode = 'home',
               </p>
             </div>
 
+            {/* Popup Blocked Recovery Card */}
+            {popupBlocked && (
+              <div className={`relative z-10 mb-4 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs space-y-2`}>
+                <div className="flex items-center gap-1.5 font-black text-amber-400 text-xs uppercase tracking-wide">
+                  <span>🛡️</span>
+                  <span>Popup Window Blocked</span>
+                </div>
+                <p className={`text-[11px] leading-relaxed ${dk ? 'text-slate-300' : 'text-slate-600'}`}>
+                  Your browser blocked the Google Sign-In popup. Use email &amp; password or continue in Guest mode.
+                </p>
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => { setPopupBlocked(false); setViewMode('login'); }}
+                    className="flex-1 py-1.5 px-2 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold text-[10px] uppercase tracking-wider hover:bg-emerald-500/30"
+                  >
+                    Use Email Form
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setPopupBlocked(false); setViewMode('guest'); }}
+                    className={`flex-1 py-1.5 px-2 rounded-lg border font-bold text-[10px] uppercase tracking-wider ${dk ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'}`}
+                  >
+                    Guest Mode
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Slow Network Recovery Banner */}
+            {isSlowNetwork && isBusy && (
+              <div className="relative z-10 mb-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs space-y-2">
+                <div className="flex items-center justify-between text-[11px] font-bold">
+                  <span>Slow network detected...</span>
+                  <span className="animate-pulse">Connecting</span>
+                </div>
+                <div className="w-full bg-amber-900/40 rounded-full h-1.5 overflow-hidden">
+                  <div className="bg-amber-400 h-1.5 rounded-full animate-pulse w-3/4"></div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setGoogleLoading(false); setEmailLoading(false); setViewMode('guest'); }}
+                  className="w-full py-1 text-center font-black text-[10px] uppercase tracking-wider hover:underline cursor-pointer"
+                >
+                  Continue in Offline Guest Mode →
+                </button>
+              </div>
+            )}
+
             {/* VIEW 1: HOME CHOOSER */}
             {viewMode === 'home' && (
               <div className="relative z-10 flex flex-col gap-4">
-                {/* Google Sign In */}
                 <button
                   type="button"
                   onClick={handleGoogleSignIn}
@@ -309,10 +401,9 @@ export default function NamePromptModal({ isOpen, onClose, initialMode = 'home',
                   <ArrowRightIcon/>
                 </button>
 
-                {/* Email Login/Signup buttons */}
                 <div className="grid grid-cols-2 gap-2.5">
                   <button
-                    onClick={() => { setError(''); setViewMode('login'); }}
+                    onClick={() => { setError(''); setPopupBlocked(false); setViewMode('login'); }}
                     className={`py-3 px-4 rounded-xl font-black text-xs uppercase tracking-wider border transition-all ${
                       dk ? 'bg-slate-800/50 border-slate-700 hover:bg-slate-800 text-slate-200' : 'bg-slate-100 border-slate-200 hover:bg-slate-200 text-slate-800'
                     }`}
@@ -320,7 +411,7 @@ export default function NamePromptModal({ isOpen, onClose, initialMode = 'home',
                     Log In
                   </button>
                   <button
-                    onClick={() => { setError(''); setViewMode('signup'); }}
+                    onClick={() => { setError(''); setPopupBlocked(false); setViewMode('signup'); }}
                     className={`py-3 px-4 rounded-xl font-black text-xs uppercase tracking-wider border transition-all ${
                       dk ? 'bg-slate-800/50 border-slate-700 hover:bg-slate-800 text-slate-200' : 'bg-slate-100 border-slate-200 hover:bg-slate-200 text-slate-800'
                     }`}
@@ -335,9 +426,8 @@ export default function NamePromptModal({ isOpen, onClose, initialMode = 'home',
                   </div>
                 )}
 
-                {/* Guest / Saved Accounts entry */}
                 <button
-                  onClick={() => { setError(''); setViewMode('guest'); }}
+                  onClick={() => { setError(''); setPopupBlocked(false); setViewMode('guest'); }}
                   className={`flex items-center justify-center gap-2 w-full py-3.5 rounded-2xl font-black text-xs uppercase tracking-wider border transition-all ${
                     dk ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20' : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
                   }`}
@@ -350,7 +440,7 @@ export default function NamePromptModal({ isOpen, onClose, initialMode = 'home',
 
             {/* VIEW 2 & 3: EMAIL LOGIN OR SIGN UP */}
             {(viewMode === 'login' || viewMode === 'signup') && (
-              <form onSubmit={handleEmailAuth} className="relative z-10 flex flex-col gap-4">
+              <form onSubmit={handleEmailAuth} className="relative z-10 flex flex-col gap-3.5">
                 <div className="flex items-center justify-between mb-1">
                   <button
                     type="button"
@@ -369,10 +459,11 @@ export default function NamePromptModal({ isOpen, onClose, initialMode = 'home',
                     <label className={`block text-xs font-bold mb-1 uppercase tracking-wide ${dk ? 'text-slate-400' : 'text-slate-600'}`}>Your Name / Nickname</label>
                     <input
                       type="text"
+                      required
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       placeholder="e.g. Alex"
-                      className={`w-full px-4 py-3 rounded-xl border text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/50 ${
+                      className={`w-full px-4 py-2.5 rounded-xl border text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/50 ${
                         dk ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500' : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400'
                       }`}
                     />
@@ -381,31 +472,101 @@ export default function NamePromptModal({ isOpen, onClose, initialMode = 'home',
 
                 <div>
                   <label className={`block text-xs font-bold mb-1 uppercase tracking-wide ${dk ? 'text-slate-400' : 'text-slate-600'}`}>Email</label>
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    className={`w-full px-4 py-3 rounded-xl border text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/50 ${
-                      dk ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500' : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400'
-                    }`}
-                  />
+                  <div className="relative">
+                    <input
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className={`w-full pl-4 pr-10 py-2.5 rounded-xl border text-sm font-bold focus:outline-none focus:ring-2 ${
+                        isEmailInvalid
+                          ? 'border-rose-500/80 focus:ring-rose-500/40 bg-rose-500/5'
+                          : isEmailValid
+                            ? 'border-emerald-500/60 focus:ring-emerald-500/40'
+                            : dk
+                              ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500'
+                              : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400'
+                      }`}
+                    />
+                    {isEmailValid && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                        <CheckCircleIcon/>
+                      </div>
+                    )}
+                  </div>
+                  {isEmailInvalid && (
+                    <p className="text-[11px] text-rose-400 mt-1 font-medium">⚠️ Add a valid domain, like name@gmail.com</p>
+                  )}
                 </div>
 
                 <div>
                   <label className={`block text-xs font-bold mb-1 uppercase tracking-wide ${dk ? 'text-slate-400' : 'text-slate-600'}`}>Password</label>
-                  <input
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className={`w-full px-4 py-3 rounded-xl border text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/50 ${
-                      dk ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500' : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400'
-                    }`}
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className={`w-full pl-4 pr-16 py-2.5 rounded-xl border text-sm font-bold focus:outline-none focus:ring-2 ${
+                        isPasswordInvalid
+                          ? 'border-rose-500/80 focus:ring-rose-500/40 bg-rose-500/5'
+                          : isPasswordValid
+                            ? 'border-emerald-500/60 focus:ring-emerald-500/40'
+                            : dk
+                              ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500'
+                              : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400'
+                      }`}
+                    />
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                      {isPasswordValid && <CheckCircleIcon/>}
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(v => !v)}
+                        title={showPassword ? 'Hide password' : 'Show password'}
+                        className={`p-1 rounded-md transition-colors ${dk ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-700' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-200'}`}
+                      >
+                        {showPassword ? <EyeOffIcon/> : <EyeIcon/>}
+                      </button>
+                    </div>
+                  </div>
+                  {isPasswordInvalid && (
+                    <p className="text-[11px] text-rose-400 mt-1 font-medium">
+                      ⚠️ Password needs at least 6 characters ({6 - password.length} more needed)
+                    </p>
+                  )}
                 </div>
+
+                {viewMode === 'signup' && (
+                  <div>
+                    <label className={`block text-xs font-bold mb-1 uppercase tracking-wide ${dk ? 'text-slate-400' : 'text-slate-600'}`}>Confirm Password</label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        required
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className={`w-full pl-4 pr-16 py-2.5 rounded-xl border text-sm font-bold focus:outline-none focus:ring-2 ${
+                          isConfirmInvalid
+                            ? 'border-rose-500/80 focus:ring-rose-500/40 bg-rose-500/5'
+                            : isConfirmValid
+                              ? 'border-emerald-500/60 focus:ring-emerald-500/40'
+                              : dk
+                                ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500'
+                                : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400'
+                        }`}
+                      />
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                        {isConfirmValid && <CheckCircleIcon/>}
+                      </div>
+                    </div>
+                    {isConfirmInvalid && (
+                      <p className="text-[11px] text-rose-400 mt-1 font-medium">⚠️ Passwords do not match yet</p>
+                    )}
+                  </div>
+                )}
 
                 {error && (
                   <div className="text-red-400 text-xs font-bold bg-red-500/10 p-3 rounded-xl border border-red-500/20">
@@ -421,15 +582,14 @@ export default function NamePromptModal({ isOpen, onClose, initialMode = 'home',
                   {emailLoading ? 'Processing...' : viewMode === 'login' ? 'Log In' : 'Sign Up'}
                 </button>
 
-                {/* Toggle between login / signup */}
                 <p className={`text-center text-xs font-semibold ${dk ? 'text-slate-500' : 'text-slate-400'}`}>
                   {viewMode === 'login' ? (
                     <>No account?{' '}
-                      <button type="button" onClick={() => { setError(''); setViewMode('signup'); }} className={`font-black underline underline-offset-2 ${dk ? 'text-emerald-400' : 'text-emerald-600'}`}>Sign up</button>
+                      <button type="button" onClick={() => { setError(''); setConfirmPassword(''); setViewMode('signup'); }} className={`font-black underline underline-offset-2 ${dk ? 'text-emerald-400' : 'text-emerald-600'}`}>Sign up</button>
                     </>
                   ) : (
                     <>Already have an account?{' '}
-                      <button type="button" onClick={() => { setError(''); setViewMode('login'); }} className={`font-black underline underline-offset-2 ${dk ? 'text-emerald-400' : 'text-emerald-600'}`}>Log in</button>
+                      <button type="button" onClick={() => { setError(''); setConfirmPassword(''); setViewMode('login'); }} className={`font-black underline underline-offset-2 ${dk ? 'text-emerald-400' : 'text-emerald-600'}`}>Log in</button>
                     </>
                   )}
                 </p>
@@ -453,7 +613,7 @@ export default function NamePromptModal({ isOpen, onClose, initialMode = 'home',
                 </div>
 
                 {savedAccounts.length > 0 && (
-                  <div className={`rounded-2xl border divide-y overflow-hidden max-h-48 overflow-y-auto ${
+                  <div className={`rounded-2xl border divide-y overflow-hidden max-h-48 overflow-y-auto custom-scrollbar ${
                     dk ? 'border-slate-700/60 divide-slate-800 bg-slate-800/40' : 'border-slate-200 divide-slate-100 bg-slate-50/50'
                   }`}>
                     {savedAccounts.map((acc) => {
@@ -518,7 +678,6 @@ export default function NamePromptModal({ isOpen, onClose, initialMode = 'home',
                     {error && <p className="text-red-400 text-xs font-bold mt-1">{error}</p>}
                   </div>
 
-                  {/* Personas */}
                   <div className="flex flex-wrap gap-1.5">
                     {PERSONAS.map((p) => (
                       <button

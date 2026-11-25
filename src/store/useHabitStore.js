@@ -6,7 +6,7 @@ import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { loadConfettiScript } from '../utils';
 
 let _unsubAuthState = null;
-let _unsubSnapshot  = null;
+let _unsubSnapshot = null;
 let _isApplyingRemote = false;
 
 const UI_ONLY_FIELDS = [
@@ -14,8 +14,7 @@ const UI_ONLY_FIELDS = [
   'isImpersonating', 'impersonatedUserName', 'impersonatedProfileId', 'adminSavedState',
   'currentDate', 'viewingHabitMap', 'heatmapFilter', 'weeklyGraphFilter',
   'dashboardGraphFilter', 'selectedCategory', 'editingHabitName',
-  'editingManageListHabitName', 'importStatus',
-  'actionToast', 'sessionExpiredModal',
+  'importStatus', 'actionToast', 'sessionExpiredModal',
 ];
 
 const PROFILE_SCOPED_KEYS = [
@@ -36,24 +35,60 @@ const DEFAULT_CONFIGS = {
 };
 const DEFAULT_CATEGORIES = ["all", "health", "academic", "dev", "lifestyle"];
 
-const extractProfileSnapshot = (source, fallbackName = 'Main Profile', id = 'main', isMain = false) => ({
-  id,
-  name: source?.name || fallbackName,
-  isMain: Boolean(isMain || id === 'main'),
-  createdAt: source?.createdAt || Date.now(),
-  updatedAt: Date.now(),
-  trackerData: source?.trackerData && typeof source.trackerData === 'object' ? source.trackerData : {},
-  habits: Array.isArray(source?.habits) ? source.habits : DEFAULT_HABITS,
-  habitConfigs: source?.habitConfigs && typeof source.habitConfigs === 'object' ? source.habitConfigs : DEFAULT_CONFIGS,
-  categories: Array.isArray(source?.categories) ? source.categories : DEFAULT_CATEGORIES,
-  archivedHabits: Array.isArray(source?.archivedHabits) ? source.archivedHabits : [],
-  shieldedDates: Array.isArray(source?.shieldedDates) ? source.shieldedDates : [],
-  savedLevel: Number(source?.savedLevel) || 1,
-  manualXPOffset: Number(source?.manualXPOffset) || 0,
-  manualStreakOffset: Number(source?.manualStreakOffset) || 0,
+let _globalDefaults = {
+  habits: DEFAULT_HABITS,
+  habitConfigs: DEFAULT_CONFIGS,
+  categories: DEFAULT_CATEGORIES,
+};
+
+export const serializeUser = (fbUser, overrides = {}) => {
+  if (!fbUser) return null;
+  return {
+    uid: fbUser.uid,
+    email: fbUser.email || '',
+    displayName: overrides.displayName !== undefined ? overrides.displayName : (fbUser.displayName || ''),
+    photoURL: fbUser.photoURL || null,
+    emailVerified: Boolean(fbUser.emailVerified),
+  };
+};
+
+const applyThemeToDOM = (theme) => {
+  if (typeof window === 'undefined') return;
+  const resolved = theme === 'light' ? 'light' : 'dark';
+  const root = window.document.documentElement;
+  root.style.colorScheme = resolved;
+  if (resolved === 'dark') root.classList.add('dark');
+  else root.classList.remove('dark');
+};
+
+const getGlobalDefaultsClone = () => ({
+  habits: [...(_globalDefaults.habits || DEFAULT_HABITS)],
+  habitConfigs: JSON.parse(JSON.stringify(_globalDefaults.habitConfigs || DEFAULT_CONFIGS)),
+  categories: [...(_globalDefaults.categories || DEFAULT_CATEGORIES)],
 });
 
+const extractProfileSnapshot = (source, fallbackName = 'Main Profile', id = 'main', isMain = false) => {
+  const defaults = getGlobalDefaultsClone();
+  return {
+    id,
+    name: source?.name || fallbackName,
+    isMain: Boolean(isMain || id === 'main'),
+    createdAt: source?.createdAt || Date.now(),
+    updatedAt: Date.now(),
+    trackerData: source?.trackerData && typeof source.trackerData === 'object' ? source.trackerData : {},
+    habits: Array.isArray(source?.habits) ? source.habits : defaults.habits,
+    habitConfigs: source?.habitConfigs && typeof source.habitConfigs === 'object' ? source.habitConfigs : defaults.habitConfigs,
+    categories: Array.isArray(source?.categories) ? source.categories : defaults.categories,
+    archivedHabits: Array.isArray(source?.archivedHabits) ? source.archivedHabits : [],
+    shieldedDates: Array.isArray(source?.shieldedDates) ? source.shieldedDates : [],
+    savedLevel: Number(source?.savedLevel) || 1,
+    manualXPOffset: Number(source?.manualXPOffset) || 0,
+    manualStreakOffset: Number(source?.manualStreakOffset) || 0,
+  };
+};
+
 const toPersistedData = (state) => {
+  const defaults = getGlobalDefaultsClone();
   const activeId = state.activeProfileId || 'main';
   const existingProfiles = { ...(state.cloudProfiles || {}) };
   const currentActiveProfile = extractProfileSnapshot(
@@ -64,7 +99,6 @@ const toPersistedData = (state) => {
   );
   existingProfiles[activeId] = currentActiveProfile;
 
-  // Ensure 'main' always exists
   if (!existingProfiles.main) {
     existingProfiles.main = extractProfileSnapshot(
       state,
@@ -76,15 +110,16 @@ const toPersistedData = (state) => {
 
   return {
     trackerData: state.trackerData || {},
-    habits: Array.isArray(state.habits) ? state.habits : DEFAULT_HABITS,
-    habitConfigs: state.habitConfigs || DEFAULT_CONFIGS,
-    categories: Array.isArray(state.categories) ? state.categories : DEFAULT_CATEGORIES,
+    habits: Array.isArray(state.habits) ? state.habits : defaults.habits,
+    habitConfigs: state.habitConfigs || defaults.habitConfigs,
+    categories: Array.isArray(state.categories) ? state.categories : defaults.categories,
     archivedHabits: Array.isArray(state.archivedHabits) ? state.archivedHabits : [],
     shieldedDates: Array.isArray(state.shieldedDates) ? state.shieldedDates : [],
     theme: state.theme || 'dark',
     tableOrientation: state.tableOrientation || 'horizontal',
     textSizes: state.textSizes || { habit: 14, table1: 12, table2: 11, tabSize: 110 },
     isMobileMode: Boolean(state.isMobileMode),
+    mobileModeLocked: Boolean(state.mobileModeLocked),
     savedLevel: Number(state.savedLevel) || 1,
     guestName: state.guestName || '',
     manualXPOffset: Number(state.manualXPOffset) || 0,
@@ -94,6 +129,17 @@ const toPersistedData = (state) => {
     activeProfileId: activeId,
     cloudProfiles: existingProfiles,
   };
+};
+
+const withMainMirroredAtRoot = (persisted, activeProfileId) => {
+  const result = { ...persisted };
+  if (result.cloudProfiles?.main && activeProfileId !== 'main') {
+    const mainSnap = result.cloudProfiles.main;
+    PROFILE_SCOPED_KEYS.forEach((k) => {
+      if (mainSnap[k] !== undefined) result[k] = mainSnap[k];
+    });
+  }
+  return result;
 };
 
 export const useHabitStore = create((setStore, getStore) => ({
@@ -123,6 +169,7 @@ export const useHabitStore = create((setStore, getStore) => ({
   tableOrientation: 'horizontal',
   textSizes: { habit: 14, table1: 12, table2: 11, tabSize: 110 },
   isMobileMode: false,
+  mobileModeLocked: false,
   savedLevel: 1,
   guestName: "",
   manualXPOffset: 0,
@@ -140,9 +187,8 @@ export const useHabitStore = create((setStore, getStore) => ({
   dashboardGraphFilter: 'all',
   selectedCategory: 'all',
   editingHabitName: null,
-  editingManageListHabitName: null,
   importStatus: null,
-  actionToast: null, // { title, subtitle, actionLabel, actionType, type: 'success' | 'info' | 'error' }
+  actionToast: null,
   sessionExpiredModal: false,
 
   triggerActionToast: (toastObj, duration = 5000) => {
@@ -157,11 +203,68 @@ export const useHabitStore = create((setStore, getStore) => ({
   },
   dismissActionToast: () => setStore({ actionToast: null }),
   setSessionExpiredModal: (val) => setStore({ sessionExpiredModal: Boolean(val) }),
-
   setImportStatus: (status) => setStore({ importStatus: status }),
+
+  resetLocalSession: async () => {
+    const current = getStore();
+    const defaults = getGlobalDefaultsClone();
+    const cleanData = {
+      trackerData: {},
+      habits: defaults.habits,
+      habitConfigs: defaults.habitConfigs,
+      categories: defaults.categories,
+      archivedHabits: [],
+      shieldedDates: [],
+      theme: current.theme || 'dark',
+      tableOrientation: current.tableOrientation || 'horizontal',
+      textSizes: current.textSizes || { habit: 14, table1: 12, table2: 11, tabSize: 110 },
+      isMobileMode: Boolean(current.isMobileMode),
+      mobileModeLocked: Boolean(current.mobileModeLocked),
+      savedLevel: 1,
+      guestName: '',
+      manualXPOffset: 0,
+      manualStreakOffset: 0,
+      lastUpdated: 0,
+      currentUid: null,
+      activeProfileId: 'main',
+      cloudProfiles: {
+        main: extractProfileSnapshot({ ...defaults, trackerData: {} }, 'Main Profile', 'main', true),
+      },
+    };
+    setStore({
+      ...cleanData,
+      user: null,
+      isAuthenticated: false,
+      viewingHabitMap: null,
+      selectedCategory: 'all',
+      heatmapFilter: 'all',
+      weeklyGraphFilter: 'all',
+      dashboardGraphFilter: 'all',
+    });
+    await set('adib_habit_data', cleanData);
+  },
 
   init: async () => {
     try {
+      // Always try to refresh global defaults in background/startup when db is available
+      if (db) {
+        try {
+          const globalRef = doc(db, 'settings', 'globalDefaults');
+          const globalSnap = await getDoc(globalRef);
+          if (globalSnap.exists()) {
+            const gd = globalSnap.data();
+            _globalDefaults = {
+              habits: Array.isArray(gd.habits) && gd.habits.length > 0 ? gd.habits : DEFAULT_HABITS,
+              habitConfigs: gd.habitConfigs && typeof gd.habitConfigs === 'object' ? gd.habitConfigs : DEFAULT_CONFIGS,
+              categories: Array.isArray(gd.categories) && gd.categories.length > 0 ? gd.categories : DEFAULT_CATEGORIES,
+            };
+          }
+        } catch (e) {
+          console.warn("Failed to fetch global defaults, using hardcoded.", e);
+        }
+      }
+
+      const defaults = getGlobalDefaultsClone();
       let data = await get('adib_habit_data');
 
       if (!data) {
@@ -169,57 +272,40 @@ export const useHabitStore = create((setStore, getStore) => ({
         if (localData) {
           data = {
             trackerData: JSON.parse(localData || '{}'),
-            habits: JSON.parse(localStorage.getItem('habit_tracker_master_v9_names') || 'null') || DEFAULT_HABITS,
-            habitConfigs: JSON.parse(localStorage.getItem('habit_tracker_master_v9_configs') || 'null') || DEFAULT_CONFIGS,
-            categories: JSON.parse(localStorage.getItem('adib_habit_categories') || 'null') || DEFAULT_CATEGORIES,
+            habits: JSON.parse(localStorage.getItem('habit_tracker_master_v9_names') || 'null') || defaults.habits,
+            habitConfigs: JSON.parse(localStorage.getItem('habit_tracker_master_v9_configs') || 'null') || defaults.habitConfigs,
+            categories: JSON.parse(localStorage.getItem('adib_habit_categories') || 'null') || defaults.categories,
             archivedHabits: JSON.parse(localStorage.getItem('adib_habit_archived') || 'null') || [],
             shieldedDates: [],
             theme: localStorage.getItem('adib_habit_theme') || 'dark',
             tableOrientation: localStorage.getItem('adib_table_orientation') || 'horizontal',
             textSizes: JSON.parse(localStorage.getItem('adib_text_sizes') || 'null') || { habit: 14, table1: 12, table2: 11, tabSize: 110 },
             isMobileMode: JSON.parse(localStorage.getItem('adib_mobile_mode') || 'null') || (window.innerWidth <= 768),
+            mobileModeLocked: Boolean(localStorage.getItem('adib_mobile_mode')),
             savedLevel: parseInt(localStorage.getItem('adib_habit_saved_level')) || 1,
             lastUpdated: Date.now()
           };
           await set('adib_habit_data', data);
         } else {
-          let dynamicHabits = DEFAULT_HABITS;
-          let dynamicConfigs = DEFAULT_CONFIGS;
-          let dynamicCategories = DEFAULT_CATEGORIES;
-
-          if (db) {
-            try {
-              const globalRef = doc(db, 'settings', 'globalDefaults');
-              const globalSnap = await getDoc(globalRef);
-              if (globalSnap.exists()) {
-                const globalData = globalSnap.data();
-                if (globalData.habits) dynamicHabits = globalData.habits;
-                if (globalData.habitConfigs) dynamicConfigs = globalData.habitConfigs;
-                if (globalData.categories) dynamicCategories = globalData.categories;
-              }
-            } catch (e) {
-              console.warn("Failed to fetch global defaults, using hardcoded.", e);
-            }
-          }
-
           data = {
             trackerData: {},
-            habits: dynamicHabits,
-            habitConfigs: dynamicConfigs,
-            categories: dynamicCategories,
+            habits: defaults.habits,
+            habitConfigs: defaults.habitConfigs,
+            categories: defaults.categories,
             archivedHabits: [],
             shieldedDates: [],
             theme: 'dark',
             tableOrientation: 'horizontal',
             textSizes: { habit: 14, table1: 12, table2: 11, tabSize: 110 },
             isMobileMode: window.innerWidth <= 768,
+            mobileModeLocked: false,
             savedLevel: 1,
             guestName: "",
             manualXPOffset: 0,
             manualStreakOffset: 0,
             activeProfileId: 'main',
             cloudProfiles: {},
-            lastUpdated: Date.now()
+            lastUpdated: 0
           };
         }
       }
@@ -229,12 +315,12 @@ export const useHabitStore = create((setStore, getStore) => ({
       if (data) {
         const parsedDate = data.currentDate ? new Date(data.currentDate) : new Date();
         data.currentDate = Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
-        if (!Array.isArray(data.habits)) data.habits = DEFAULT_HABITS;
+        if (!Array.isArray(data.habits)) data.habits = defaults.habits;
         if (!Array.isArray(data.archivedHabits)) data.archivedHabits = [];
         if (!Array.isArray(data.shieldedDates)) data.shieldedDates = [];
-        if (!Array.isArray(data.categories)) data.categories = DEFAULT_CATEGORIES;
+        if (!Array.isArray(data.categories)) data.categories = defaults.categories;
         if (!data.trackerData || typeof data.trackerData !== 'object') data.trackerData = {};
-        if (!data.habitConfigs || typeof data.habitConfigs !== 'object') data.habitConfigs = DEFAULT_CONFIGS;
+        if (!data.habitConfigs || typeof data.habitConfigs !== 'object') data.habitConfigs = defaults.habitConfigs;
         if (data.guestName === "Guest User") data.guestName = "";
         if (!data.activeProfileId) data.activeProfileId = 'main';
         if (!data.cloudProfiles || typeof data.cloudProfiles !== 'object') {
@@ -262,21 +348,18 @@ export const useHabitStore = create((setStore, getStore) => ({
         }
       }
 
+      const effectiveMobileMode = data.mobileModeLocked ? Boolean(data.isMobileMode) : isMobileDevice;
+
       setStore({
         ...data,
-        isMobileMode: isMobileDevice,
+        isMobileMode: effectiveMobileMode,
+        mobileModeLocked: Boolean(data.mobileModeLocked),
         isHydrating: false
       });
 
-      const root = window.document.documentElement;
-      root.style.colorScheme = data.theme;
-      if (data.theme === 'dark') {
-        root.classList.add('dark');
-      } else {
-        root.classList.remove('dark');
-      }
+      applyThemeToDOM(data.theme || 'dark');
 
-      if (_unsubSnapshot)  { _unsubSnapshot();  _unsubSnapshot  = null; }
+      if (_unsubSnapshot) { _unsubSnapshot(); _unsubSnapshot = null; }
       if (_unsubAuthState) { _unsubAuthState(); _unsubAuthState = null; }
 
       if (!auth || !db) {
@@ -284,17 +367,23 @@ export const useHabitStore = create((setStore, getStore) => ({
         return;
       }
 
-      _unsubAuthState = onAuthStateChanged(auth, async (user) => {
-        if (user) {
-          setStore({ user, isAuthenticated: true, authInitialized: true });
+      _unsubAuthState = onAuthStateChanged(auth, async (fbUser) => {
+        if (_unsubSnapshot) {
+          _unsubSnapshot();
+          _unsubSnapshot = null;
+        }
+
+        if (fbUser) {
+          const safeUser = serializeUser(fbUser);
+          setStore({ user: safeUser, isAuthenticated: true, authInitialized: true });
           try {
-            const userDocRef = doc(db, 'users', user.uid);
+            const userDocRef = doc(db, 'users', fbUser.uid);
             _unsubSnapshot = onSnapshot(userDocRef, async (docSnap) => {
               if (_isApplyingRemote) return;
               if (getStore().isImpersonating) return;
 
               const currentStore = getStore();
-              const isFirstSyncForUser = currentStore.currentUid !== user.uid;
+              const isFirstSyncForUser = currentStore.currentUid !== fbUser.uid;
               const localLastUpdated = currentStore.lastUpdated || 0;
               const localTracker = currentStore.trackerData || {};
               const hasLocalData = Object.keys(localTracker).length > 0;
@@ -314,14 +403,13 @@ export const useHabitStore = create((setStore, getStore) => ({
                     });
                     if (!Array.isArray(safeRemote.shieldedDates)) safeRemote.shieldedDates = [];
 
-                    // Hydrate cloudProfiles (1 Main + Sub-Profiles)
                     let profilesMap = safeRemote.cloudProfiles && typeof safeRemote.cloudProfiles === 'object'
                       ? { ...safeRemote.cloudProfiles }
                       : {};
                     if (!profilesMap.main) {
                       profilesMap.main = extractProfileSnapshot(
                         safeRemote,
-                        remoteData.displayName || user.displayName || 'Main Profile',
+                        remoteData.displayName || safeUser.displayName || 'Main Profile',
                         'main',
                         true
                       );
@@ -330,16 +418,17 @@ export const useHabitStore = create((setStore, getStore) => ({
                       ? safeRemote.activeProfileId
                       : 'main';
                     const activeSnap = profilesMap[activeId] || profilesMap.main;
+                    const fbDefaults = getGlobalDefaultsClone();
 
                     const mergedState = {
                       ...safeRemote,
-                      currentUid: user.uid,
+                      currentUid: fbUser.uid,
                       activeProfileId: activeId,
                       cloudProfiles: profilesMap,
                       trackerData: activeSnap.trackerData || {},
-                      habits: Array.isArray(activeSnap.habits) ? activeSnap.habits : DEFAULT_HABITS,
-                      habitConfigs: activeSnap.habitConfigs || DEFAULT_CONFIGS,
-                      categories: Array.isArray(activeSnap.categories) ? activeSnap.categories : DEFAULT_CATEGORIES,
+                      habits: Array.isArray(activeSnap.habits) ? activeSnap.habits : fbDefaults.habits,
+                      habitConfigs: activeSnap.habitConfigs || fbDefaults.habitConfigs,
+                      categories: Array.isArray(activeSnap.categories) ? activeSnap.categories : fbDefaults.categories,
                       archivedHabits: Array.isArray(activeSnap.archivedHabits) ? activeSnap.archivedHabits : [],
                       shieldedDates: Array.isArray(activeSnap.shieldedDates) ? activeSnap.shieldedDates : [],
                       savedLevel: Number(activeSnap.savedLevel) || 1,
@@ -348,23 +437,65 @@ export const useHabitStore = create((setStore, getStore) => ({
                     };
 
                     setStore(mergedState);
+                    if (mergedState.theme) applyThemeToDOM(mergedState.theme);
                     await set('adib_habit_data', toPersistedData(getStore()));
                   } finally {
                     _isApplyingRemote = false;
                   }
                 } else if (localLastUpdated > remoteLastUpdated) {
-                  const localPersisted = { ...toPersistedData(getStore()), currentUid: user.uid };
-                  await setDoc(userDocRef, { ...localPersisted, displayName: user.displayName || currentStore.guestName || '' }, { merge: true });
-                  setStore({ currentUid: user.uid });
+                  const localPersisted = withMainMirroredAtRoot(
+                    { ...toPersistedData(getStore()), currentUid: fbUser.uid },
+                    getStore().activeProfileId
+                  );
+                  await setDoc(
+                    userDocRef,
+                    {
+                      ...localPersisted,
+                      displayName: safeUser.displayName || currentStore.guestName || '',
+                      email: safeUser.email || '',
+                    },
+                    { merge: true }
+                  );
+                  setStore({ currentUid: fbUser.uid });
                 }
               } else {
-                const defaultMainName = user.displayName || currentStore.guestName || 'Main Profile';
+                const defaultMainName = safeUser.displayName || currentStore.guestName || 'Main Profile';
+                // Only migrate local data into a brand-new cloud account if it wasn't from a different UID
+                const canMigrateLocal = !currentStore.currentUid || currentStore.currentUid === fbUser.uid;
+                const seedSource = canMigrateLocal ? currentStore : getGlobalDefaultsClone();
                 const initialProfiles = {
-                  main: extractProfileSnapshot(currentStore, defaultMainName, 'main', true),
+                  main: extractProfileSnapshot(seedSource, defaultMainName, 'main', true),
                 };
-                setStore({ currentUid: user.uid, activeProfileId: 'main', cloudProfiles: initialProfiles });
-                const localPersisted = { ...toPersistedData(getStore()), currentUid: user.uid };
-                await setDoc(userDocRef, { ...localPersisted, displayName: defaultMainName }, { merge: true });
+                setStore({
+                  ...(canMigrateLocal ? {} : {
+                    trackerData: {},
+                    habits: seedSource.habits,
+                    habitConfigs: seedSource.habitConfigs,
+                    categories: seedSource.categories,
+                    archivedHabits: [],
+                    shieldedDates: [],
+                    savedLevel: 1,
+                    manualXPOffset: 0,
+                    manualStreakOffset: 0,
+                  }),
+                  currentUid: fbUser.uid,
+                  activeProfileId: 'main',
+                  cloudProfiles: initialProfiles,
+                  lastUpdated: Date.now(),
+                });
+                const localPersisted = withMainMirroredAtRoot(
+                  { ...toPersistedData(getStore()), currentUid: fbUser.uid },
+                  'main'
+                );
+                await setDoc(
+                  userDocRef,
+                  {
+                    ...localPersisted,
+                    displayName: defaultMainName,
+                    email: safeUser.email || '',
+                  },
+                  { merge: true }
+                );
               }
             }, (syncErr) => {
               _isApplyingRemote = false;
@@ -375,15 +506,11 @@ export const useHabitStore = create((setStore, getStore) => ({
           }
         } else {
           setStore({ user: null, isAuthenticated: false, authInitialized: true });
-          if (_unsubSnapshot) {
-            _unsubSnapshot();
-            _unsubSnapshot = null;
-          }
         }
       });
     } catch (e) {
       console.error("Failed to hydrate store:", e);
-      setStore({ isHydrating: false });
+      setStore({ isHydrating: false, authInitialized: true });
     }
   },
 
@@ -395,13 +522,23 @@ export const useHabitStore = create((setStore, getStore) => ({
     try {
       const now = Math.max(Date.now(), (state.lastUpdated || 0) + 1);
       setStore({ lastUpdated: now });
+      const latest = getStore();
       const targetUid = isImpersonating || user.uid;
-      const targetDisplayName = isImpersonating ? impersonatedUserName : (user.displayName || state.guestName || "");
+      const targetDisplayName = isImpersonating ? impersonatedUserName : (user.displayName || latest.guestName || "");
       const userDocRef = doc(db, 'users', targetUid);
-      const dataToSave = { ...toPersistedData(getStore()), displayName: targetDisplayName, currentUid: targetUid };
+      const persisted = toPersistedData(latest);
+      const dataToSave = withMainMirroredAtRoot(
+        {
+          ...persisted,
+          displayName: targetDisplayName,
+          ...(isImpersonating ? {} : { email: user.email || '' }),
+          currentUid: targetUid,
+        },
+        latest.activeProfileId
+      );
       await setDoc(userDocRef, dataToSave, { merge: true });
       if (!isImpersonating) {
-        await set('adib_habit_data', toPersistedData(getStore()));
+        await set('adib_habit_data', persisted);
       }
     } catch (err) {
       console.warn("Background cloud sync deferred:", err);
@@ -413,8 +550,8 @@ export const useHabitStore = create((setStore, getStore) => ({
     const trimmed = (profileName || '').trim();
     if (!trimmed) return null;
     const state = getStore();
+    const defaults = getGlobalDefaultsClone();
 
-    // Save current active profile snapshot first
     const currentId = state.activeProfileId || 'main';
     const updatedProfiles = { ...(state.cloudProfiles || {}) };
     updatedProfiles[currentId] = extractProfileSnapshot(
@@ -432,9 +569,9 @@ export const useHabitStore = create((setStore, getStore) => ({
       createdAt: Date.now(),
       updatedAt: Date.now(),
       trackerData: {},
-      habits: DEFAULT_HABITS,
-      habitConfigs: DEFAULT_CONFIGS,
-      categories: DEFAULT_CATEGORIES,
+      habits: defaults.habits,
+      habitConfigs: defaults.habitConfigs,
+      categories: defaults.categories,
       archivedHabits: [],
       shieldedDates: [],
       savedLevel: 1,
@@ -486,14 +623,15 @@ export const useHabitStore = create((setStore, getStore) => ({
 
     const target = updatedProfiles[targetProfileId];
     if (!target) return;
+    const defaults = getGlobalDefaultsClone();
 
     await state.saveToIDB({
       activeProfileId: targetProfileId,
       cloudProfiles: updatedProfiles,
       trackerData: target.trackerData || {},
-      habits: Array.isArray(target.habits) ? target.habits : DEFAULT_HABITS,
-      habitConfigs: target.habitConfigs || DEFAULT_CONFIGS,
-      categories: Array.isArray(target.categories) ? target.categories : DEFAULT_CATEGORIES,
+      habits: Array.isArray(target.habits) ? target.habits : defaults.habits,
+      habitConfigs: target.habitConfigs || defaults.habitConfigs,
+      categories: Array.isArray(target.categories) ? target.categories : defaults.categories,
       archivedHabits: Array.isArray(target.archivedHabits) ? target.archivedHabits : [],
       shieldedDates: Array.isArray(target.shieldedDates) ? target.shieldedDates : [],
       savedLevel: Number(target.savedLevel) || 1,
@@ -525,7 +663,7 @@ export const useHabitStore = create((setStore, getStore) => ({
   },
 
   deleteCloudProfile: async (profileId) => {
-    if (!profileId || profileId === 'main') return; // Main profile cannot be deleted
+    if (!profileId || profileId === 'main') return;
     const state = getStore();
     const updatedProfiles = { ...(state.cloudProfiles || {}) };
     delete updatedProfiles[profileId];
@@ -534,15 +672,17 @@ export const useHabitStore = create((setStore, getStore) => ({
       updatedProfiles.main = extractProfileSnapshot(state, 'Main Profile', 'main', true);
     }
 
+    const defaults = getGlobalDefaultsClone();
+
     if (state.activeProfileId === profileId) {
       const mainProf = updatedProfiles.main;
       await state.saveToIDB({
         activeProfileId: 'main',
         cloudProfiles: updatedProfiles,
         trackerData: mainProf.trackerData || {},
-        habits: Array.isArray(mainProf.habits) ? mainProf.habits : DEFAULT_HABITS,
-        habitConfigs: mainProf.habitConfigs || DEFAULT_CONFIGS,
-        categories: Array.isArray(mainProf.categories) ? mainProf.categories : DEFAULT_CATEGORIES,
+        habits: Array.isArray(mainProf.habits) ? mainProf.habits : defaults.habits,
+        habitConfigs: mainProf.habitConfigs || defaults.habitConfigs,
+        categories: Array.isArray(mainProf.categories) ? mainProf.categories : defaults.categories,
         archivedHabits: Array.isArray(mainProf.archivedHabits) ? mainProf.archivedHabits : [],
         shieldedDates: Array.isArray(mainProf.shieldedDates) ? mainProf.shieldedDates : [],
         savedLevel: Number(mainProf.savedLevel) || 1,
@@ -637,7 +777,6 @@ export const useHabitStore = create((setStore, getStore) => ({
     const stateBefore = getStore();
     const now = Math.max(Date.now(), (stateBefore.lastUpdated || 0) + 1);
 
-    // Sync active profile inside cloudProfiles map
     const nextStatePreview = { ...stateBefore, ...updates, lastUpdated: now };
     const activeId = nextStatePreview.activeProfileId || 'main';
     const updatedCloudProfiles = { ...(nextStatePreview.cloudProfiles || {}) };
@@ -651,15 +790,8 @@ export const useHabitStore = create((setStore, getStore) => ({
     setStore({ ...updates, cloudProfiles: updatedCloudProfiles, lastUpdated: now });
 
     const state = getStore();
-    const dataToSave = { ...toPersistedData(state), lastUpdated: now };
-
-    // Also mirror the 'main' profile at root document fields so root stats always stay consistent
-    if (dataToSave.cloudProfiles?.main && state.activeProfileId !== 'main') {
-      const mainSnap = dataToSave.cloudProfiles.main;
-      PROFILE_SCOPED_KEYS.forEach((k) => {
-        if (mainSnap[k] !== undefined) dataToSave[k] = mainSnap[k];
-      });
-    }
+    const persisted = { ...toPersistedData(state), lastUpdated: now };
+    const dataToSave = withMainMirroredAtRoot(persisted, state.activeProfileId);
 
     if (state.isImpersonating) {
       if (db && state.isAuthenticated && state.user) {
@@ -672,7 +804,7 @@ export const useHabitStore = create((setStore, getStore) => ({
       return;
     }
 
-    await set('adib_habit_data', toPersistedData(state));
+    await set('adib_habit_data', persisted);
 
     if (!state.isAuthenticated && state.guestName && state.guestName.trim()) {
       try {
@@ -682,7 +814,7 @@ export const useHabitStore = create((setStore, getStore) => ({
           id: existingIdx >= 0 ? accounts[existingIdx].id : Date.now().toString(),
           name: state.guestName.trim(),
           savedAt: Date.now(),
-          data: toPersistedData(state),
+          data: persisted,
         };
         if (existingIdx >= 0) accounts[existingIdx] = entry;
         else accounts.unshift(entry);
@@ -694,7 +826,15 @@ export const useHabitStore = create((setStore, getStore) => ({
 
     if (db && state.isAuthenticated && state.user) {
       try {
-        await setDoc(doc(db, 'users', state.user.uid), { ...dataToSave, displayName: state.user.displayName || state.guestName || "" }, { merge: true });
+        await setDoc(
+          doc(db, 'users', state.user.uid),
+          {
+            ...dataToSave,
+            displayName: state.user.displayName || state.guestName || "",
+            email: state.user.email || "",
+          },
+          { merge: true }
+        );
       } catch (err) {
         console.error("Background sync failed:", err);
       }
@@ -746,14 +886,8 @@ export const useHabitStore = create((setStore, getStore) => ({
   },
 
   setTheme: async (theme) => {
+    applyThemeToDOM(theme);
     await getStore().saveToIDB({ theme });
-    const root = window.document.documentElement;
-    root.style.colorScheme = theme;
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
-    }
   },
 
   setCurrentDate: (date) => setStore({ currentDate: date }),
@@ -765,7 +899,10 @@ export const useHabitStore = create((setStore, getStore) => ({
 
   startImpersonation: (targetUser, targetProfileId = 'main') => {
     const state = getStore();
-    const adminStateBackup = {
+    const defaults = getGlobalDefaultsClone();
+
+    // Preserve original admin state if already impersonating another user
+    const adminStateBackup = state.adminSavedState || {
       trackerData: state.trackerData,
       habits: state.habits,
       habitConfigs: state.habitConfigs,
@@ -778,6 +915,7 @@ export const useHabitStore = create((setStore, getStore) => ({
       tableOrientation: state.tableOrientation,
       textSizes: state.textSizes,
       isMobileMode: state.isMobileMode,
+      mobileModeLocked: state.mobileModeLocked,
       savedLevel: state.savedLevel,
       guestName: state.guestName,
       manualXPOffset: state.manualXPOffset,
@@ -794,6 +932,9 @@ export const useHabitStore = create((setStore, getStore) => ({
 
     const chosenId = userProfiles[targetProfileId] ? targetProfileId : 'main';
     const chosenSnap = userProfiles[chosenId];
+    const targetTheme = targetUser.theme || 'dark';
+
+    applyThemeToDOM(targetTheme);
 
     setStore({
       isImpersonating: targetUser.id,
@@ -803,12 +944,12 @@ export const useHabitStore = create((setStore, getStore) => ({
       activeProfileId: chosenId,
       cloudProfiles: userProfiles,
       trackerData: chosenSnap.trackerData || {},
-      habits: chosenSnap.habits || DEFAULT_HABITS,
-      habitConfigs: chosenSnap.habitConfigs || DEFAULT_CONFIGS,
-      categories: chosenSnap.categories || DEFAULT_CATEGORIES,
+      habits: chosenSnap.habits || defaults.habits,
+      habitConfigs: chosenSnap.habitConfigs || defaults.habitConfigs,
+      categories: chosenSnap.categories || defaults.categories,
       archivedHabits: chosenSnap.archivedHabits || [],
       shieldedDates: chosenSnap.shieldedDates || [],
-      theme: targetUser.theme || 'dark',
+      theme: targetTheme,
       tableOrientation: targetUser.tableOrientation || 'horizontal',
       textSizes: targetUser.textSizes || { habit: 14, table1: 12, table2: 11, tabSize: 110 },
       savedLevel: chosenSnap.savedLevel || 1,
@@ -821,6 +962,7 @@ export const useHabitStore = create((setStore, getStore) => ({
   stopImpersonation: () => {
     const state = getStore();
     if (state.adminSavedState) {
+      applyThemeToDOM(state.adminSavedState.theme || 'dark');
       setStore({
         ...state.adminSavedState,
         isImpersonating: null,
@@ -860,21 +1002,23 @@ export const useHabitStore = create((setStore, getStore) => ({
       return;
     }
 
+    const defaults = getGlobalDefaultsClone();
     const newGuestData = {
       trackerData: {},
-      habits: DEFAULT_HABITS,
-      habitConfigs: DEFAULT_CONFIGS,
-      categories: DEFAULT_CATEGORIES,
+      habits: defaults.habits,
+      habitConfigs: defaults.habitConfigs,
+      categories: defaults.categories,
       archivedHabits: [],
       shieldedDates: [],
       activeProfileId: 'main',
       cloudProfiles: {
-        main: extractProfileSnapshot({}, trimmed, 'main', true),
+        main: extractProfileSnapshot({ ...defaults, trackerData: {} }, trimmed, 'main', true),
       },
       theme: current.theme || 'dark',
       tableOrientation: current.tableOrientation || 'horizontal',
       textSizes: current.textSizes || { habit: 14, table1: 12, table2: 11, tabSize: 110 },
       isMobileMode: current.isMobileMode || false,
+      mobileModeLocked: Boolean(current.mobileModeLocked),
       savedLevel: 1,
       guestName: trimmed,
       manualXPOffset: 0,
@@ -950,8 +1094,9 @@ export const useHabitStore = create((setStore, getStore) => ({
     const accounts = (await get('adib_guest_accounts')) || [];
     const account = accounts.find(a => a.id === id);
     if (!account) return;
+    const defaults = getGlobalDefaultsClone();
     const data = { ...account.data };
-    if (!Array.isArray(data.habits)) data.habits = DEFAULT_HABITS;
+    if (!Array.isArray(data.habits)) data.habits = defaults.habits;
     if (!Array.isArray(data.archivedHabits)) data.archivedHabits = [];
     if (!Array.isArray(data.shieldedDates)) data.shieldedDates = [];
     if (!data.trackerData) data.trackerData = {};
@@ -959,13 +1104,24 @@ export const useHabitStore = create((setStore, getStore) => ({
     if (!data.cloudProfiles) {
       data.cloudProfiles = { main: extractProfileSnapshot(data, data.guestName || 'Main Profile', 'main', true) };
     }
+    if (data.theme) applyThemeToDOM(data.theme);
     setStore({ ...data, user: null, isAuthenticated: false, currentUid: null, isHydrating: false });
     await set('adib_habit_data', data);
   },
 
   deleteGuestAccount: async (id) => {
+    const state = getStore();
     const accounts = (await get('adib_guest_accounts')) || [];
+    const target = accounts.find(a => a.id === id);
     await set('adib_guest_accounts', accounts.filter(a => a.id !== id));
+
+    if (
+      target &&
+      !state.isAuthenticated &&
+      state.guestName?.trim().toLowerCase() === target.name?.trim().toLowerCase()
+    ) {
+      await getStore().resetLocalSession();
+    }
   },
 }));
 

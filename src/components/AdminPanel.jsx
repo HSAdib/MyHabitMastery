@@ -98,6 +98,11 @@ export default function AdminPanel() {
   const [editingGlobalHabitCategory, setEditingGlobalHabitCategory] = useState('all');
 
   useEffect(() => {
+    if (!db) {
+      setError('Firebase is not configured (running in local-only mode).');
+      setLoading(false);
+      return;
+    }
     const usersCol = collection(db, 'users');
     const unsubscribe = onSnapshot(usersCol, (snapshot) => {
       const userList = snapshot.docs.map((docSnap) => {
@@ -166,8 +171,9 @@ export default function AdminPanel() {
       if (!q) return true;
       const name = getDisplayName(u).toLowerCase();
       const uid = (u.id || '').toLowerCase();
+      const email = (u.email || '').toLowerCase();
       const profMatch = (u._profilesList || []).some(p => (p.name || '').toLowerCase().includes(q));
-      return name.includes(q) || uid.includes(q) || profMatch;
+      return name.includes(q) || uid.includes(q) || email.includes(q) || profMatch;
     });
 
     list.sort((a, b) => {
@@ -195,12 +201,24 @@ export default function AdminPanel() {
   }, [searchQuery, filteredUsers, userCandidates]);
 
   const handleUpdateName = async (userId) => {
-    if (!tempName.trim()) return;
+    const trimmed = tempName.trim();
+    if (!trimmed) return;
     setIsUpdatingName(true);
     try {
+      const targetUser = users.find(u => u.id === userId);
+      const updatedProfiles = targetUser?.cloudProfiles ? { ...targetUser.cloudProfiles } : null;
+      if (updatedProfiles?.main) {
+        updatedProfiles.main = {
+          ...updatedProfiles.main,
+          name: trimmed,
+          updatedAt: Date.now(),
+        };
+      }
       await updateDoc(doc(db, "users", userId), {
-        displayName: tempName.trim(),
-        guestName: tempName.trim()
+        displayName: trimmed,
+        guestName: trimmed,
+        ...(updatedProfiles ? { cloudProfiles: updatedProfiles } : {}),
+        lastUpdated: Date.now(),
       });
       setEditingUserId(null);
     } catch (err) {
@@ -246,6 +264,7 @@ export default function AdminPanel() {
 
   const handleOpenJsonEditor = (user) => {
     const cleanCopy = { ...user };
+    delete cleanCopy.id;
     delete cleanCopy._profilesList;
     delete cleanCopy._totalUserXP;
     delete cleanCopy._mainXP;
@@ -772,7 +791,18 @@ export default function AdminPanel() {
                       {cat !== 'all' && (
                         <button
                           type="button"
-                          onClick={() => setGlobalCategories(globalCategories.filter(c => c !== cat))}
+                          onClick={() => {
+                            setGlobalCategories(globalCategories.filter(c => c !== cat));
+                            setGlobalConfigs(prev => {
+                              const next = { ...prev };
+                              Object.keys(next).forEach(h => {
+                                if (next[h]?.category === cat) {
+                                  next[h] = { ...next[h], category: 'all' };
+                                }
+                              });
+                              return next;
+                            });
+                          }}
                           className="text-slate-500 hover:text-rose-400"
                         >
                           ×
