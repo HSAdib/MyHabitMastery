@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Analytics } from "@vercel/analytics/react";
 import { motion, AnimatePresence } from 'framer-motion';
-import { signOut } from 'firebase/auth';
+import { isNativePlatform, signOutCrossPlatform } from './platform/nativeAuth';
 import { auth } from './firebase.config';
 import { useHabitStore } from './store/useHabitStore';
 import { getSafeKey, parseLocalDate, loadConfettiScript, solveFluidPath, findClosestSuggestion } from './utils';
@@ -484,7 +484,7 @@ export default function App() {
 
   const handleLogout = async () => {
     try {
-      if (auth) await signOut(auth);
+      if (auth) await signOutCrossPlatform(auth);
       await resetLocalSession();
     } catch (error) {
       console.error('Logout Failed', error);
@@ -1723,7 +1723,7 @@ export default function App() {
 
   return (
     <div className={`min-h-screen ${getContainerBg()} font-sans pb-6 md:pb-20 overflow-x-hidden ${isImpersonating ? 'pt-12' : ''}`}>
-      <Analytics />
+      {!isNativePlatform() && <Analytics />}
 
       {/* 04/10 Offline / Reconnected Banner */}
       <AnimatePresence>

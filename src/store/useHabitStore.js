@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { get, set } from 'idb-keyval';
 import { auth, db } from '../firebase.config';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { onAuthStateChanged } from 'firebase/auth';
+import { signOutCrossPlatform } from '../platform/nativeAuth';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { loadConfettiScript } from '../utils';
 
@@ -352,22 +353,22 @@ export const useHabitStore = create((setStore, getStore) => ({
 
   init: async () => {
     try {
-      // Always try to refresh global defaults in background/startup when db is available
+      // Refresh global defaults in the background so offline/flaky networks never delay startup
       if (db) {
-        try {
-          const globalRef = doc(db, 'settings', 'globalDefaults');
-          const globalSnap = await getDoc(globalRef);
-          if (globalSnap.exists()) {
-            const gd = globalSnap.data();
-            _globalDefaults = {
-              habits: Array.isArray(gd.habits) && gd.habits.length > 0 ? gd.habits : DEFAULT_HABITS,
-              habitConfigs: gd.habitConfigs && typeof gd.habitConfigs === 'object' ? gd.habitConfigs : DEFAULT_CONFIGS,
-              categories: Array.isArray(gd.categories) && gd.categories.length > 0 ? gd.categories : DEFAULT_CATEGORIES,
-            };
-          }
-        } catch (e) {
-          console.warn("Failed to fetch global defaults, using hardcoded.", e);
-        }
+        getDoc(doc(db, 'settings', 'globalDefaults'))
+          .then((globalSnap) => {
+            if (globalSnap.exists()) {
+              const gd = globalSnap.data();
+              _globalDefaults = {
+                habits: Array.isArray(gd.habits) && gd.habits.length > 0 ? gd.habits : DEFAULT_HABITS,
+                habitConfigs: gd.habitConfigs && typeof gd.habitConfigs === 'object' ? gd.habitConfigs : DEFAULT_CONFIGS,
+                categories: Array.isArray(gd.categories) && gd.categories.length > 0 ? gd.categories : DEFAULT_CATEGORIES,
+              };
+            }
+          })
+          .catch((e) => {
+            console.warn("Failed to fetch global defaults, using hardcoded.", e);
+          });
       }
 
       const defaults = getGlobalDefaultsClone();
@@ -1214,7 +1215,7 @@ export const useHabitStore = create((setStore, getStore) => ({
       await getStore().saveCurrentGuestAccount();
     }
     if (auth?.currentUser) {
-      try { await signOut(auth); } catch (e) { console.warn(e); }
+      try { await signOutCrossPlatform(auth); } catch (e) { console.warn(e); }
     }
 
     const accounts = (await get('adib_guest_accounts')) || [];
@@ -1323,7 +1324,7 @@ export const useHabitStore = create((setStore, getStore) => ({
 
   loadGuestAccount: async (id) => {
     if (auth?.currentUser) {
-      try { await signOut(auth); } catch (e) { console.warn(e); }
+      try { await signOutCrossPlatform(auth); } catch (e) { console.warn(e); }
     }
     const accounts = (await get('adib_guest_accounts')) || [];
     const account = accounts.find(a => a.id === id);

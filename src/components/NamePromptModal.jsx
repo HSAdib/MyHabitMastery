@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase.config';
 import { useHabitStore, serializeUser } from '../store/useHabitStore';
+import { signInWithGoogleCrossPlatform } from '../platform/nativeAuth';
 
 const GoogleIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -231,11 +232,13 @@ export default function NamePromptModal({ isOpen, onClose, initialMode = 'home' 
     }
     setGoogleLoading(true);
     try {
-      await signInWithPopup(auth, googleProvider);
+      await signInWithGoogleCrossPlatform(auth, googleProvider);
       if (controlled && onClose) onClose();
     } catch (err) {
       console.error('Google Sign-in failed:', err);
-      if (err.code === 'auth/popup-blocked' || err.code === 'auth/cancelled-popup-request' || err.code === 'auth/unauthorized-domain') {
+      if (err.code === 'auth/desktop-google-unsupported') {
+        setError('On the Desktop app, please sign in using Email & Password below (Google blocks embedded desktop popups).');
+      } else if (err.code === 'auth/popup-blocked' || err.code === 'auth/cancelled-popup-request' || err.code === 'auth/unauthorized-domain') {
         setPopupBlocked(true);
       } else if (err.code !== 'auth/popup-closed-by-user') {
         setError('Google Sign-In failed. Please try again or use email below.');

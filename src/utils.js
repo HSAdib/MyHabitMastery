@@ -1,3 +1,5 @@
+import confetti from 'canvas-confetti';
+
 export const getSafeKey = (date) => {
   if (!date) return "";
   const y = date.getFullYear();
@@ -13,18 +15,10 @@ export const parseLocalDate = (dateStr) => {
 };
 
 export const loadConfettiScript = (callback) => {
-  if (window.confetti) {
-    callback();
-    return;
+  if (typeof window !== 'undefined' && !window.confetti) {
+    window.confetti = confetti;
   }
-  let script = document.getElementById('canvas-confetti-script');
-  if (!script) {
-    script = document.createElement('script');
-    script.id = 'canvas-confetti-script';
-    script.src = 'https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js';
-    document.head.appendChild(script);
-  }
-  script.addEventListener('load', callback, { once: true });
+  if (typeof callback === 'function') callback();
 };
 
 export const solveFluidPath = (points) => {

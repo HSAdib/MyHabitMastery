@@ -1,0 +1,14 @@
+{
+  "appId": "com.hsadib.myhabitmastery",
+  "appName": "My Habit Mastery",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "FirebaseAuthentication": {
+      "skipNativeAuth": true,
+      "providers": ["google.com"]
+    }
+  }
+}

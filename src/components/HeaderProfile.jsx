@@ -3,10 +3,11 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { useHabitStore, serializeUser } from '../store/useHabitStore';
-import { updateProfile, deleteUser, signOut, reauthenticateWithPopup } from 'firebase/auth';
+import { updateProfile, deleteUser } from 'firebase/auth';
 import { doc, deleteDoc } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../firebase.config';
 import { SUPER_ADMIN_EMAIL } from './ProtectedAdminRoute';
+import { reauthenticateGoogleCrossPlatform, signOutCrossPlatform } from '../platform/nativeAuth';
 
 const EditIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
@@ -183,7 +184,7 @@ export default function HeaderProfile({ totalXP, bestStreak, handleLogin, handle
     if (handleSwitchAccount) {
       await handleSwitchAccount();
     } else {
-      try { if (auth?.currentUser) await signOut(auth); } catch (err) { console.error(err); }
+      try { if (auth?.currentUser) await signOutCrossPlatform(auth); } catch (err) { console.error(err); }
       await resetLocalSession();
     }
   };
@@ -201,7 +202,7 @@ export default function HeaderProfile({ totalXP, bestStreak, handleLogin, handle
       if (!isRecentLogin) {
         const isGoogleProvider = currentUser.providerData?.some(p => p.providerId === 'google.com');
         if (isGoogleProvider) {
-          await reauthenticateWithPopup(currentUser, googleProvider);
+          await reauthenticateGoogleCrossPlatform(currentUser, googleProvider);
         } else {
           // Preserve offline data and prompt fresh sign-in BEFORE touching Firestore
           await savePartialToIDB({});
