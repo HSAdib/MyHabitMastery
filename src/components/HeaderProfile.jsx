@@ -183,9 +183,8 @@ export default function HeaderProfile({ totalXP, bestStreak, handleLogin, handle
     if (handleSwitchAccount) {
       await handleSwitchAccount();
     } else {
-      try { if (auth.currentUser) await signOut(auth); } catch (err) { console.error(err); }
-      setStorePartial({ user: null, isAuthenticated: false, guestName: '' });
-      await savePartialToIDB({ guestName: '' });
+      try { if (auth?.currentUser) await signOut(auth); } catch (err) { console.error(err); }
+      await resetLocalSession();
     }
   };
 
