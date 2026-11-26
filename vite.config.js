@@ -42,6 +42,12 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 3000,
       strictPort: true,
+      watch: {
+        awaitWriteFinish: {
+          stabilityThreshold: 120,
+          pollInterval: 30,
+        },
+      },
     },
   };
 });

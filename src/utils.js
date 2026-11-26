@@ -14,6 +14,28 @@ export const parseLocalDate = (dateStr) => {
   return new Date(y, m - 1, d, 12, 0, 0, 0); // Use noon to prevent DST hours shifting days
 };
 
+/**
+ * Returns true when a habit is currently active (not in archivedHabits) AND
+ * dateKey does not fall inside any historical [from, to) archived range.
+ */
+export const isHabitActiveOnDate = (habit, dateKey, archivedHabits = [], habitConfigs = {}) => {
+  if (archivedHabits.includes(habit)) return false;
+  const ranges = habitConfigs?.[habit]?.archivedRanges;
+  if (!Array.isArray(ranges) || ranges.length === 0) return true;
+  return !ranges.some(r => r && r.from && dateKey >= r.from && (r.to == null || dateKey < r.to));
+};
+
+export const TRASH_RETENTION_DAYS = 30;
+export const TRASH_RETENTION_MS = TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+
+/** Filter out trashed habit entries whose 30-day retention window has elapsed. */
+export const purgeExpiredTrash = (trashedHabits = [], now = Date.now()) => {
+  if (!Array.isArray(trashedHabits)) return [];
+  return trashedHabits.filter(
+    (item) => item && typeof item.name === 'string' && item.name.trim() && (now - (Number(item.deletedAt) || 0)) < TRASH_RETENTION_MS
+  );
+};
+
 export const loadConfettiScript = (callback) => {
   if (typeof window !== 'undefined' && !window.confetti) {
     window.confetti = confetti;

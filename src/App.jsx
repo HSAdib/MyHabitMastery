@@ -6,13 +6,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { isNativePlatform, signOutCrossPlatform } from './platform/nativeAuth';
 import { auth } from './firebase.config';
 import { useHabitStore } from './store/useHabitStore';
-import { getSafeKey, parseLocalDate, loadConfettiScript, solveFluidPath, findClosestSuggestion } from './utils';
+import { getSafeKey, parseLocalDate, loadConfettiScript, solveFluidPath, findClosestSuggestion, isHabitActiveOnDate, TRASH_RETENTION_DAYS, TRASH_RETENTION_MS, purgeExpiredTrash } from './utils';
 import { useNavigate } from 'react-router-dom';
 import HeaderProfile from './components/HeaderProfile';
 import NamePromptModal from './components/NamePromptModal';
 import { SUPER_ADMIN_EMAIL } from './components/ProtectedAdminRoute';
 import AutoFitText from './components/AutoFitText';
 import ActivityHeatmap from './components/ActivityHeatmap';
+import AppLogo from './components/AppLogo';
+import HelpGuideModal from './components/HelpGuideModal';
+import FilterDropdown from './components/FilterDropdown';
+import { TutorialTipCard } from './components/ThanosOnboarding';
 import {
   ResponsiveContainer, AreaChart, BarChart, CartesianGrid,
   XAxis, YAxis, Area, Bar, Tooltip as RechartsTooltip, Cell
@@ -28,8 +32,8 @@ const ShieldIcon = ({ className = '' }) => (
 const RefreshIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M3 21v-5h5" /></svg>
 );
-const ZapIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
+const HeaderFireIcon = ({ className = 'w-6 h-6' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="none" className={className}><g transform="translate(-6.25, 25.73) scale(0.0185, -0.0185)"><path d="M950 1303 c-25 -21 -55 -49 -67 -63 -53 -60 -107 -191 -133 -324 -12 -58 -12 -58 -32 -39 -10 11 -25 37 -32 57 l-13 38 -22 -30 c-39 -55 -82 -159 -98 -238 -13 -66 -14 -92 -5 -158 57 -390 516 -537 773 -248 139 156 152 377 37 607 -59 117 -128 200 -128 153 0 -16 -31 -78 -40 -78 -11 0 -84 109 -119 178 -17 34 -37 88 -44 119 -8 31 -18 58 -23 60 -6 2 -30 -14 -54 -34z m147 -468 c41 -55 86 -122 100 -149 27 -53 40 -141 29 -199 -16 -87 -107 -167 -207 -182 -162 -24 -308 141 -266 301 18 69 86 186 165 285 76 95 64 99 179 -56z" /></g></svg>
 );
 const EditIcon = ({ className = '' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /><path d="m15 5 4 4" /></svg>
@@ -90,7 +94,7 @@ const TableRotateIcon = () => (
   </svg>
 );
 const TextSizeIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 7 4 4 20 4 20 7" /><line x1="9" x2="15" y1="20" y2="20" /><line x1="12" x2="12" y1="4" y2="20" /></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2" /><line x1="12" y1="18" x2="12.01" y2="18" /></svg>
 );
 const ChevronUpIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6" /></svg>
@@ -125,290 +129,6 @@ const AnimatedNumber = ({ value }) => {
 };
 
 // ─── Thanos Snap Disintegration Component ───────────────────────────────────
-// Authentic Avengers: Infinity War disintegration effect:
-// 1. A crumbling disintegration wave sweeps across the element (left to right).
-// 2. Ash, cinder, and dust particles break off along the glowing wave front.
-// 3. Ash particles catch the wind, billowing upward and to the right while fading.
-// 4. Smooth height collapse after disintegration completes so layout transitions cleanly.
-const ThanosDisintegrate = ({ children, shouldDisintegrate, onDone }) => {
-  const containerRef = React.useRef(null);
-  const cardRef = React.useRef(null);
-  const canvasRef = React.useRef(null);
-  const animFrameRef = React.useRef(null);
-  const collapsingRef = React.useRef(false);
-  const [phase, setPhase] = React.useState('idle'); // 'idle' | 'snapping' | 'collapsing' | 'done'
-  const [collapseHeight, setCollapseHeight] = React.useState(null);
-  const [dimensions, setDimensions] = React.useState({ w: 0, h: 0 });
-
-  React.useEffect(() => {
-    if (!shouldDisintegrate || phase !== 'idle') return;
-
-    const el = cardRef.current;
-    if (!el) {
-      if (onDone) onDone();
-      return;
-    }
-
-    const rect = el.getBoundingClientRect();
-    const W = Math.round(rect.width);
-    const H = Math.round(rect.height);
-
-    if (W <= 0 || H <= 0) {
-      if (onDone) onDone();
-      return;
-    }
-
-    // Extra padding around canvas so ash particles can billow upward and right without clipping
-    const PADDING_TOP = 60;
-    const PADDING_RIGHT = 80;
-    const CANVAS_W = W + PADDING_RIGHT;
-    const CANVAS_H = H + PADDING_TOP;
-
-    setDimensions({ w: CANVAS_W, h: CANVAS_H });
-    setCollapseHeight(H);
-    setPhase('snapping');
-
-    const DURATION = 2200; // total cinematic experience
-
-    const startSnapAnimation = (snapshotCanvas) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-
-      canvas.width = CANVAS_W;
-      canvas.height = CANVAS_H;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      // Extract colors from snapshot or use rich ash & ember palette
-      let sampleColors = [
-        'rgba(71, 85, 105, 0.95)',   // slate-600
-        'rgba(51, 65, 85, 0.95)',   // slate-700
-        'rgba(30, 41, 59, 1.0)',    // slate-800
-        'rgba(148, 163, 184, 0.85)', // slate-400
-        'rgba(245, 158, 11, 0.95)',  // amber ember
-        'rgba(251, 191, 36, 0.95)',  // glowing cinder
-        'rgba(16, 185, 129, 0.85)',  // emerald speck
-      ];
-
-      if (snapshotCanvas) {
-        try {
-          const sCtx = snapshotCanvas.getContext('2d');
-          const sW = snapshotCanvas.width;
-          const sH = snapshotCanvas.height;
-          const imgData = sCtx.getImageData(0, 0, Math.min(W, sW), Math.min(H, sH));
-          const data = imgData.data;
-          const extracted = [];
-          for (let i = 0; i < data.length; i += 4 * 120) {
-            if (data[i + 3] > 40) {
-              extracted.push(`rgba(${data[i]},${data[i + 1]},${data[i + 2]},${data[i + 3] / 255})`);
-            }
-          }
-          if (extracted.length > 20) sampleColors = extracted;
-        } catch {
-          // fallback palette preserved
-        }
-      }
-
-      // Generate ash & dust particles along the sweep
-      const PARTICLE_COUNT = 850;
-      const particles = [];
-      for (let i = 0; i < PARTICLE_COUNT; i++) {
-        const originX = Math.random() * W;
-        const originY = Math.random() * H;
-        // Wave sweeps from left to right: wave front reaches x over 0 to 1100ms
-        const waveDelay = (originX / W) * (DURATION * 0.50) + (Math.random() - 0.5) * 160;
-        const color = sampleColors[Math.floor(Math.random() * sampleColors.length)];
-        const size = 1.8 + Math.random() * 4.2;
-
-        // Upward-right drift (like ash caught in the wind)
-        const angle = -Math.PI * 0.28 + (Math.random() - 0.5) * 0.5;
-        const speed = 1.3 + Math.random() * 3.4;
-
-        particles.push({
-          x: originX,
-          y: originY + PADDING_TOP, // offset for top padding
-          vx: Math.cos(angle) * speed + (Math.random() * 0.7),
-          vy: Math.sin(angle) * speed - (0.7 + Math.random() * 1.8),
-          curl: (Math.random() - 0.5) * 0.08,
-          size,
-          color,
-          delay: Math.max(0, waveDelay),
-          life: 700 + Math.random() * 850,
-        });
-      }
-
-      const startTime = performance.now();
-
-      const render = (now) => {
-        const elapsed = now - startTime;
-        ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
-
-        const waveProgress = Math.min(1, elapsed / (DURATION * 0.52));
-        const waveX = waveProgress * (W + 40);
-
-        // Draw remaining solid portion with jagged crumbling edge if snapshot exists
-        if (snapshotCanvas && waveProgress < 1) {
-          ctx.save();
-          ctx.translate(0, PADDING_TOP);
-          ctx.beginPath();
-          ctx.moveTo(waveX, 0);
-          const steps = 18;
-          for (let s = 0; s <= steps; s++) {
-            const py = (H / steps) * s;
-            const jitter = Math.sin(s * 1.9 + elapsed * 0.012) * 14 + Math.cos(s * 2.8) * 8;
-            ctx.lineTo(waveX + jitter, py);
-          }
-          ctx.lineTo(W, H);
-          ctx.lineTo(W, 0);
-          ctx.closePath();
-          ctx.clip();
-          ctx.drawImage(snapshotCanvas, 0, 0, snapshotCanvas.width, snapshotCanvas.height, 0, 0, W, H);
-          ctx.restore();
-
-          // Draw glowing ember disintegration seam
-          ctx.save();
-          ctx.translate(0, PADDING_TOP);
-          ctx.strokeStyle = 'rgba(251, 191, 36, 0.8)';
-          ctx.lineWidth = 3.5;
-          ctx.shadowColor = '#f59e0b';
-          ctx.shadowBlur = 14;
-          ctx.beginPath();
-          for (let s = 0; s <= steps; s++) {
-            const py = (H / steps) * s;
-            const jitter = Math.sin(s * 1.9 + elapsed * 0.012) * 14 + Math.cos(s * 2.8) * 8;
-            if (s === 0) ctx.moveTo(waveX + jitter, py);
-            else ctx.lineTo(waveX + jitter, py);
-          }
-          ctx.stroke();
-          ctx.restore();
-        }
-
-        // Fast batch rendering of ash particles
-        for (let i = 0; i < particles.length; i++) {
-          const p = particles[i];
-          if (elapsed < p.delay) continue;
-
-          const age = elapsed - p.delay;
-          if (age > p.life) continue;
-
-          const prog = age / p.life;
-          const alpha = (1 - prog) * (1 - Math.pow(prog, 1.8));
-
-          p.vx += p.curl;
-          p.vy -= 0.03; // thermal lift upward
-          p.x += p.vx;
-          p.y += p.vy;
-
-          ctx.globalAlpha = Math.max(0, alpha);
-          ctx.fillStyle = p.color;
-          const s = p.size * (1 - prog * 0.45);
-          ctx.fillRect(p.x, p.y, s, s);
-        }
-
-        // Trigger smooth height & margin collapse as the wave finishes so the space slides closed naturally
-        if (elapsed > DURATION * 0.48 && !collapsingRef.current) {
-          collapsingRef.current = true;
-          setPhase('collapsing');
-        }
-
-        if (elapsed < DURATION) {
-          animFrameRef.current = requestAnimationFrame(render);
-        } else {
-          setPhase('done');
-          if (onDone) onDone();
-        }
-      };
-
-      animFrameRef.current = requestAnimationFrame(render);
-    };
-
-    // Load html2canvas with fail-safe timeout
-    let started = false;
-    const fallbackTimer = setTimeout(() => {
-      if (!started) {
-        started = true;
-        startSnapAnimation(null);
-      }
-    }, 350);
-
-    import('html2canvas')
-      .then(({ default: html2canvas }) => {
-        return html2canvas(el, {
-          backgroundColor: null,
-          scale: Math.min(window.devicePixelRatio || 1, 2),
-          useCORS: true,
-          logging: false,
-        });
-      })
-      .then(snap => {
-        if (!started) {
-          started = true;
-          clearTimeout(fallbackTimer);
-          startSnapAnimation(snap);
-        }
-      })
-      .catch(() => {
-        if (!started) {
-          started = true;
-          clearTimeout(fallbackTimer);
-          startSnapAnimation(null);
-        }
-      });
-
-    return () => {
-      clearTimeout(fallbackTimer);
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shouldDisintegrate]);
-
-  if (phase === 'done') return null;
-
-  return (
-    <div
-      ref={containerRef}
-      style={{
-        position: 'relative',
-        overflow: phase === 'collapsing' ? 'hidden' : 'visible',
-        height: phase === 'collapsing' ? 0 : (collapseHeight !== null ? `${collapseHeight}px` : 'auto'),
-        opacity: phase === 'collapsing' ? 0 : 1,
-        marginBottom: phase === 'collapsing' ? 0 : '2rem',
-        transition: phase === 'collapsing' ? 'height 650ms cubic-bezier(0.4, 0, 0.2, 1), margin-bottom 650ms cubic-bezier(0.4, 0, 0.2, 1), opacity 650ms ease' : 'none',
-      }}
-    >
-      {/* Real element - completely hidden during snapping & collapsing so it NEVER flashes back */}
-      <div
-        ref={cardRef}
-        style={{
-          visibility: phase === 'idle' ? 'visible' : 'hidden',
-          display: phase === 'collapsing' ? 'none' : 'block',
-        }}
-      >
-        {children}
-      </div>
-
-      {/* Disintegration Canvas - remains active and visible across snapping AND collapsing */}
-      {phase !== 'idle' && (
-        <canvas
-          ref={canvasRef}
-          width={dimensions.w}
-          height={dimensions.h}
-          style={{
-            position: 'absolute',
-            top: -60, // matches PADDING_TOP so particles float above the card naturally
-            left: 0,
-            width: dimensions.w ? `${dimensions.w}px` : '100%',
-            height: dimensions.h ? `${dimensions.h}px` : '100%',
-            pointerEvents: 'none',
-            zIndex: 40,
-          }}
-        />
-      )}
-    </div>
-  );
-};
-// ────────────────────────────────────────────────────────────────────────────
-
 // Animation Variants
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -427,6 +147,8 @@ export default function App() {
   const habitConfigs = useHabitStore(state => state.habitConfigs);
   const categories = useHabitStore(state => state.categories);
   const archivedHabits = useHabitStore(state => state.archivedHabits);
+  const trashedHabits = useHabitStore(state => state.trashedHabits || []);
+  const activeTrashedHabits = useMemo(() => purgeExpiredTrash(trashedHabits), [trashedHabits]);
   const theme = useHabitStore(state => state.theme);
   const tableOrientation = useHabitStore(state => state.tableOrientation);
   const textSizes = useHabitStore(state => state.textSizes);
@@ -491,14 +213,54 @@ export default function App() {
     }
   };
 
-  // Welcome card status: 'pending' | 'visible' | 'snapping' | 'gone'
-  const [welcomeCardStatus, setWelcomeCardStatus] = useState(() => {
+  // Per-account tutorial tip state — each tip stays visible until user clicks Dismiss (triggers Thanos Snap)
+  const accountTipKey = user?.uid
+    ? `uid:${user.uid}:${activeProfileId}`
+    : (guestName ? `guest:${guestName}` : 'anon');
+  const readTipsForAccount = (key) => {
     try {
-      return localStorage.getItem('adib_dismissed_welcome') === 'true' ? 'gone' : 'pending';
+      const raw = localStorage.getItem(`hm_tips_${key}`);
+      return raw ? JSON.parse(raw) : {};
     } catch {
-      return 'pending';
+      return {};
     }
-  });
+  };
+  const [dismissedTips, setDismissedTips] = useState(() => readTipsForAccount(accountTipKey));
+  const [snappingTips, setSnappingTips] = useState({});
+
+  useEffect(() => {
+    setDismissedTips(readTipsForAccount(accountTipKey));
+    setSnappingTips({});
+  }, [accountTipKey]);
+
+  const triggerTipSnap = useCallback((tipId) => {
+    setSnappingTips(prev => ({ ...prev, [tipId]: true }));
+  }, []);
+
+  const finishTipSnap = useCallback((tipId) => {
+    setDismissedTips(prev => {
+      const next = { ...prev, [tipId]: true };
+      try { localStorage.setItem(`hm_tips_${accountTipKey}`, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+    setSnappingTips(prev => {
+      const next = { ...prev };
+      delete next[tipId];
+      return next;
+    });
+  }, [accountTipKey]);
+
+  const resetAllTutorials = useCallback(() => {
+    try { localStorage.removeItem(`hm_tips_${accountTipKey}`); } catch { /* ignore */ }
+    setDismissedTips({});
+    setSnappingTips({});
+    setShowHelpModal(false);
+    useHabitStore.getState().triggerActionToast({
+      type: 'success',
+      title: 'Tutorials Restored',
+      subtitle: 'All in-app guide cards are back on screen.',
+    }, 3000);
+  }, [accountTipKey]);
   const [editingHabitName, setEditingHabitName] = useState(null);
   const [habitToDelete, setHabitToDelete] = useState(null);
   const [tempHabitName, setTempHabitName] = useState("");
@@ -528,20 +290,16 @@ export default function App() {
   const todayJournalCardRef = useRef(null);
   const journalListContainerRef = useRef(null);
   const [showInsightsModal, setShowInsightsModal] = useState(false);
+  const [showShieldModal, setShowShieldModal] = useState(false);
   const [showWeeklyModal, setShowWeeklyModal] = useState(false);
   const [showMonthlyGraphModal, setShowMonthlyGraphModal] = useState(false);
   const [showArchiveModal, setShowArchiveModal] = useState(false);
+  const [archiveModalTab, setArchiveModalTab] = useState('archive'); // 'archive' | 'trash'
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
   const [manageModalTab, setManageModalTab] = useState('categories');
-  const [seenManageTip, setSeenManageTip] = useState(() => {
-    try {
-      return !!localStorage.getItem('adib_seen_manage_tip');
-    } catch {
-      return false;
-    }
-  });
   const [showTextSizeModal, setShowTextSizeModal] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
   const [showLevelUpModal, setShowLevelUpModal] = useState(false);
   const [showLevelDetailsModal, setShowLevelDetailsModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -549,6 +307,17 @@ export default function App() {
   const [editingCat, setEditingCat] = useState(null);
   const [newCatInput, setNewCatInput] = useState("");
   const [newHabitInput, setNewHabitInput] = useState("");
+  const [assigningCategory, setAssigningCategory] = useState(null);
+  const [isManagingCategories, setIsManagingCategories] = useState(false);
+  const [isAddingQuickCat, setIsAddingQuickCat] = useState(false);
+  const [quickCatInput, setQuickCatInput] = useState("");
+  const [inlineHabitInput, setInlineHabitInput] = useState("");
+  const [inlineHabitError, setInlineHabitError] = useState("");
+  const [showQuickAddHabitModal, setShowQuickAddHabitModal] = useState(false);
+  const [quickHabitDraft, setQuickHabitDraft] = useState({ name: '', category: 'all', steps: 1, priority: 1 });
+  const [quickHabitError, setQuickHabitError] = useState("");
+  const [isAddingModalCat, setIsAddingModalCat] = useState(false);
+  const [modalNewCatInput, setModalNewCatInput] = useState("");
   const [activeSlider, setActiveSlider] = useState(null);
   const [isEditingTabName, setIsEditingTabName] = useState(false);
   const [tableHeight, setTableHeight] = useState(484);
@@ -670,58 +439,150 @@ export default function App() {
     const newCats = categories.map(c => c === oldName ? formattedName : c);
     const newConfigs = { ...habitConfigs };
     Object.keys(newConfigs).forEach(h => {
-      if (newConfigs[h].category === oldName) {
+      if (newConfigs[h]?.category === oldName) {
         newConfigs[h] = { ...newConfigs[h], category: formattedName };
       }
     });
     savePartialToIDB({ categories: newCats, habitConfigs: newConfigs });
 
     if (selectedCategory === oldName) setSelectedCategory(formattedName);
+    if (assigningCategory === oldName) setAssigningCategory(formattedName);
     setEditingCat(null);
   };
 
-  const handleManualAddCategory = () => {
-    const name = newCatInput.toLowerCase().trim();
-    if (!name) return;
-    if (categories.includes(name)) {
-      setCatInputError(`The category "${name}" already exists.`);
-      return;
+  /** Switch dashboard category filter cleanly and collapse stale inline editors. */
+  const selectDashboardCategory = (cat) => {
+    setSelectedCategory(cat);
+    if (assigningCategory && assigningCategory !== cat) {
+      setAssigningCategory(null);
     }
-    setCatInputError('');
-    const newCats = [...categories, name];
-    setCategories(newCats);
-    setNewCatInput("");
-    triggerActionToast({
-      type: 'success',
-      title: '📁 Category Created!',
-      subtitle: `Category "${name}" created successfully.`,
-    }, 3000);
+    if (inlineHabitError) setInlineHabitError('');
   };
 
-  const handleAddHabitFromInput = () => {
-    const name = newHabitInput.trim();
-    if (!name) return;
+  /** Create and persist a category by name, returning the normalized name on success. */
+  const createCategoryByName = (rawName, onError) => {
+    const name = rawName.toLowerCase().trim();
+    if (!name) return null;
+    if (categories.includes(name)) {
+      if (onError) onError(`The category "${name}" already exists.`);
+      return null;
+    }
+    const newCats = [...categories, name];
+    setCategories(newCats);
+    triggerActionToast({
+      type: 'success',
+      title: 'Category Created',
+      subtitle: `Category "${name}" added.`,
+    }, 2600);
+    return name;
+  };
+
+  const handleManualAddCategory = () => {
+    const created = createCategoryByName(newCatInput, setCatInputError);
+    if (!created) return;
+    setCatInputError('');
+    setNewCatInput("");
+  };
+
+  /** Toggle whether an active habit belongs to a target category without closing multi-assign. */
+  const toggleHabitCategoryMembership = (habit, targetCategory) => {
+    const isMember = habitConfigs[habit]?.category === targetCategory;
+    const nextCategory = isMember ? 'all' : targetCategory;
+    const newConfigs = {
+      ...habitConfigs,
+      [habit]: { ...(habitConfigs[habit] || { steps: 1 }), category: nextCategory }
+    };
+    setHabitConfigs(newConfigs);
+    save(trackerData, habits, newConfigs);
+    setAssigningCategory(targetCategory);
+  };
+
+  /** Create a habit in the target category with optional steps/priority and duplicate checks. */
+  const createHabitInCategory = (rawName, targetCategory, onError, options = {}) => {
+    const name = rawName.trim();
+    if (!name) return false;
     if (habits.some(h => h.toLowerCase() === name.toLowerCase())) {
-      setHabitInputError(`A habit named "${name}" already exists. Try a distinct name.`);
-      return;
+      if (onError) onError(`A habit named "${name}" already exists. Try a distinct name.`);
+      return false;
     }
     if (archivedHabits.some(h => h.toLowerCase() === name.toLowerCase())) {
-      setHabitInputError(`A habit named "${name}" is archived. Please unarchive it below.`);
-      return;
+      if (onError) onError(`A habit named "${name}" is archived. Unarchive it in Archive.`);
+      return false;
     }
-    setHabitInputError('');
-    const categoryToAssign = selectedCategory === 'all' ? 'all' : selectedCategory;
+    if (activeTrashedHabits.some(t => t.name.toLowerCase() === name.toLowerCase())) {
+      if (onError) onError(`"${name}" is in Trash. Restore it from Trash or pick a different name.`);
+      return false;
+    }
+    if (onError) onError('');
+    const categoryToAssign = targetCategory === 'all' ? 'all' : targetCategory;
+    const steps = Math.max(1, parseInt(options.steps) || 1);
+    const priority = Math.max(1, Math.min(10, parseInt(options.priority) || 1));
     const newHabits = [...habits, name];
-    const newConfigs = { ...habitConfigs, [name]: { steps: 1, category: categoryToAssign } };
+    const newConfigs = {
+      ...habitConfigs,
+      [name]: { steps, ...(priority > 1 ? { priority } : {}), category: categoryToAssign }
+    };
     setHabits(newHabits);
     setHabitConfigs(newConfigs);
     save(trackerData, newHabits, newConfigs);
-    setNewHabitInput("");
     triggerActionToast({
       type: 'success',
-      title: '✨ Habit Added!',
-      subtitle: `"${name}" added to ${categoryToAssign} category.`,
-    }, 3000);
+      title: 'Habit Added',
+      subtitle: `"${name}" added to ${categoryToAssign === 'all' ? 'All Habits' : categoryToAssign}.`,
+    }, 2600);
+    return true;
+  };
+
+  /** Open the sleek Quick-Add Habit modal pre-targeted to a category. */
+  const openQuickAddHabitModal = (defaultCat = selectedCategory) => {
+    setQuickHabitDraft({
+      name: '',
+      category: defaultCat && categories.includes(defaultCat) ? defaultCat : 'all',
+      steps: 1,
+      priority: 1,
+    });
+    setQuickHabitError('');
+    setIsAddingModalCat(false);
+    setModalNewCatInput('');
+    setShowQuickAddHabitModal(true);
+  };
+
+  /** Update goal steps (1–99) for the currently inspected habit and persist. */
+  const updateViewingHabitSteps = (rawVal) => {
+    if (!viewingHabitMap) return;
+    let val = parseInt(rawVal);
+    if (isNaN(val) || val < 1) val = 1;
+    if (val > 99) val = 99;
+    setTempGoalVal(val);
+    const nc = {
+      ...habitConfigs,
+      [viewingHabitMap]: {
+        ...(habitConfigs[viewingHabitMap] || { priority: 1, steps: 1 }),
+        steps: val,
+      },
+    };
+    setHabitConfigs(nc);
+    save(trackerData, habits, nc);
+  };
+
+  /** Update XP priority multiplier (1–10x) for the currently inspected habit and persist. */
+  const updateViewingHabitPriority = (rawVal) => {
+    if (!viewingHabitMap) return;
+    const val = Math.max(1, Math.min(10, parseInt(rawVal) || 1));
+    const nc = {
+      ...habitConfigs,
+      [viewingHabitMap]: {
+        ...(habitConfigs[viewingHabitMap] || { steps: 1 }),
+        priority: val,
+      },
+    };
+    setHabitConfigs(nc);
+    save(trackerData, habits, nc);
+  };
+
+  const handleAddHabitFromInput = () => {
+    if (!createHabitInCategory(newHabitInput, selectedCategory, setHabitInputError)) return;
+    setNewHabitInput("");
   };
 
   useEffect(() => {
@@ -844,6 +705,14 @@ export default function App() {
     }
   }, [viewingHabitMap, habitConfigs]);
 
+  // Auto-purge Trash entries older than 30 days (including all saved records)
+  useEffect(() => {
+    if (isHydrating || trashedHabits.length === 0) return;
+    if (activeTrashedHabits.length !== trashedHabits.length) {
+      savePartialToIDB({ trashedHabits: activeTrashedHabits });
+    }
+  }, [isHydrating, trashedHabits, activeTrashedHabits]);
+
   // Auto-scroll to today (only when month or table orientation changes)
   useEffect(() => {
     const scrollToToday = () => {
@@ -885,13 +754,32 @@ export default function App() {
     return () => window.removeEventListener('resize', handleTableHeight);
   }, [isMobileMode]);
 
-  // Grab-to-scroll on the table container (ignore interactive elements & don't trap vertical wheel scroll)
+  // Grab-to-scroll & Shift+Wheel horizontal scroll on the table container
   useEffect(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
 
+    let wheelRaf = null;
+    let targetScrollLeft = el.scrollLeft;
+
+    const stepSmoothScroll = () => {
+      const diff = targetScrollLeft - el.scrollLeft;
+      if (Math.abs(diff) < 0.5) {
+        el.scrollLeft = targetScrollLeft;
+        wheelRaf = null;
+        return;
+      }
+      el.scrollLeft += diff * 0.22;
+      wheelRaf = requestAnimationFrame(stepSmoothScroll);
+    };
+
     const onMouseDown = (e) => {
-      if (e.target.closest('thead, button, input, select, textarea, a')) return;
+      if (e.button !== 0) return;
+      if (e.target.closest('button, input, select, textarea, a')) return;
+      if (wheelRaf) {
+        cancelAnimationFrame(wheelRaf);
+        wheelRaf = null;
+      }
       isDraggingTable.current = true;
       dragStart.current = { x: e.clientX, y: e.clientY, scrollLeft: el.scrollLeft, scrollTop: el.scrollTop };
       el.style.cursor = 'grabbing';
@@ -905,21 +793,44 @@ export default function App() {
       el.scrollTop = dragStart.current.scrollTop - dy;
     };
     const onMouseUp = () => {
+      if (!isDraggingTable.current) return;
       isDraggingTable.current = false;
       el.style.cursor = 'grab';
       el.style.userSelect = '';
     };
+    const onWheel = (e) => {
+      if (!e.shiftKey) return;
+      const rawDelta = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+      if (rawDelta !== 0 && el.scrollWidth > el.clientWidth) {
+        e.preventDefault();
+        const multiplier = e.deltaMode === 1 ? 32 : 1.35;
+        if (!wheelRaf) targetScrollLeft = el.scrollLeft;
+        const maxScroll = el.scrollWidth - el.clientWidth;
+        targetScrollLeft = Math.max(0, Math.min(maxScroll, targetScrollLeft + rawDelta * multiplier));
+        if (!wheelRaf) {
+          wheelRaf = requestAnimationFrame(stepSmoothScroll);
+        }
+      }
+    };
 
     el.style.cursor = 'grab';
     el.addEventListener('mousedown', onMouseDown);
+    el.addEventListener('wheel', onWheel, { passive: false });
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
+    window.addEventListener('blur', onMouseUp);
     return () => {
+      if (wheelRaf) cancelAnimationFrame(wheelRaf);
+      isDraggingTable.current = false;
+      el.style.cursor = '';
+      el.style.userSelect = '';
       el.removeEventListener('mousedown', onMouseDown);
+      el.removeEventListener('wheel', onWheel);
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
+      window.removeEventListener('blur', onMouseUp);
     };
-  }, [tableOrientation]);
+  }, [tableOrientation, isHydrating, isMobileMode]);
 
   // Global ESC key handler — closes any open modal
   useEffect(() => {
@@ -938,18 +849,23 @@ export default function App() {
       if (showMonthlyGraphModal) { setShowMonthlyGraphModal(false); return; }
       if (showAllNotes) { setShowAllNotes(false); return; }
       if (showInsightsModal) { setShowInsightsModal(false); return; }
+      if (showShieldModal) { setShowShieldModal(false); return; }
       if (showManageModal) { closeManageModal(); return; }
+      if (showQuickAddHabitModal) { setShowQuickAddHabitModal(false); return; }
       if (showTextSizeModal) { setShowTextSizeModal(false); return; }
+      if (showHelpModal) { setShowHelpModal(false); return; }
       if (showArchiveModal) { setShowArchiveModal(false); return; }
       if (showLevelDetailsModal) { setShowLevelDetailsModal(false); return; }
       if (showTrophyDetailsModal) { setShowTrophyDetailsModal(false); return; }
       if (showLevelUpModal) { setShowLevelUpModal(false); return; }
       if (categoryToDelete) { setCategoryToDelete(null); return; }
       if (selectedHeatmapDay) { setSelectedHeatmapDay(null); return; }
+      if (editingCat) { setEditingCat(null); return; }
+      if (isManagingCategories) { setIsManagingCategories(false); return; }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [viewingHabitMap, editingNoteDate, showDeleteConfirm, showWeeklyModal, showMonthlyGraphModal, showAllNotes, showInsightsModal, showManageModal, showTextSizeModal, showArchiveModal, showLevelDetailsModal, showTrophyDetailsModal, showLevelUpModal, categoryToDelete, selectedHeatmapDay, showWelcomeModal, showGuestPicker, showAuthModal]);
+  }, [viewingHabitMap, editingNoteDate, showDeleteConfirm, showWeeklyModal, showMonthlyGraphModal, showAllNotes, showInsightsModal, showShieldModal, showManageModal, showQuickAddHabitModal, showTextSizeModal, showHelpModal, showArchiveModal, showLevelDetailsModal, showTrophyDetailsModal, showLevelUpModal, categoryToDelete, selectedHeatmapDay, editingCat, isManagingCategories, showWelcomeModal, showGuestPicker, showAuthModal]);
 
   // Logic Handlers
   const handleDashboardRename = (oldName) => {
@@ -983,6 +899,14 @@ export default function App() {
         type: 'error',
         title: 'Habit Already Exists',
         subtitle: `A habit named "${newName}" already exists.`,
+      }, 4000);
+      return false;
+    }
+    if (activeTrashedHabits.some(t => t.name.toLowerCase() === newName.toLowerCase())) {
+      triggerActionToast({
+        type: 'error',
+        title: 'Habit Name in Trash',
+        subtitle: `"${newName}" is in Trash. Restore it from Trash or pick a different name.`,
       }, 4000);
       return false;
     }
@@ -1021,25 +945,43 @@ export default function App() {
     return true;
   };
 
+  /** Soft-delete a habit into Trash (retaining config & all date records for 30 days). */
   const deleteHabit = (name) => {
     if (!name) return;
+    const orderIndex = habits.indexOf(name);
+    const wasArchived = archivedHabits.includes(name);
+    const configSnapshot = habitConfigs[name] ? { ...habitConfigs[name] } : { steps: 1 };
+    const records = {};
+
     const newHabits = habits.filter(h => h !== name);
     const newConfigs = { ...habitConfigs };
     delete newConfigs[name];
     const newData = { ...trackerData };
     Object.keys(newData).forEach(k => {
       if (newData[k] && newData[k][name] !== undefined) {
+        records[k] = newData[k][name];
         const dayCopy = { ...newData[k] };
         delete dayCopy[name];
         newData[k] = dayCopy;
       }
     });
     const newArchived = archivedHabits.filter(h => h !== name);
+    const trashEntry = {
+      name,
+      deletedAt: Date.now(),
+      orderIndex: orderIndex >= 0 ? orderIndex : habits.length,
+      wasArchived,
+      config: configSnapshot,
+      records,
+    };
+    const nextTrash = [trashEntry, ...activeTrashedHabits.filter(t => t.name !== name)];
+
     savePartialToIDB({
       habits: newHabits,
       habitConfigs: newConfigs,
       trackerData: newData,
       archivedHabits: newArchived,
+      trashedHabits: nextTrash,
     });
     const st = useHabitStore.getState();
     const filterUpdates = {};
@@ -1051,14 +993,90 @@ export default function App() {
     if (editingHabitName === name) setEditingHabitName(null);
     setHabitToDelete(null);
     setShowDeleteConfirm(false);
+    triggerActionToast({
+      type: 'success',
+      title: 'Moved to Trash',
+      subtitle: `"${name}" stays in Trash for ${TRASH_RETENTION_DAYS} days with all records.`,
+    }, 3500);
+  };
+
+  /** Restore a habit and all its preserved historical records from 30-day Trash. */
+  const restoreHabitFromTrash = (name) => {
+    const entry = activeTrashedHabits.find(t => t.name === name);
+    if (!entry) return;
+    if (habits.some(h => h.toLowerCase() === name.toLowerCase())) {
+      triggerActionToast({
+        type: 'error',
+        title: 'Cannot Restore',
+        subtitle: `An active or archived habit named "${name}" already exists.`,
+      }, 3500);
+      return;
+    }
+
+    const insertAt = Math.max(0, Math.min(Number.isFinite(entry.orderIndex) ? entry.orderIndex : habits.length, habits.length));
+    const newHabits = [...habits];
+    newHabits.splice(insertAt, 0, entry.name);
+
+    const newConfigs = {
+      ...habitConfigs,
+      [entry.name]: entry.config ? { ...entry.config } : { steps: 1 },
+    };
+
+    const newData = { ...trackerData };
+    const savedRecords = entry.records && typeof entry.records === 'object' ? entry.records : {};
+    const recordKeys = Object.keys(savedRecords);
+    recordKeys.forEach((dateKey) => {
+      newData[dateKey] = { ...(newData[dateKey] || {}), [entry.name]: savedRecords[dateKey] };
+    });
+
+    const newArchived = entry.wasArchived && !archivedHabits.includes(entry.name)
+      ? [...archivedHabits, entry.name]
+      : archivedHabits;
+    const nextTrash = activeTrashedHabits.filter(t => t.name !== entry.name);
+
+    savePartialToIDB({
+      habits: newHabits,
+      habitConfigs: newConfigs,
+      trackerData: newData,
+      archivedHabits: newArchived,
+      trashedHabits: nextTrash,
+    });
+
+    triggerActionToast({
+      type: 'success',
+      title: 'Habit Restored',
+      subtitle: `"${entry.name}" restored with ${recordKeys.length} ${recordKeys.length === 1 ? 'record' : 'records'}.`,
+    }, 3500);
   };
 
   const toggleArchiveHabit = (name) => {
+    const todayKey = getSafeKey(new Date());
+    const existingCfg = habitConfigs[name] || { steps: 1 };
+    const existingRanges = Array.isArray(existingCfg.archivedRanges) ? [...existingCfg.archivedRanges] : [];
     let newArchived;
+    let updatedRanges;
+
     if (archivedHabits.includes(name)) {
       newArchived = archivedHabits.filter(h => h !== name);
+      const lastIdx = existingRanges.length - 1;
+      if (lastIdx >= 0 && existingRanges[lastIdx]?.to == null) {
+        if (existingRanges[lastIdx].from === todayKey) {
+          // Archived and restored on the same day: drop the range so today still counts
+          updatedRanges = existingRanges.slice(0, lastIdx);
+        } else {
+          updatedRanges = existingRanges.map((r, i) => (i === lastIdx ? { ...r, to: todayKey } : r));
+        }
+      } else {
+        updatedRanges = existingRanges;
+      }
     } else {
       newArchived = [...archivedHabits, name];
+      const lastIdx = existingRanges.length - 1;
+      if (lastIdx >= 0 && existingRanges[lastIdx]?.to == null) {
+        updatedRanges = existingRanges;
+      } else {
+        updatedRanges = [...existingRanges, { from: todayKey, to: null }];
+      }
       setViewingHabitMap(null);
       const st = useHabitStore.getState();
       const filterUpdates = {};
@@ -1067,8 +1085,13 @@ export default function App() {
       if (st.dashboardGraphFilter === name) filterUpdates.dashboardGraphFilter = 'all';
       if (Object.keys(filterUpdates).length > 0) setStorePartial(filterUpdates);
     }
-    // Single atomic save — setArchivedHabits would fire two writes (setStorePartial + savePartialToIDB)
-    savePartialToIDB({ archivedHabits: newArchived });
+
+    const newConfigs = {
+      ...habitConfigs,
+      [name]: { ...existingCfg, archivedRanges: updatedRanges },
+    };
+    // Single atomic save — persists both archivedHabits and archivedRanges together
+    savePartialToIDB({ archivedHabits: newArchived, habitConfigs: newConfigs });
   };
 
   const saveNote = (dateKey, noteText) => {
@@ -1200,6 +1223,45 @@ export default function App() {
     () => habits.filter(h => !archivedHabits.includes(h)),
     [habits, archivedHabits]
   );
+
+  /** Ordered active habits available for Prev/Next stepping inside the Habit Detail modal. */
+  const modalNavigableHabits = useMemo(() => {
+    const filtered = activeHabitsList.filter(
+      h => selectedCategory === 'all' || habitConfigs[h]?.category === selectedCategory
+    );
+    if (!viewingHabitMap || filtered.includes(viewingHabitMap)) {
+      return filtered;
+    }
+    return activeHabitsList;
+  }, [activeHabitsList, selectedCategory, habitConfigs, viewingHabitMap]);
+
+  /** Step backward (-1) or forward (+1) through active habits while inspecting a habit modal. */
+  const stepViewingHabit = useCallback((direction) => {
+    if (!viewingHabitMap || modalNavigableHabits.length <= 1) return;
+    const idx = modalNavigableHabits.indexOf(viewingHabitMap);
+    if (idx === -1) return;
+    const nextIdx = (idx + direction + modalNavigableHabits.length) % modalNavigableHabits.length;
+    setIsEditingTabName(false);
+    setViewingHabitMap(modalNavigableHabits[nextIdx]);
+  }, [viewingHabitMap, modalNavigableHabits]);
+
+  useEffect(() => {
+    if (!viewingHabitMap || modalNavigableHabits.length <= 1) return;
+    const onArrowNav = (e) => {
+      if (isEditingTabName || showDeleteConfirm) return;
+      const tag = e.target?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea') return;
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        stepViewingHabit(-1);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        stepViewingHabit(1);
+      }
+    };
+    window.addEventListener('keydown', onArrowNav);
+    return () => window.removeEventListener('keydown', onArrowNav);
+  }, [viewingHabitMap, modalNavigableHabits.length, isEditingTabName, showDeleteConfirm, stepViewingHabit]);
 
   const effectiveDashboardFilter = dashboardGraphFilter === 'all' || activeHabitsList.includes(dashboardGraphFilter)
     ? dashboardGraphFilter
@@ -1335,6 +1397,16 @@ export default function App() {
     return stats;
   }, [categories, analytics, habits, habitConfigs, archivedHabits]);
 
+  const categoryCounts = useMemo(() => {
+    const counts = { all: activeHabitsList.length };
+    categories.forEach(cat => {
+      if (cat !== 'all') {
+        counts[cat] = habits.filter(h => habitConfigs[h]?.category === cat && !archivedHabits.includes(h)).length;
+      }
+    });
+    return counts;
+  }, [categories, habits, habitConfigs, archivedHabits, activeHabitsList.length]);
+
   const weeklySummary = useMemo(() => {
     const last7Days = [];
     for (let i = 0; i < 7; i++) {
@@ -1413,17 +1485,37 @@ export default function App() {
     const currentStreaks = {};
     let perfectDaysCount = 0;
     let totalWins = 0;
+    let trackedDaysCount = 0;
 
     habits.forEach(h => { streaks[h] = 0; currentStreaks[h] = 0; });
     const dayStats = [0, 1, 2, 3, 4, 5, 6].map(() => ({ earned: 0, total: 0 }));
 
+    // 30-day & prior 30-day windows + per-habit 30-day completion
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    const todayStr = getSafeKey(today);
+
+    const start30 = new Date(today);
+    start30.setDate(start30.getDate() - 29);
+    const start30Key = getSafeKey(start30);
+
+    const start60 = new Date(today);
+    start60.setDate(start60.getDate() - 59);
+    const start60Key = getSafeKey(start60);
+
+    let recent30Earned = 0;
+    let recent30Total = 0;
+    let prev30Earned = 0;
+    let prev30Total = 0;
+    let activePerfectStreak = 0;
+    let runningPerfectStreak = 0;
+
+    const perHabit30 = {};
+    activeHabitsList.forEach(h => { perHabit30[h] = { earned: 0, total: 0 }; });
+
     const allKeys = Object.keys(trackerData).sort();
     if (allKeys.length > 0) {
       const startDate = parseLocalDate(allKeys[0]);
-      const today = new Date();
-      today.setHours(12, 0, 0, 0);
-      const todayStr = getSafeKey(today);
-
       let cursor = new Date(startDate);
       while (cursor <= today) {
         const dateStr = getSafeKey(cursor);
@@ -1437,14 +1529,26 @@ export default function App() {
         habits.forEach(h => {
           const valRaw = trackerData[dateStr]?.[h] ?? 0;
           const score = typeof valRaw === 'number' ? valRaw : (valRaw ? 100 : 0);
+          const isActive = isHabitActiveOnDate(h, dateStr, archivedHabits, habitConfigs);
 
-          if (!archivedHabits.includes(h)) {
+          if (isActive) {
             activeHabitsForDay++;
             dayScore += score;
-          }
+            dayStats[dayOfWeek].total += 100;
+            dayStats[dayOfWeek].earned += score;
 
-          dayStats[dayOfWeek].total += 100;
-          dayStats[dayOfWeek].earned += score;
+            if (dateStr >= start30Key) {
+              recent30Earned += score;
+              recent30Total += 100;
+              if (perHabit30[h]) {
+                perHabit30[h].earned += score;
+                perHabit30[h].total += 100;
+              }
+            } else if (dateStr >= start60Key) {
+              prev30Earned += score;
+              prev30Total += 100;
+            }
+          }
 
           if (score >= 100) {
             totalWins++;
@@ -1457,51 +1561,162 @@ export default function App() {
           }
         });
 
-        if (activeHabitsForDay > 0 && dayScore === activeHabitsForDay * 100) {
-          perfectDaysCount++;
+        if (activeHabitsForDay > 0) {
+          if (dayScore > 0) trackedDaysCount++;
+          const isPerfect = dayScore >= activeHabitsForDay * 100;
+          if (isPerfect) {
+            perfectDaysCount++;
+            runningPerfectStreak++;
+          } else if (isShielded || isToday) {
+            // Preserve active perfect streak across shielded/today dates
+          } else {
+            runningPerfectStreak = 0;
+          }
         }
 
         cursor.setDate(cursor.getDate() + 1);
       }
+      activePerfectStreak = runningPerfectStreak;
     }
 
     const dayAverages = dayStats.map(d => d.total > 0 ? Math.round((d.earned / d.total) * 100) : 0);
+    const shortDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const bestDayIdx = dayAverages.indexOf(Math.max(...dayAverages, -1));
-    const bestDay = bestDayIdx >= 0 && dayAverages[bestDayIdx] > 0 ? days[bestDayIdx] : 'None yet';
+    const maxDayVal = Math.max(...dayAverages, 0);
+    const bestDayIdx = maxDayVal > 0 ? dayAverages.indexOf(maxDayVal) : -1;
+    const bestDay = bestDayIdx >= 0 ? days[bestDayIdx] : 'None yet';
     const bestDayScore = bestDayIdx >= 0 ? dayAverages[bestDayIdx] : 0;
+
+    // Lowest non-zero or lowest active weekday to spot dip days
+    const nonBestIndices = dayAverages.map((v, i) => ({ v, i })).filter(x => x.i !== bestDayIdx);
+    const hasWeekdayActivity = dayStats.some(d => d.total > 0 && d.earned > 0);
+    const weakEntry = hasWeekdayActivity && nonBestIndices.length > 0
+      ? nonBestIndices.reduce((min, cur) => (cur.v < min.v ? cur : min), nonBestIndices[0])
+      : null;
+    const weakDay = weakEntry ? days[weakEntry.i] : null;
+    const weakDayScore = weakEntry ? weakEntry.v : 0;
+
+    const weekdayBreakdown = shortDays.map((label, idx) => ({
+      label,
+      fullLabel: days[idx],
+      pct: dayAverages[idx],
+      isBest: idx === bestDayIdx,
+      isWeak: weakEntry ? idx === weakEntry.i && dayAverages[idx] < bestDayScore : false,
+    }));
+
+    const consistency30d = recent30Total > 0 ? Math.round((recent30Earned / recent30Total) * 100) : 0;
+    const prev30Pct = prev30Total > 0 ? Math.round((prev30Earned / prev30Total) * 100) : null;
+    const consistencyDelta = prev30Pct !== null ? consistency30d - prev30Pct : null;
+
+    const habit30Rankings = activeHabitsList
+      .map(h => {
+        const s = perHabit30[h];
+        const pct = s && s.total > 0 ? Math.round((s.earned / s.total) * 100) : 0;
+        return { habit: h, pct, currentStreak: currentStreaks[h] || 0, maxStreak: streaks[h] || 0 };
+      })
+      .sort((a, b) => b.pct - a.pct);
+
+    const topHabit30 = habit30Rankings.length > 0 && habit30Rankings[0].pct > 0 ? habit30Rankings[0] : null;
+    const focusHabit30 = habit30Rankings.length > 1 && habit30Rankings[habit30Rankings.length - 1].pct < 75
+      ? habit30Rankings[habit30Rankings.length - 1]
+      : null;
 
     const sortedStreaks = Object.entries(streaks)
       .filter(([h, s]) => s > 0 && !archivedHabits.includes(h))
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 4)
+      .slice(0, 5)
       .map(([h, s]) => ({ habit: h, max: s, current: currentStreaks[h] }));
 
-    return { bestDay, bestDayScore, topStreaks: sortedStreaks, perfectDaysCount, totalWins };
-  }, [trackerData, habits, archivedHabits, shieldedDates]);
+    return {
+      bestDay,
+      bestDayScore,
+      weakDay,
+      weakDayScore,
+      weekdayBreakdown,
+      consistency30d,
+      consistencyDelta,
+      activePerfectStreak,
+      trackedDaysCount,
+      topHabit30,
+      focusHabit30,
+      habit30Rankings,
+      topStreaks: sortedStreaks,
+      perfectDaysCount,
+      totalWins,
+    };
+  }, [trackerData, habits, activeHabitsList, archivedHabits, habitConfigs, shieldedDates]);
 
   // Earn 1 Streak Shield on initial start + 1 per Level gained + 1 every 7 Perfect Days
   const shieldStats = useMemo(() => {
-    const totalEarned = Math.max(1, (xpStats.level - 1) + Math.floor((insightsData?.perfectDaysCount || 0) / 7));
+    const levelShields = Math.max(0, xpStats.level - 1);
+    const perfectDayShields = Math.floor((insightsData?.perfectDaysCount || 0) / 7);
+    const totalEarned = Math.max(1, levelShields + perfectDayShields);
     const usedCount = shieldedDates.length;
     const availableCount = Math.max(0, totalEarned - usedCount);
-    return { totalEarned, usedCount, availableCount };
-  }, [xpStats.level, insightsData?.perfectDaysCount, shieldedDates]);
 
-  // True if ANY habit has been logged at any point — used for empty state
-  const hasAnyData = useMemo(() =>
-    Object.values(trackerData).some(day =>
-      habits.some(h => { const v = day[h]; return typeof v === 'number' ? v > 0 : !!v; })
-    ), [trackerData, habits]);
+    // Reconstruct chronological per-day shield earn history
+    const sortedKeys = Object.keys(trackerData).sort();
+    let runningXP = manualXPOffset || 0;
+    let runningLevel = Math.floor(Math.sqrt(runningXP / 100)) + 1;
+    let runningPerfectDays = 0;
+    const dayMap = {};
 
-  useEffect(() => {
-    if (isHydrating) return;
-    if (welcomeCardStatus === 'pending') {
-      setWelcomeCardStatus(hasAnyData ? 'gone' : 'visible');
-    } else if (hasAnyData && welcomeCardStatus === 'visible') {
-      setWelcomeCardStatus('snapping');
-    }
-  }, [isHydrating, hasAnyData, welcomeCardStatus]);
+    const addEarn = (dateKey, count, reason, type) => {
+      if (count <= 0) return;
+      if (!dayMap[dateKey]) {
+        dayMap[dateKey] = { dateKey, count: 0, reasons: [] };
+      }
+      dayMap[dateKey].count += count;
+      dayMap[dateKey].reasons.push({ count, reason, type });
+    };
+
+    sortedKeys.forEach((dateKey) => {
+      const dayObj = trackerData[dateKey] || {};
+      habits.forEach((habit) => {
+        const raw = dayObj[habit] ?? 0;
+        const val = typeof raw === 'number' ? raw : (raw ? 100 : 0);
+        const priority = habitConfigs[habit]?.priority || 1;
+        runningXP += (val / 100) * 10 * priority;
+      });
+      const newLevel = Math.floor(Math.sqrt(runningXP / 100)) + 1;
+      if (newLevel > runningLevel) {
+        const gained = newLevel - runningLevel;
+        const reason = gained === 1
+          ? `Reached Level ${newLevel}`
+          : `Reached Levels ${runningLevel + 1}–${newLevel}`;
+        addEarn(dateKey, gained, reason, 'level');
+        runningLevel = newLevel;
+      }
+
+      const dayHabits = activeHabitsList.filter(h => isHabitActiveOnDate(h, dateKey, archivedHabits, habitConfigs));
+      if (dayHabits.length > 0) {
+        const isPerfect = dayHabits.every((h) => {
+          const raw = dayObj[h] ?? 0;
+          const val = typeof raw === 'number' ? raw : (raw ? 100 : 0);
+          return Math.round(val) >= 100;
+        });
+        if (isPerfect) {
+          runningPerfectDays += 1;
+          if (runningPerfectDays % 7 === 0) {
+            addEarn(dateKey, 1, `7 Perfect Days Milestone (${runningPerfectDays} total)`, 'perfect');
+          }
+        }
+      }
+    });
+
+    const earnHistory = Object.values(dayMap).sort((a, b) => b.dateKey.localeCompare(a.dateKey));
+    const hasStarterFallback = levelShields + perfectDayShields === 0;
+
+    return {
+      totalEarned,
+      usedCount,
+      availableCount,
+      levelShields,
+      perfectDayShields,
+      hasStarterFallback,
+      earnHistory,
+    };
+  }, [xpStats.level, insightsData?.perfectDaysCount, shieldedDates, trackerData, habits, habitConfigs, manualXPOffset, activeHabitsList]);
 
   const habitInsights = useMemo(() => {
     if (!viewingHabitMap) return null;
@@ -1852,9 +2067,9 @@ export default function App() {
                 whileTap={{ scale: 0.9 }}
                 onClick={() => window.location.reload()}
                 title="Refresh the app"
-                className="bg-emerald-600 p-3 rounded-2xl text-white shadow-lg animate-glow cursor-pointer"
+                className="bg-emerald-600 p-2.5 rounded-2xl text-white shadow-lg animate-glow cursor-pointer"
               >
-                <ZapIcon />
+                <HeaderFireIcon />
               </motion.div>
 
               <div>
@@ -1879,30 +2094,24 @@ export default function App() {
                           ? 'bg-slate-800 border-emerald-500/30 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.2)] hover:border-emerald-500/50'
                           : 'bg-white border-emerald-200 text-emerald-600 shadow-[0_0_10px_rgba(16,185,129,0.15)] hover:border-emerald-400'
                         }`}
-                      title="Adjust Display Sizes"
+                      title="Adjust Sizes"
                     >
                       <TextSizeIcon />
                     </button>
-
-                    {/* Mobile View Toggle */}
                     <button
-                      onClick={toggleMobileMode}
-                      className={`p-1.5 rounded-lg transition-all border active:scale-90 flex items-center gap-1.5
-                        ${isMobileMode
-                          ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.3)]'
-                          : (theme === 'dark'
-                            ? 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
-                            : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
-                          )}`}
-                      title="Toggle Mobile Compatibility Mode"
+                      onClick={() => setShowHelpModal(true)}
+                      className={`p-1.5 rounded-lg transition-all border active:scale-90
+                        ${theme === 'dark'
+                          ? 'bg-slate-800 border-blue-500/30 text-blue-400 shadow-[0_0_12px_rgba(59,130,246,0.15)] hover:border-blue-400/60 hover:bg-slate-700'
+                          : 'bg-white border-blue-200 text-blue-600 shadow-[0_0_10px_rgba(59,130,246,0.12)] hover:border-blue-400 hover:bg-blue-50'
+                        }`}
+                      title="How to Use & Customize (Help)"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
-                        <line x1="12" y1="18" x2="12.01" y2="18" />
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                        <line x1="12" y1="17" x2="12.01" y2="17" />
                       </svg>
-                      <span className="text-[9px] font-black uppercase tracking-wider hidden sm:inline">
-                        {isMobileMode ? 'Mobile View On' : 'Mobile View Off'}
-                      </span>
                     </button>
                   </div>
 
@@ -1922,14 +2131,6 @@ export default function App() {
                     >
                       <TrophyIcon className="w-2.5 h-2.5 text-yellow-500" />
                       <span className="text-[9px] font-black text-yellow-500">{analytics.totalDone}</span>
-                    </button>
-                    <button
-                      onClick={() => setSelectedHeatmapDay(getSafeKey(new Date()))}
-                      className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.15)] cursor-pointer hover:scale-105 active:scale-95 transition-all"
-                      title={`Streak Shields: ${shieldStats.availableCount} available (${shieldStats.usedCount} used). Click to shield today or click any heatmap day!`}
-                    >
-                      <ShieldIcon />
-                      <span className="text-[9px] font-black">{shieldStats.availableCount}</span>
                     </button>
                   </div>
                 </div>
@@ -1966,11 +2167,31 @@ export default function App() {
               <motion.button
                 whileHover={{ scale: 1.05, boxShadow: '0 0 14px 3px rgba(245,158,11,0.45)' }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => setShowArchiveModal(true)}
+                onClick={() => {
+                  setArchiveModalTab('archive');
+                  setShowArchiveModal(true);
+                }}
                 title="View archived habits (hidden from tracker)"
-                className={`mr-2 p-2 rounded-xl border flex items-center justify-center transition-all ${theme === 'dark' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500/20' : 'bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100'}`}
+                className={`mr-1.5 p-2 rounded-xl border flex items-center justify-center transition-all ${theme === 'dark' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500/20' : 'bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100'}`}
               >
                 <ArchiveIcon />
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => {
+                  setArchiveModalTab('trash');
+                  setShowArchiveModal(true);
+                }}
+                title={`Trash (${activeTrashedHabits.length}) — deleted habits kept ${TRASH_RETENTION_DAYS} days`}
+                className={`relative mr-2 p-2 rounded-xl border flex items-center justify-center transition-all ${theme === 'dark' ? 'bg-rose-500/10 text-rose-400 border-rose-500/25 hover:bg-rose-500/20' : 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100'}`}
+              >
+                <TrashIcon />
+                {activeTrashedHabits.length > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center leading-none shadow-sm">
+                    {activeTrashedHabits.length}
+                  </span>
+                )}
               </motion.button>
               <div className={`w-px h-6 mx-1 ${theme === 'dark' ? 'bg-slate-700' : 'bg-slate-200'}`} />
               {/* Left Side: Date Navigation Group */}
@@ -2039,201 +2260,477 @@ export default function App() {
               availableShields={shieldStats.availableCount}
               onOpenNotes={handleOpenNotes}
               onOpenInsights={handleOpenInsights}
+              onOpenShields={() => setShowShieldModal(true)}
               onSelectDay={setSelectedHeatmapDay}
               onboardingBanner={
-                (welcomeCardStatus === 'visible' || welcomeCardStatus === 'snapping') ? (
-                  <ThanosDisintegrate shouldDisintegrate={welcomeCardStatus === 'snapping'}>
-                    <div className={`mb-3 p-3 rounded-2xl border ${theme === 'dark' ? 'bg-slate-800/70 border-slate-700' : 'bg-emerald-50/80 border-emerald-200'} flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-sm`}>
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-500 flex items-center justify-center shrink-0 text-sm">
-                          🌱
-                        </div>
-                        <div>
-                          <p className={`text-[10px] font-black uppercase tracking-wider ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-700'}`}>Heatmap Visual Guide</p>
-                          <p className={`text-[11px] font-medium leading-tight ${getTextMuted()}`}>Each square is a day. Color intensifies from light to deep emerald as you log habits.</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5 self-start md:self-auto shrink-0 text-[9px] font-black uppercase tracking-wider">
-                        <span className={getTextMuted()}>Key:</span>
-                        <span className={`w-3.5 h-3.5 rounded-[2px] ${theme === 'dark' ? 'bg-slate-800' : 'bg-slate-200'}`} title="0% Empty" />
-                        <span className={`w-3.5 h-3.5 rounded-[2px] ${theme === 'dark' ? 'bg-emerald-900/60' : 'bg-emerald-200'}`} title="25% Light" />
-                        <span className={`w-3.5 h-3.5 rounded-[2px] ${theme === 'dark' ? 'bg-emerald-700' : 'bg-emerald-400'}`} title="50% Medium" />
-                        <span className={`w-3.5 h-3.5 rounded-[2px] ${theme === 'dark' ? 'bg-emerald-500' : 'bg-emerald-600'}`} title="75% Strong" />
-                        <span className={`w-3.5 h-3.5 rounded-[2px] ${theme === 'dark' ? 'bg-emerald-400' : 'bg-emerald-700'}`} title="100% Perfect" />
-                        <span className="text-[8px] font-bold text-emerald-500 ml-1">More Active</span>
-                      </div>
-                    </div>
-                  </ThanosDisintegrate>
-                ) : null
+                <TutorialTipCard
+                  isVisible={!isHydrating && !dismissedTips.heatmap}
+                  isSnapping={!!snappingTips.heatmap}
+                  onDismiss={() => triggerTipSnap('heatmap')}
+                  onSnapDone={() => finishTipSnap('heatmap')}
+                  theme={theme}
+                  accent="emerald"
+                  icon={<ActivityIcon className="w-4 h-4" />}
+                  eyebrow="Heatmap Guide"
+                  title="Per-Habit Intensity & Shields"
+                  description="Each square steps color automatically per active habit completed that day. Completing all active habits adds a fire watermark. Click any square to inspect or apply a Streak Shield, and click the Shields pill to view your earn log."
+                  badges={['Per-Habit Color', 'All Done = Fire Mark', 'Click Day = Inspect / Shield']}
+                  marginBottom="0.75rem"
+                />
               }
             />
 
             <motion.div variants={itemVariants} className={`${isMobileMode ? '' : 'col-span-1'} ${getCardStyle()} ${cardPadding} border relative overflow-hidden flex flex-col justify-between transition-colors h-full min-w-0`}>
-              <div className="flex items-start mb-2 md:mb-4 justify-between">
+              <div className="flex items-center justify-between gap-2 mb-2 relative z-20">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <FilterDropdown
+                    value={effectiveDashboardFilter}
+                    onChange={setDashboardGraphFilter}
+                    theme={theme}
+                    preserveCase
+                    maxWidthClass="max-w-[95px] md:max-w-[125px]"
+                    options={[
+                      { value: 'all', label: 'Overall' },
+                      ...habits.filter(h => !archivedHabits.includes(h)).map(h => ({ value: h, label: h })),
+                    ]}
+                  />
 
-                {/* Left Side: Vertical Stack */}
-                <div className="flex flex-col gap-0.5 min-w-0 flex-1 mr-2 relative z-20">
-                  {/* Row 1: Slim Dropdown Only */}
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={effectiveDashboardFilter}
-                      onChange={(e) => setDashboardGraphFilter(e.target.value)}
-                      className={`text-[11px] font-black uppercase px-2 py-1 rounded-full border transition-all duration-500 cursor-pointer focus:outline-none max-w-[80px] md:max-w-[120px] truncate
-                        ${theme === 'dark'
-                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.2)] hover:bg-emerald-500/20'
-                          : 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:border-emerald-300 shadow-sm'}`}
-                    >
-                      <option value="all" className={theme === 'dark' ? 'bg-slate-900' : 'bg-white'}>Overall</option>
-                      {habits.filter(h => !archivedHabits.includes(h)).map(h => (
-                        <option key={h} value={h} className={theme === 'dark' ? 'bg-slate-900' : 'bg-white'}>{h}</option>
-                      ))}
-                    </select>
+                  <div className="flex items-baseline gap-1.5 min-w-0 truncate">
+                    <span className={`text-base md:text-lg font-black ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'} leading-none`}>
+                      {effectiveDashboardFilter === 'all' ? analytics.monthlyPct : (analytics.habitPcts[effectiveDashboardFilter] || 0)}%
+                    </span>
+                    <span className={`text-[9px] font-black uppercase tracking-wider truncate ${getTextMuted()}`}>
+                      {currentDate.toLocaleDateString(undefined, { month: 'short' })} Trend
+                    </span>
                   </div>
-
-                  {/* Row 2: Big Percentage */}
-                  <span className={`text-lg md:text-xl font-black ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'} leading-none mt-1`}>
-                    {effectiveDashboardFilter === 'all' ? analytics.monthlyPct : (analytics.habitPcts[effectiveDashboardFilter] || 0)}%
-                  </span>
                 </div>
 
                 {/* Right Side: Expand Graph Button */}
-                <div className="flex items-center gap-2 shrink-0 z-20">
-                  <button
-                    onClick={() => setShowMonthlyGraphModal(true)}
-                    className={`p-2 rounded-xl transition-all border
-                      ${theme === 'dark'
-                        ? 'bg-slate-800/50 border-slate-700 text-slate-400 hover:text-emerald-400 hover:bg-slate-800'
-                        : 'bg-white border-slate-200 text-slate-500 hover:text-emerald-600 hover:bg-slate-50 shadow-sm'}`}
-                    title="Detailed Monthly Graph"
-                  >
-                    <MaximizeIcon />
-                  </button>
-                </div>
-
+                <button
+                  onClick={() => setShowMonthlyGraphModal(true)}
+                  className={`h-6 w-6 shrink-0 flex items-center justify-center rounded-lg transition-all border [&>svg]:w-3 [&>svg]:h-3
+                    ${theme === 'dark'
+                      ? 'bg-slate-800/50 border-slate-700 text-slate-400 hover:text-emerald-400 hover:bg-slate-800'
+                      : 'bg-white border-slate-200 text-slate-500 hover:text-emerald-600 hover:bg-slate-50 shadow-sm'}`}
+                  title="Detailed Monthly Graph"
+                >
+                  <MaximizeIcon />
+                </button>
               </div>
-              <div className="flex-grow flex items-center h-16 md:h-28 w-full relative">
-                <svg className="w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
-                  <defs>
-                    <linearGradient id="greenTrendShadow" x1="0%" y1="0%" x2="0%" y2="100%">
-                      <stop offset="0%" stopColor="#10b981" stopOpacity="0.8" />
-                      <stop offset="50%" stopColor="#10b981" stopOpacity="0.3" />
-                      <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
-                    </linearGradient>
-                  </defs>
-                  {trendPoints.length >= 2 && (
-                    <>
-                      {/* The Shadow Fill */}
-                      <motion.path
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ duration: 2 }}
-                        d={`${solveFluidPath(trendPoints)} L 100,100 L 0,100 Z`}
-                        fill="url(#greenTrendShadow)"
-                      />
-                      {/* The Main Line */}
-                      <motion.path
-                        initial={{ pathLength: 0 }}
-                        animate={{ pathLength: 1 }}
-                        transition={{ duration: 2 }}
-                        d={solveFluidPath(trendPoints)}
-                        fill="none"
-                        stroke="#10b981"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                      />
-                    </>
-                  )}
-                </svg>
-              </div>
-              <div className={`flex justify-between mt-1 md:mt-2 px-1 text-[6px] md:text-[8px] font-black ${theme === 'dark' ? 'text-slate-600' : 'text-slate-300'} uppercase tracking-widest`}>
-                <span>START</span><span>END</span>
+              <TutorialTipCard
+                isVisible={!isHydrating && !dismissedTips.trendCard}
+                isSnapping={!!snappingTips.trendCard}
+                onDismiss={() => triggerTipSnap('trendCard')}
+                onSnapDone={() => finishTipSnap('trendCard')}
+                theme={theme}
+                accent="emerald"
+                icon={<ActivityIcon className="w-4 h-4" />}
+                eyebrow="Trend Card"
+                title="Hover or Expand"
+                description="Filter by Overall or one habit, hover points for daily %, or click the expand icon for Weekly & full Monthly graphs."
+                marginBottom="0.5rem"
+              />
+              <div className="flex-1 w-full min-h-[165px] relative">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={monthlyGraphData} margin={{ top: 8, right: 6, left: -28, bottom: -4 }}>
+                    <defs>
+                      <linearGradient id="dashTrendGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#10b981" stopOpacity={0.45} />
+                        <stop offset="65%" stopColor="#10b981" stopOpacity={0.12} />
+                        <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid
+                      vertical={false}
+                      strokeDasharray="3 3"
+                      stroke={theme === 'dark' ? 'rgba(148,163,184,0.12)' : 'rgba(100,116,139,0.15)'}
+                    />
+                    <XAxis
+                      dataKey="date"
+                      height={18}
+                      axisLine={false}
+                      tickLine={false}
+                      interval="preserveStartEnd"
+                      minTickGap={18}
+                      tick={{ fontSize: 9, fontWeight: 700, fill: theme === 'dark' ? '#64748b' : '#94a3b8' }}
+                    />
+                    <YAxis
+                      domain={[0, 100]}
+                      ticks={[0, 50, 100]}
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 9, fontWeight: 700, fill: theme === 'dark' ? '#475569' : '#94a3b8' }}
+                    />
+                    <RechartsTooltip
+                      cursor={{ stroke: '#10b981', strokeWidth: 1, strokeDasharray: '3 3' }}
+                      content={({ active, payload }) => {
+                        if (!active || !payload || !payload.length) return null;
+                        const item = payload[0].payload;
+                        return (
+                          <div className={`px-2.5 py-1.5 rounded-xl border text-[11px] shadow-lg backdrop-blur-md ${
+                            theme === 'dark'
+                              ? 'bg-slate-900/95 border-slate-700 text-white'
+                              : 'bg-white/95 border-slate-200 text-slate-800'
+                          }`}>
+                            <div className={`text-[9px] font-bold uppercase tracking-wider ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+                              {item.fullDate}
+                            </div>
+                            <div className="font-black text-emerald-500">
+                              {item.score}% completed
+                            </div>
+                          </div>
+                        );
+                      }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="score"
+                      stroke="#10b981"
+                      strokeWidth={2.5}
+                      strokeLinecap="round"
+                      fill="url(#dashTrendGrad)"
+                      dot={false}
+                      activeDot={{ r: 4.5, fill: '#34d399', stroke: theme === 'dark' ? '#0f172a' : '#ffffff', strokeWidth: 2 }}
+                      isAnimationActive={true}
+                      animationDuration={900}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
               </div>
             </motion.div>
           </div>
-          <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2 no-scrollbar">
-            {/* NEW: EDIT TAB (Manager Trigger) */}
-            <button
-              onClick={() => setShowManageModal(true)}
-              title="Manage habits and categories"
-              className={`shrink-0 px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all flex items-center gap-2 ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white hover:border-slate-500' : 'bg-white border-slate-200 text-slate-500 hover:text-slate-800 hover:border-slate-300'}`}
-            >
-              <EditIcon /> <span>Edit</span>
-            </button>
+          <div className="mb-6">
+            <div className="flex items-center gap-2">
+              {/* Clean Scrollable Habit Category Tabs + Inline + New */}
+              <div
+                onWheel={(e) => {
+                  if (e.shiftKey && Math.abs(e.deltaY) > 0) {
+                    e.preventDefault();
+                    e.currentTarget.scrollLeft += e.deltaY;
+                  }
+                }}
+                className="flex-1 min-w-0 flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5"
+              >
+                {categories.map((cat) => {
+                  const isSelected = selectedCategory === cat;
+                  const pct = categoryProgress[cat] || 0;
+                  const count = categoryCounts[cat] ?? 0;
 
-            <div className={`w-px h-4 mx-1 ${theme === 'dark' ? 'bg-slate-800' : 'bg-slate-200'}`}></div>
+                  return (
+                    <button
+                      key={cat}
+                      onClick={() => selectDashboardCategory(cat)}
+                      title={`Filter by ${cat} — ${count} ${count === 1 ? 'habit' : 'habits'}${count > 0 ? ` (${pct}% monthly)` : ''}`}
+                      className={`relative group shrink-0 h-8 px-3 rounded-xl border transition-all duration-200 overflow-hidden flex items-center gap-2 ${isSelected
+                        ? (theme === 'dark'
+                          ? 'bg-emerald-500/15 border-emerald-500/70 text-emerald-300'
+                          : 'bg-emerald-50 border-emerald-500 text-emerald-700 shadow-xs')
+                        : (theme === 'dark'
+                          ? 'bg-slate-900/75 border-slate-800 hover:border-slate-600 text-slate-300 hover:text-white'
+                          : 'bg-white border-slate-200 hover:border-slate-300 text-slate-600 hover:text-slate-900 shadow-xs')
+                        }`}
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full shrink-0 transition-colors ${isSelected
+                          ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.75)]'
+                          : (pct > 0 ? 'bg-emerald-500/45 group-hover:bg-emerald-400/70' : (theme === 'dark' ? 'bg-slate-700' : 'bg-slate-300'))
+                          }`}
+                      />
+                      <span className="relative z-10 text-[10px] font-black uppercase tracking-wider whitespace-nowrap">
+                        {cat}
+                      </span>
+                      <span
+                        className={`relative z-10 px-1.5 py-0.5 rounded-md text-[9px] font-extrabold tabular-nums leading-none transition-colors ${isSelected
+                          ? (theme === 'dark' ? 'bg-emerald-500/20 text-emerald-200' : 'bg-emerald-500/15 text-emerald-800')
+                          : (theme === 'dark' ? 'bg-slate-800 text-slate-400 group-hover:text-slate-300' : 'bg-slate-100 text-slate-500 group-hover:text-slate-700')
+                          }`}
+                      >
+                        {count}
+                      </span>
+                      {count > 0 && (
+                        <span
+                          className={`relative z-10 text-[9px] font-black tabular-nums whitespace-nowrap ${isSelected
+                            ? (theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600')
+                            : (pct > 0 ? 'text-emerald-500/80' : (theme === 'dark' ? 'text-slate-500' : 'text-slate-400'))
+                            }`}
+                        >
+                          {pct}%
+                        </span>
+                      )}
+                      {count > 0 && (
+                        <div
+                          className={`absolute inset-x-0 bottom-0 h-[2.5px] ${isSelected
+                            ? (theme === 'dark' ? 'bg-emerald-950/90' : 'bg-emerald-200/70')
+                            : (theme === 'dark' ? 'bg-slate-800/80' : 'bg-slate-100')
+                            }`}
+                        >
+                          <motion.div
+                            initial={{ width: 0 }}
+                            animate={{ width: `${pct}%` }}
+                            transition={{ duration: 0.7, ease: 'easeOut' }}
+                            className={`h-full rounded-r-full ${isSelected
+                              ? 'bg-emerald-400'
+                              : 'bg-emerald-500/65 group-hover:bg-emerald-500'
+                              }`}
+                          />
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
 
+                {/* Inline Quick-Add Category */}
+                {isAddingQuickCat ? (
+                  <div className={`shrink-0 h-8 flex items-center gap-1 px-2 rounded-xl border ${theme === 'dark' ? 'bg-slate-900 border-emerald-500/70' : 'bg-white border-emerald-500'}`}>
+                    <input
+                      autoFocus
+                      type="text"
+                      value={quickCatInput}
+                      onChange={(e) => setQuickCatInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const created = createCategoryByName(quickCatInput, (msg) =>
+                            triggerActionToast({ type: 'error', title: 'Category Exists', subtitle: msg }, 2500)
+                          );
+                          if (created) {
+                            setQuickCatInput('');
+                            setIsAddingQuickCat(false);
+                            selectDashboardCategory(created);
+                            setAssigningCategory(created);
+                          }
+                        } else if (e.key === 'Escape') {
+                          setIsAddingQuickCat(false);
+                          setQuickCatInput('');
+                        }
+                      }}
+                      onBlur={() => {
+                        if (!quickCatInput.trim()) setIsAddingQuickCat(false);
+                      }}
+                      placeholder="Category name..."
+                      className={`w-28 bg-transparent text-[10px] font-black uppercase tracking-wider focus:outline-none ${theme === 'dark' ? 'text-white placeholder:text-slate-500' : 'text-slate-800 placeholder:text-slate-400'}`}
+                    />
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        const created = createCategoryByName(quickCatInput, (msg) =>
+                          triggerActionToast({ type: 'error', title: 'Category Exists', subtitle: msg }, 2500)
+                        );
+                        if (created) {
+                          setQuickCatInput('');
+                          setIsAddingQuickCat(false);
+                          selectDashboardCategory(created);
+                          setAssigningCategory(created);
+                        }
+                      }}
+                      title="Create category"
+                      className="text-emerald-500 hover:text-emerald-400 text-[10px] font-black uppercase"
+                    >
+                      Add
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingQuickCat(true)}
+                    title="Create new category"
+                    className={`shrink-0 h-8 px-2.5 rounded-xl border border-dashed text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1 ${theme === 'dark'
+                      ? 'border-slate-800 text-slate-500 hover:text-emerald-400 hover:border-emerald-500/60 hover:bg-emerald-500/5'
+                      : 'border-slate-300 text-slate-400 hover:text-emerald-600 hover:border-emerald-400 hover:bg-emerald-50/50'
+                      }`}
+                  >
+                    <PlusIcon />
+                    <span>New</span>
+                  </button>
+                )}
+              </div>
 
-
-            {/* EXISTING CATEGORIES (Clean Look) */}
-            {categories.map(cat => (
-              <div key={cat} className="relative group shrink-0">
+              {/* Quick-Assign Toggle for Active Specific Category */}
+              {selectedCategory !== 'all' && (
                 <button
-                  onClick={() => setSelectedCategory(cat)}
-                  title={`Filter by ${cat} (${categoryProgress[cat] || 0}% complete)`}
-                  className={`relative overflow-hidden px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all ${selectedCategory === cat
-                    ? 'border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)] text-white'
-                    : (theme === 'dark' ? 'border-emerald-800/60 hover:border-emerald-600 text-emerald-200/70' : 'border-emerald-300 hover:border-emerald-400 text-emerald-700/80')
+                  type="button"
+                  onClick={() => setAssigningCategory(assigningCategory === selectedCategory ? null : selectedCategory)}
+                  title={assigningCategory === selectedCategory ? 'Finish assigning habits' : `Assign or remove habits in ${selectedCategory}`}
+                  className={`shrink-0 h-8 px-3 rounded-xl text-[10px] font-black uppercase tracking-wider border transition-all flex items-center gap-1.5 ${assigningCategory === selectedCategory
+                    ? 'bg-emerald-500 border-emerald-400 text-slate-950 shadow-sm'
+                    : (theme === 'dark'
+                      ? 'bg-slate-900/90 border-slate-700/80 text-emerald-400 hover:border-emerald-500/60 hover:bg-emerald-500/10'
+                      : 'bg-white border-slate-200 text-emerald-600 hover:border-emerald-400 hover:bg-emerald-50 shadow-xs')
                     }`}
                 >
-                  {/* Background Track - Given a distinct green hue so it looks like an empty bar */}
-                  <div className={`absolute inset-0 z-0 transition-colors duration-500 ${selectedCategory === cat
-                    ? 'bg-emerald-900/80'
-                    : (theme === 'dark' ? 'bg-emerald-950/60' : 'bg-emerald-50')
-                    }`} />
-
-                  {/* Progress Fill - Made much more vibrant so the loading state is obvious */}
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${categoryProgress[cat] || 0}%` }}
-                    transition={{ duration: 1, ease: "easeOut" }}
-                    className={`absolute inset-y-0 left-0 z-0 h-full ${selectedCategory === cat
-                      ? 'bg-emerald-500'
-                      : 'bg-emerald-500/60'
-                      }`}
-                  />
-
-                  {/* Text Label */}
-                  <span className="relative z-10">{cat}</span>
+                  {assigningCategory === selectedCategory ? (
+                    <>
+                      <CheckIcon className="w-3 h-3" />
+                      <span>Done</span>
+                    </>
+                  ) : (
+                    <>
+                      <PlusIcon />
+                      <span>Assign</span>
+                    </>
+                  )}
                 </button>
-              </div>
-            ))}
+              )}
+            </div>
           </div>
           {/* Updated Habit Cards Grid */}
           <motion.div variants={containerVariants} className="grid gap-3 mb-8" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${textSizes.tabSize || 110}px, 1fr))` }}>
 
-            {/* 01/10 Empty Category State */}
-            {selectedCategory !== 'all' && habits.filter(h => !archivedHabits.includes(h) && habitConfigs[h]?.category === selectedCategory).length === 0 && (
-              <div className={`col-span-full p-8 rounded-3xl border text-center flex flex-col items-center justify-center my-2 ${theme === 'dark' ? 'bg-slate-900/40 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'
-                }`}>
-                <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 flex items-center justify-center text-xl mb-3 shadow-inner">
-                  📂
+            {/* Habit Rings Tutorial */}
+            <div className="col-span-full">
+              <TutorialTipCard
+                isVisible={!isHydrating && !dismissedTips.rings}
+                isSnapping={!!snappingTips.rings}
+                onDismiss={() => triggerTipSnap('rings')}
+                onSnapDone={() => finishTipSnap('rings')}
+                theme={theme}
+                accent="blue"
+                icon={<HeaderFireIcon className="w-4 h-4 text-orange-500" />}
+                eyebrow="Habit Rings Guide"
+                title="Streaks, Goal Steps & Priority"
+                description="Click any habit circle to view its month calendar, set Goal Steps (e.g. 8 glasses), or set Priority (1x–10x XP). An orange streak fire appears at 2+ consecutive days."
+                badges={['Click Circle = Configure', '2+ Days = Streak Fire', 'Edit Pill = Categories']}
+                marginBottom="0.5rem"
+              />
+            </div>
+
+            {/* Category Empty / Multi-Assign Panel */}
+            {selectedCategory !== 'all' && ((categoryCounts[selectedCategory] ?? 0) === 0 || assigningCategory === selectedCategory) && (() => {
+              const catCount = categoryCounts[selectedCategory] ?? 0;
+              return (
+                <div className={`col-span-full p-4 md:p-5 rounded-2xl border my-1 ${theme === 'dark' ? 'bg-slate-900/60 border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-700 shadow-xs'}`}>
+                  <div className="flex items-center justify-between gap-3 flex-wrap mb-3.5">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={`w-8 h-8 rounded-xl border flex items-center justify-center shrink-0 ${theme === 'dark' ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-600'}`}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z" />
+                          <path d="M7 7h.01" />
+                        </svg>
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className={`text-xs md:text-sm font-black tracking-wider uppercase ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                            {selectedCategory}
+                          </h4>
+                          <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${catCount > 0
+                            ? (theme === 'dark' ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-emerald-50 text-emerald-700 border border-emerald-200')
+                            : (theme === 'dark' ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-500')
+                            }`}>
+                            {catCount} {catCount === 1 ? 'habit' : 'habits'}
+                          </span>
+                        </div>
+                        <p className={`text-[11px] font-medium mt-0.5 ${getTextMuted()}`}>
+                          Tap habits below to add or remove them from {selectedCategory}, or create a new one.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      {assigningCategory === selectedCategory && catCount > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => setAssigningCategory(null)}
+                          className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[10px] font-black uppercase tracking-wider transition-all"
+                        >
+                          Done
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => selectDashboardCategory('all')}
+                          className={`px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-wider transition-all ${theme === 'dark' ? 'border-slate-700 bg-slate-800/70 text-slate-300 hover:text-white hover:border-slate-500' : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
+                        >
+                          Show All
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Multi-Select Habit Assignment Chips */}
+                  {activeHabitsList.length > 0 && (
+                    <div className={`mb-3.5 pt-3 border-t ${theme === 'dark' ? 'border-slate-800/80' : 'border-slate-100'}`}>
+                      <div className="flex flex-wrap gap-1.5">
+                        {activeHabitsList.map(habit => {
+                          const currentCat = habitConfigs[habit]?.category;
+                          const isInSelected = currentCat === selectedCategory;
+                          const hasOtherCat = currentCat && currentCat !== 'all' && !isInSelected;
+                          return (
+                            <button
+                              key={habit}
+                              type="button"
+                              onClick={() => toggleHabitCategoryMembership(habit, selectedCategory)}
+                              title={isInSelected ? `Remove "${habit}" from ${selectedCategory}` : `Add "${habit}" to ${selectedCategory}`}
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-[11px] font-bold transition-all ${isInSelected
+                                ? (theme === 'dark'
+                                  ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-200 hover:bg-emerald-500/30'
+                                  : 'bg-emerald-50 border-emerald-400 text-emerald-800 hover:bg-emerald-100')
+                                : (theme === 'dark'
+                                  ? 'bg-slate-800/70 border-slate-700/80 text-slate-300 hover:border-emerald-500/50 hover:text-white'
+                                  : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-emerald-400 hover:text-slate-900')
+                                }`}
+                            >
+                              <span className={`font-black ${isInSelected ? 'text-emerald-400' : 'text-emerald-500'}`}>
+                                {isInSelected ? '✓' : '+'}
+                              </span>
+                              <span className="truncate max-w-[160px]">{habit}</span>
+                              {hasOtherCat && (
+                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${theme === 'dark' ? 'bg-slate-900/80 text-slate-400' : 'bg-white text-slate-400 border border-slate-200'}`}>
+                                  {currentCat}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Inline Quick-Create Habit in Selected Category */}
+                  <div className={`pt-3 border-t ${theme === 'dark' ? 'border-slate-800/80' : 'border-slate-100'}`}>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        placeholder={`New ${selectedCategory} habit...`}
+                        value={inlineHabitInput}
+                        onChange={(e) => {
+                          setInlineHabitInput(e.target.value);
+                          if (inlineHabitError) setInlineHabitError('');
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && createHabitInCategory(inlineHabitInput, selectedCategory, setInlineHabitError)) {
+                            setInlineHabitInput('');
+                          }
+                        }}
+                        className={`flex-1 px-3.5 py-2 rounded-xl text-xs font-bold focus:outline-none border transition-all ${inlineHabitError
+                          ? 'border-rose-500/70 focus:border-rose-500'
+                          : (theme === 'dark'
+                            ? 'bg-slate-800/80 border-slate-700 focus:border-emerald-500 text-white placeholder:text-slate-500'
+                            : 'bg-slate-50 border-slate-200 focus:border-emerald-500 text-slate-800 placeholder:text-slate-400')
+                          }`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (createHabitInCategory(inlineHabitInput, selectedCategory, setInlineHabitError)) {
+                            setInlineHabitInput('');
+                          }
+                        }}
+                        disabled={!inlineHabitInput.trim()}
+                        className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-45 disabled:hover:bg-emerald-500 text-slate-950 text-[10px] font-black uppercase tracking-wider transition-all shrink-0 inline-flex items-center gap-1.5"
+                      >
+                        <PlusIcon />
+                        <span>Add</span>
+                      </button>
+                    </div>
+                    {inlineHabitError && (
+                      <p className="text-[11px] font-bold text-rose-500 mt-2 px-1">
+                        {inlineHabitError}
+                      </p>
+                    )}
+                  </div>
                 </div>
-                <h4 className={`text-base font-black mb-1 capitalize ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
-                  No habits in &lsquo;{selectedCategory}&rsquo; yet
-                </h4>
-                <p className={`text-xs font-medium mb-5 max-w-sm ${getTextMuted()}`}>
-                  Assign habits to this category in Manage Habits, or create a brand new habit specifically for {selectedCategory}.
-                </p>
-                <div className="flex items-center gap-3 flex-wrap justify-center">
-                  <button
-                    onClick={() => {
-                      setManageModalTab('habits');
-                      setShowManageModal(true);
-                    }}
-                    className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-emerald-500/20"
-                  >
-                    + Create &lsquo;{selectedCategory}&rsquo; Habit
-                  </button>
-                  <button
-                    onClick={() => setSelectedCategory('all')}
-                    className={`px-4 py-2 rounded-xl border text-xs font-black uppercase tracking-wider transition-all ${theme === 'dark' ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-slate-200 text-slate-600 hover:bg-slate-100'
-                      }`}
-                  >
-                    Show All Habits
-                  </button>
-                </div>
-              </div>
-            )}
+              );
+            })()}
 
             <AnimatePresence mode='popLayout'>
               {habits.filter(h => !archivedHabits.includes(h) && (selectedCategory === 'all' || habitConfigs[h]?.category === selectedCategory)).map((habit) => {
@@ -2250,7 +2747,7 @@ export default function App() {
                     key={habit}
                     className={`${getCardStyle()} habit-card-container cursor-pointer overflow-hidden group transition-all relative flex flex-col items-center justify-center rounded-full aspect-square border-0 select-none`}
                     onClick={() => setViewingHabitMap(habit)}
-                    title={`${habit} · ${pct}% this month${allHabitStreaks[habit] > 0 ? ` · 🔥 ${allHabitStreaks[habit]} day streak` : ''}`}
+                    title={`${habit} · ${pct}% this month${allHabitStreaks[habit] >= 2 ? ` · 🔥 ${allHabitStreaks[habit]} day streak` : ''}`}
                   >
                     <svg
                       className="absolute transition-all duration-500 -rotate-90 inset-0 w-full h-full p-1"
@@ -2290,7 +2787,7 @@ export default function App() {
                         <input
                           autoFocus
                           style={{ fontSize: `clamp(9px, 11cqw, ${textSizes.habit || 14}px)` }}
-                          className={`font-black uppercase w-full text-center bg-transparent focus:outline-none border-b-2 border-emerald-500 mb-1 leading-[1.1] ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}
+                          className={`font-black w-full text-center bg-transparent focus:outline-none border-b-2 border-emerald-500 mb-1 leading-[1.1] ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}
                           value={tempHabitName}
                           onChange={(e) => setTempHabitName(e.target.value)}
                           onBlur={() => handleDashboardRename(habit)}
@@ -2303,7 +2800,7 @@ export default function App() {
                           maxFontSize={textSizes.habit || 14}
                           minFontSize={7}
                           maxLines={2}
-                          className="font-black uppercase opacity-80"
+                          className="font-black opacity-80"
                           style={{ height: '28cqw' }}
                         />
                       )}
@@ -2315,9 +2812,11 @@ export default function App() {
                         <AnimatedNumber value={pct} />
                       </span>
 
-                      {allHabitStreaks[habit] > 0 && (
+                      {allHabitStreaks[habit] >= 2 && (
                         <div className="flex items-center gap-0.5 mt-[3cqw]">
-                          <span style={{ fontSize: 'clamp(8px, 9cqw, 12px)' }} className="leading-none">🔥</span>
+                          <span style={{ width: 'clamp(9px, 10cqw, 13px)', height: 'clamp(9px, 10cqw, 13px)' }} className="inline-flex items-center justify-center text-orange-500 drop-shadow-[0_0_4px_rgba(249,115,22,0.5)] shrink-0">
+                            <HeaderFireIcon className="w-full h-full" />
+                          </span>
                           <span
                             style={{ fontSize: 'clamp(7px, 8cqw, 11px)' }}
                             className={`font-black leading-none ${theme === 'dark' ? 'text-orange-400' : 'text-orange-500'}`}
@@ -2331,27 +2830,29 @@ export default function App() {
                 );
               })}
             </AnimatePresence>
-            <motion.button layout whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => {
-              let n = habits.length + 1;
-              while (
-                habits.some(h => h.toLowerCase() === `habit ${n}`) ||
-                archivedHabits.some(h => h.toLowerCase() === `habit ${n}`)
-              ) {
-                n++;
-              }
-              const name = `Habit ${n}`;
-              const categoryToAssign = selectedCategory === 'all' ? 'all' : selectedCategory;
-              const newHabits = [...habits, name];
-              const newConfigs = { ...habitConfigs, [name]: { steps: 1, category: categoryToAssign } };
-              savePartialToIDB({ habits: newHabits, habitConfigs: newConfigs });
-              setEditingHabitName(name);
-              setTempHabitName(name);
-            }}
-              className={`${getCardStyle()} flex items-center justify-center border-2 border-dashed transition-all rounded-full aspect-square ${theme === 'dark' ? 'border-slate-800 text-slate-700 hover:border-emerald-700' : 'border-slate-200 text-slate-300 hover:border-emerald-400'}`}
-              title="Add New Habit"
-            >
-              <PlusIcon />
-            </motion.button>
+            {(selectedCategory === 'all' || habits.some(h => !archivedHabits.includes(h) && habitConfigs[h]?.category === selectedCategory)) && (
+              <motion.button
+                layout
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => openQuickAddHabitModal(selectedCategory)}
+                className={`${getCardStyle()} habit-card-container flex flex-col items-center justify-center gap-1 border-2 border-dashed transition-all rounded-full aspect-square group cursor-pointer ${theme === 'dark'
+                  ? 'border-slate-800 text-slate-500 hover:border-emerald-500/70 hover:text-emerald-400 hover:bg-emerald-500/5'
+                  : 'border-slate-200 text-slate-400 hover:border-emerald-400 hover:text-emerald-600 hover:bg-emerald-50/40'
+                  }`}
+                title={selectedCategory === 'all' ? 'Create a new habit' : `Create a new habit in ${selectedCategory}`}
+              >
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${theme === 'dark' ? 'bg-slate-800/80 group-hover:bg-emerald-500/20' : 'bg-slate-100 group-hover:bg-emerald-100'}`}>
+                  <PlusIcon />
+                </div>
+                <span
+                  style={{ fontSize: 'clamp(7px, 9cqw, 10px)' }}
+                  className="font-black uppercase tracking-wider leading-none"
+                >
+                  New
+                </span>
+              </motion.button>
+            )}
           </motion.div>
           {/* Monthly Graph Detailed Modal */}
           <AnimatePresence>
@@ -2360,10 +2861,10 @@ export default function App() {
                 <motion.div initial={{ scale: 0.9, opacity: 0, y: 50 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 50 }} className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} border rounded-[1.2rem] md:rounded-[2rem] w-full max-w-4xl p-6 md:p-8 shadow-2xl relative flex flex-col`} onClick={e => e.stopPropagation()}>
                   <button onClick={() => setShowMonthlyGraphModal(false)} className={`absolute top-6 right-6 flex flex-col items-center gap-0.5 p-2 ${getTextMuted()} hover:text-rose-500 transition-all`} title="Close (ESC)"><XIcon /><span className="text-[6px] font-mono opacity-50">ESC</span></button>
 
-                  <div className="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
+                  <div className="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4 pr-12">
                     <div>
                       <p className={`text-[10px] font-black ${getTextMuted()} uppercase tracking-[0.2em] mb-2`}>Monthly Trends</p>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 flex-wrap">
                         <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} title="Previous month" className={`p-1.5 rounded-lg transition-all ${theme === 'dark' ? 'bg-slate-800 text-slate-400 hover:text-emerald-400' : 'bg-slate-100 text-slate-500 hover:text-emerald-600'}`}>
                           <ChevronLeftIcon />
                         </button>
@@ -2373,36 +2874,36 @@ export default function App() {
                         <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} title="Next month" className={`p-1.5 rounded-lg transition-all ${theme === 'dark' ? 'bg-slate-800 text-slate-400 hover:text-emerald-400' : 'bg-slate-100 text-slate-500 hover:text-emerald-600'}`}>
                           <ChevronRightIcon />
                         </button>
+                        <FilterDropdown
+                          value={effectiveDashboardFilter}
+                          onChange={setDashboardGraphFilter}
+                          theme={theme}
+                          preserveCase
+                          maxWidthClass="max-w-[125px] md:max-w-[160px]"
+                          options={[
+                            { value: 'all', label: 'Overall' },
+                            ...habits.filter(h => !archivedHabits.includes(h)).map(h => ({ value: h, label: h })),
+                          ]}
+                        />
                       </div>
                     </div>
-
-                    <select
-                      value={effectiveDashboardFilter}
-                      onChange={(e) => setDashboardGraphFilter(e.target.value)}
-                      className={`text-[11px] font-black uppercase px-3 py-2 rounded-full border transition-all duration-500 cursor-pointer focus:outline-none max-w-[120px] md:max-w-[160px] truncate shrink-0
-                    ${theme === 'dark'
-                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.2)] hover:bg-emerald-500/20'
-                          : 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:border-emerald-300 shadow-sm'}`}
-                    >
-                      <option value="all" className={theme === 'dark' ? 'bg-slate-900' : 'bg-white'}>Overall</option>
-                      {habits.filter(h => !archivedHabits.includes(h)).map(h => (
-                        <option key={h} value={h} className={theme === 'dark' ? 'bg-slate-900' : 'bg-white'}>{h}</option>
-                      ))}
-                    </select>
                   </div>
 
                   {/* Monthly Trend Onboarding Guide */}
-                  {!hasAnyData && (
-                    <div className={`mb-4 p-3.5 rounded-2xl border ${theme === 'dark' ? 'bg-slate-800/60 border-slate-700' : 'bg-emerald-50/80 border-emerald-200'} flex items-center gap-3`}>
-                      <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-500 flex items-center justify-center shrink-0 text-base">
-                        📈
-                      </div>
-                      <div>
-                        <p className={`text-[10px] font-black uppercase tracking-wider ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-700'}`}>Monthly Trend Curve</p>
-                        <p className={`text-xs font-medium leading-relaxed ${getTextMuted()}`}>As you check off habits across the month, this graph forms a smooth consistency curve showing your daily trajectory.</p>
-                      </div>
-                    </div>
-                  )}
+                  <TutorialTipCard
+                    isVisible={!dismissedTips.monthly}
+                    isSnapping={!!snappingTips.monthly}
+                    onDismiss={() => triggerTipSnap('monthly')}
+                    onSnapDone={() => finishTipSnap('monthly')}
+                    theme={theme}
+                    accent="emerald"
+                    icon={<ActivityIcon className="w-4 h-4" />}
+                    eyebrow="Trends Guide"
+                    title="Monthly Consistency Curve"
+                    description="Hover any point along the curve to inspect that day’s exact score, or use the dropdown on the dashboard card to isolate a single habit."
+                    badges={['Hover = Daily %', 'Filter by Habit']}
+                    marginBottom="1rem"
+                  />
 
                   <div className={`w-full h-[60vh] rounded-3xl border p-4 md:p-6 ${theme === 'dark' ? 'bg-slate-800/30 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
                     <ResponsiveContainer width="100%" height="100%">
@@ -2475,17 +2976,20 @@ export default function App() {
                   </div>
 
                   {/* Weekly Summary Onboarding Guide */}
-                  {weeklySummary.avgScore === 0 && !hasAnyData && (
-                    <div className={`mb-6 p-4 rounded-2xl border ${theme === 'dark' ? 'bg-slate-800/60 border-slate-700' : 'bg-emerald-50/80 border-emerald-200'} flex items-center gap-3.5`}>
-                      <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-500 flex items-center justify-center shrink-0 text-lg">
-                        📊
-                      </div>
-                      <div>
-                        <p className={`text-[10px] font-black uppercase tracking-wider ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-700'}`}>Weekly Performance Report</p>
-                        <p className={`text-xs font-medium leading-relaxed ${getTextMuted()}`}>Track habits across 3 or more days to generate your 7-day rolling score and top habit achievements ranking.</p>
-                      </div>
-                    </div>
-                  )}
+                  <TutorialTipCard
+                    isVisible={!dismissedTips.weekly}
+                    isSnapping={!!snappingTips.weekly}
+                    onDismiss={() => triggerTipSnap('weekly')}
+                    onSnapDone={() => finishTipSnap('weekly')}
+                    theme={theme}
+                    accent="emerald"
+                    icon={<ActivityIcon className="w-4 h-4" />}
+                    eyebrow="Weekly Guide"
+                    title="7-Day Rolling Performance"
+                    description="Compare all active habits over the past 7 days, or switch the filter dropdown to track one habit’s daily bar scores across the week."
+                    badges={['7-Day Avg', 'Per-Habit Bar Filter']}
+                    marginBottom="1.25rem"
+                  />
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className={`p-6 rounded-3xl border ${theme === 'dark' ? 'bg-emerald-900/20 border-emerald-500/20' : 'bg-emerald-50 border-emerald-100'} flex flex-col items-center justify-center`}>
@@ -2498,23 +3002,22 @@ export default function App() {
                       <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2">
                           <ActivityIcon className="w-4 h-4 text-emerald-500" />
-                          <p className={`text-[10px] font-black ${getTextMuted()} uppercase tracking-widest`}>
+                          <p className={`text-[10px] font-black ${getTextMuted()} ${effectiveWeeklyFilter === 'all' ? 'uppercase' : ''} tracking-widest`}>
                             {effectiveWeeklyFilter === 'all' ? 'Performance Graph' : `${effectiveWeeklyFilter} Trend`}
                           </p>
                         </div>
-                        <select
+                        <FilterDropdown
                           value={effectiveWeeklyFilter}
-                          onChange={(e) => setWeeklyGraphFilter(e.target.value)}
-                          className={`text-[11px] font-black uppercase px-2 py-1 rounded-full border transition-all duration-500 cursor-pointer focus:outline-none max-w-[80px] md:max-w-[120px] truncate
-                      ${theme === 'dark'
-                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.2)] hover:bg-emerald-500/20'
-                              : 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:border-emerald-300 shadow-sm'}`}
-                        >
-                          <option value="all" className={theme === 'dark' ? 'bg-slate-900' : 'bg-white'}>Overall</option>
-                          {habits.filter(h => !archivedHabits.includes(h)).map(h => (
-                            <option key={h} value={h} className={theme === 'dark' ? 'bg-slate-900' : 'bg-white'}>{h}</option>
-                          ))}
-                        </select>
+                          onChange={setWeeklyGraphFilter}
+                          theme={theme}
+                          preserveCase
+                          align="right"
+                          maxWidthClass="max-w-[110px] md:max-w-[140px]"
+                          options={[
+                            { value: 'all', label: 'Overall' },
+                            ...habits.filter(h => !archivedHabits.includes(h)).map(h => ({ value: h, label: h })),
+                          ]}
+                        />
                       </div>
 
                       <div className={`w-full h-48 rounded-2xl border p-4 ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
@@ -2614,6 +3117,20 @@ export default function App() {
                       )}
                     </div>
                   </div>
+
+                  <TutorialTipCard
+                    isVisible={!dismissedTips.journal}
+                    isSnapping={!!snappingTips.journal}
+                    onDismiss={() => triggerTipSnap('journal')}
+                    onSnapDone={() => finishTipSnap('journal')}
+                    theme={theme}
+                    accent="blue"
+                    icon={<NoteIcon className="w-4 h-4" />}
+                    eyebrow="Journal Guide"
+                    title="Search & Inline Edit"
+                    description="Browse up to 51 closest entries centered on Today, search by date or text, and click any entry to write or edit inline."
+                    marginBottom="0.75rem"
+                  />
 
                   {/* Scrollable list container with py-[18vh] so Today can center even if there are 0 earlier or 0 later notes */}
                   <div
@@ -2804,75 +3321,383 @@ export default function App() {
             )}
           </AnimatePresence>
 
+          {/* --- STREAK SHIELDS MODAL --- */}
+          <AnimatePresence>
+            {showShieldModal && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[180] flex items-center justify-center bg-black/70 backdrop-blur-md p-4" onClick={() => setShowShieldModal(false)}>
+                <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} border rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl relative flex flex-col max-h-[85vh]`} onClick={e => e.stopPropagation()}>
+                  <button onClick={() => setShowShieldModal(false)} className={`absolute top-6 right-6 flex flex-col items-center gap-0.5 p-2 ${getTextMuted()} hover:text-rose-500 transition-all`} title="Close (ESC)"><XIcon /><span className="text-[6px] font-mono opacity-50">ESC</span></button>
+
+                  <div className="mb-5 shrink-0 flex items-center gap-3">
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border ${theme === 'dark' ? 'bg-cyan-500/15 border-cyan-500/30 text-cyan-400' : 'bg-cyan-50 border-cyan-200 text-cyan-600'}`}>
+                      <ShieldIcon className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className={`text-[10px] font-black uppercase tracking-[0.2em] ${theme === 'dark' ? 'text-cyan-400' : 'text-cyan-600'}`}>Streak Protection</p>
+                      <h3 className={`text-2xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Streak Shields</h3>
+                    </div>
+                  </div>
+
+                  <div className="overflow-y-auto custom-scrollbar pr-2 space-y-4">
+                    <TutorialTipCard
+                      isVisible={!dismissedTips.shields}
+                      isSnapping={!!snappingTips.shields}
+                      onDismiss={() => triggerTipSnap('shields')}
+                      onSnapDone={() => finishTipSnap('shields')}
+                      theme={theme}
+                      accent="cyan"
+                      icon={<ShieldIcon className="w-4 h-4" />}
+                      eyebrow="Shields Guide"
+                      title="Protect Your Streaks"
+                      description="Earn 1 Starter Shield plus +1 per Level and +1 every 7 Perfect Days. Click any heatmap square to shield a missed day."
+                      marginBottom="0.25rem"
+                    />
+                    {/* Summary Counts */}
+                    <div className="grid grid-cols-3 gap-2.5">
+                      <div className={`p-3 rounded-2xl border text-center ${theme === 'dark' ? 'bg-cyan-500/10 border-cyan-500/30' : 'bg-cyan-50 border-cyan-200'}`}>
+                        <div className={`text-2xl font-black ${theme === 'dark' ? 'text-cyan-400' : 'text-cyan-600'}`}>{shieldStats.availableCount}</div>
+                        <div className={`text-[9px] font-black uppercase tracking-widest ${getTextMuted()}`}>Available</div>
+                      </div>
+                      <div className={`p-3 rounded-2xl border text-center ${theme === 'dark' ? 'bg-slate-800/60 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                        <div className={`text-2xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{shieldStats.totalEarned}</div>
+                        <div className={`text-[9px] font-black uppercase tracking-widest ${getTextMuted()}`}>Total Earned</div>
+                      </div>
+                      <div className={`p-3 rounded-2xl border text-center ${theme === 'dark' ? 'bg-slate-800/60 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                        <div className={`text-2xl font-black ${theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>{shieldStats.usedCount}</div>
+                        <div className={`text-[9px] font-black uppercase tracking-widest ${getTextMuted()}`}>Used</div>
+                      </div>
+                    </div>
+
+                    {/* How Shields Are Earned */}
+                    <div className={`p-4 rounded-2xl border space-y-2 ${theme === 'dark' ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                      <div className={`text-[10px] font-black uppercase tracking-widest ${getTextMuted()}`}>How You Earn Shields</div>
+                      <div className="space-y-1.5 text-xs font-semibold">
+                        <div className="flex items-center justify-between">
+                          <span className={theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}>🌱 Starter Shield (initial)</span>
+                          <span className="font-black text-cyan-400">{shieldStats.hasStarterFallback ? '1' : '0'}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className={theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}>⚡ +1 per Level gained (Lv.{xpStats.level})</span>
+                          <span className="font-black text-emerald-400">+{shieldStats.levelShields}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className={theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}>🔥 +1 every 7 Perfect Days ({insightsData?.perfectDaysCount || 0} total)</span>
+                          <span className="font-black text-amber-400">+{shieldStats.perfectDayShields}</span>
+                        </div>
+                      </div>
+                      <p className={`text-[11px] pt-1 ${getTextMuted()}`}>
+                        Shields protect your running habit streaks on missed days. Click any day in the Activity Heatmap to apply or remove a shield.
+                      </p>
+                    </div>
+
+                    {/* Earned History by Day */}
+                    <div className="space-y-2">
+                      <div className={`text-[10px] font-black uppercase tracking-widest ${getTextMuted()}`}>Shields Earned by Day</div>
+                      {shieldStats.earnHistory.length === 0 ? (
+                        <div className={`p-4 rounded-2xl border text-xs font-semibold ${theme === 'dark' ? 'bg-slate-800/30 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                          You have <span className="font-black text-cyan-400">1 Starter Shield</span> ready to use. Level up or reach 7 perfect days to earn more!
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {shieldStats.earnHistory.map((entry) => (
+                            <div key={entry.dateKey} className={`p-3 rounded-2xl border flex items-start justify-between gap-3 ${theme === 'dark' ? 'bg-slate-800/50 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                              <div className="min-w-0">
+                                <div className={`text-xs font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                                  {parseLocalDate(entry.dateKey).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </div>
+                                <div className="mt-1 space-y-0.5">
+                                  {entry.reasons.map((r, idx) => (
+                                    <div key={idx} className={`text-[11px] font-medium ${getTextMuted()}`}>
+                                      {r.type === 'level' ? '⚡' : '🔥'} {r.reason} <span className="font-bold text-cyan-400">(+{r.count})</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                              <span className={`shrink-0 px-2.5 py-1 rounded-xl text-[11px] font-black border ${theme === 'dark' ? 'bg-cyan-500/15 border-cyan-500/30 text-cyan-400' : 'bg-cyan-50 border-cyan-200 text-cyan-600'}`}>
+                                +{entry.count} 🛡️
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Used Shields */}
+                    {shieldedDates.length > 0 && (
+                      <div className="space-y-2">
+                        <div className={`text-[10px] font-black uppercase tracking-widest ${getTextMuted()}`}>Shielded Days ({shieldedDates.length})</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {[...shieldedDates].sort((a, b) => b.localeCompare(a)).map((d) => (
+                            <span key={d} className={`px-2.5 py-1 rounded-xl text-[11px] font-bold border ${theme === 'dark' ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-300' : 'bg-cyan-50 border-cyan-200 text-cyan-700'}`}>
+                              🛡️ {parseLocalDate(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* --- INSIGHTS MODAL --- */}
           <AnimatePresence>
             {showInsightsModal && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[180] flex items-center justify-center bg-black/70 backdrop-blur-md p-4" onClick={() => setShowInsightsModal(false)}>
-                <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} border rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl relative flex flex-col max-h-[85vh]`} onClick={e => e.stopPropagation()}>
-                  <button onClick={() => setShowInsightsModal(false)} className={`absolute top-6 right-6 flex flex-col items-center gap-0.5 p-2 ${getTextMuted()} hover:text-rose-500 transition-all`} title="Close (ESC)"><XIcon /><span className="text-[6px] font-mono opacity-50">ESC</span></button>
+                <motion.div initial={{ scale: 0.94, y: 18 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.94, y: 18 }} transition={{ duration: 0.18, ease: 'easeOut' }} className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} border rounded-[2rem] w-full max-w-2xl p-6 md:p-7 shadow-2xl relative flex flex-col max-h-[88vh]`} onClick={e => e.stopPropagation()}>
+                  <button onClick={() => setShowInsightsModal(false)} className={`absolute top-5 right-5 flex flex-col items-center gap-0.5 p-2 ${getTextMuted()} hover:text-rose-500 transition-all`} title="Close (ESC)"><XIcon /><span className="text-[6px] font-mono opacity-50">ESC</span></button>
 
-                  <div className="mb-6 shrink-0">
-                    <p className={`text-[10px] font-black ${getTextMuted()} uppercase tracking-[0.2em] mb-1`}>Year in Review</p>
-                    <h3 className={`text-3xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Insights</h3>
+                  <div className="mb-5 shrink-0 pr-10">
+                    <p className="text-[10px] font-black text-purple-400 uppercase tracking-[0.2em] mb-1">Performance Intelligence</p>
+                    <h3 className={`text-2xl md:text-3xl font-black tracking-tight ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Insights</h3>
                   </div>
 
-                  <div className="overflow-y-auto custom-scrollbar pr-2 space-y-4">
+                  <div className="overflow-y-auto custom-scrollbar pr-1.5 space-y-4">
+                    <TutorialTipCard
+                      isVisible={!dismissedTips.insights}
+                      isSnapping={!!snappingTips.insights}
+                      onDismiss={() => triggerTipSnap('insights')}
+                      onSnapDone={() => finishTipSnap('insights')}
+                      theme={theme}
+                      accent="purple"
+                      icon={<TrophyIcon className="w-4 h-4" />}
+                      eyebrow="Insights Guide"
+                      title="Spot Patterns & Focus Habits"
+                      description="See your 30-day consistency trend, weekday highs and dips, strongest vs lagging habits, and streak leaderboard. Click any habit row to inspect or adjust it."
+                      marginBottom="0.25rem"
+                    />
 
-                    {/* Grid for small stats */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className={`p-4 rounded-2xl border flex flex-col items-center justify-center text-center ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                        <span className={`text-[10px] font-black uppercase tracking-widest ${getTextMuted()} mb-1`}>Perfect Days</span>
-                        <span className={`text-2xl font-black ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                          {insightsData.perfectDaysCount} <span className="text-[10px] font-bold opacity-50 uppercase tracking-widest">Days</span>
-                        </span>
+                    {/* 1. 4-Card KPI Strip */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                      {/* 30d Consistency */}
+                      <div className={`p-3.5 rounded-2xl border flex flex-col justify-between ${theme === 'dark' ? 'bg-slate-800/45 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                        <span className={`text-[9px] font-black uppercase tracking-wider ${getTextMuted()}`}>30d Consistency</span>
+                        <div className="mt-1.5 flex items-baseline gap-1.5 flex-wrap">
+                          <span className={`text-2xl font-black tabular-nums ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                            {insightsData.consistency30d}%
+                          </span>
+                          {insightsData.consistencyDelta !== null ? (
+                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md ${insightsData.consistencyDelta >= 0
+                              ? (theme === 'dark' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-100 text-emerald-700')
+                              : (theme === 'dark' ? 'bg-rose-500/15 text-rose-400' : 'bg-rose-100 text-rose-700')
+                              }`}>
+                              {insightsData.consistencyDelta >= 0 ? `+${insightsData.consistencyDelta}%` : `${insightsData.consistencyDelta}%`}
+                            </span>
+                          ) : (
+                            <span className={`text-[9px] font-bold ${getTextMuted()}`}>30d avg</span>
+                          )}
+                        </div>
                       </div>
-                      <div className={`p-4 rounded-2xl border flex flex-col items-center justify-center text-center ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                        <span className={`text-[10px] font-black uppercase tracking-widest ${getTextMuted()} mb-1`}>Total Wins</span>
-                        <span className={`text-2xl font-black ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>
-                          {insightsData.totalWins} <span className="text-[10px] font-bold opacity-50 uppercase tracking-widest">Habits</span>
-                        </span>
+
+                      {/* Perfect Days */}
+                      <div className={`p-3.5 rounded-2xl border flex flex-col justify-between ${theme === 'dark' ? 'bg-slate-800/45 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                        <span className={`text-[9px] font-black uppercase tracking-wider ${getTextMuted()}`}>Perfect Days</span>
+                        <div className="mt-1.5">
+                          <span className={`text-2xl font-black tabular-nums ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                            {insightsData.perfectDaysCount}
+                          </span>
+                          <p className={`text-[9px] font-bold mt-0.5 ${getTextMuted()}`}>
+                            Shield in {7 - (insightsData.perfectDaysCount % 7)} perfect {7 - (insightsData.perfectDaysCount % 7) === 1 ? 'day' : 'days'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Active Perfect Streak */}
+                      <div className={`p-3.5 rounded-2xl border flex flex-col justify-between ${theme === 'dark' ? 'bg-slate-800/45 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                        <span className={`text-[9px] font-black uppercase tracking-wider ${getTextMuted()}`}>All-Done Streak</span>
+                        <div className="mt-1.5 flex items-baseline gap-1">
+                          <span className={`text-2xl font-black tabular-nums ${insightsData.activePerfectStreak > 0 ? 'text-orange-400' : (theme === 'dark' ? 'text-slate-300' : 'text-slate-700')}`}>
+                            {insightsData.activePerfectStreak}d
+                          </span>
+                          <span className={`text-[9px] font-bold ${getTextMuted()}`}>100% run</span>
+                        </div>
+                      </div>
+
+                      {/* Total Wins */}
+                      <div className={`p-3.5 rounded-2xl border flex flex-col justify-between ${theme === 'dark' ? 'bg-slate-800/45 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                        <span className={`text-[9px] font-black uppercase tracking-wider ${getTextMuted()}`}>Total Wins</span>
+                        <div className="mt-1.5">
+                          <span className={`text-2xl font-black tabular-nums ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>
+                            {insightsData.totalWins}
+                          </span>
+                          <p className={`text-[9px] font-bold mt-0.5 ${getTextMuted()}`}>
+                            Across {insightsData.trackedDaysCount} active {insightsData.trackedDaysCount === 1 ? 'day' : 'days'}
+                          </p>
+                        </div>
                       </div>
                     </div>
 
-                    {/* Best Day */}
-                    <div className={`p-5 rounded-2xl border flex items-center justify-between ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                      <div className="flex flex-col">
-                        <span className={`text-[10px] font-black uppercase tracking-widest ${getTextMuted()}`}>Best Day</span>
-                        <span className={`text-xl font-black mt-1 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{insightsData.bestDay}</span>
+                    {/* 2. Weekday Performance Pattern (All 7 Days) */}
+                    <div className={`p-4 md:p-5 rounded-2xl border ${theme === 'dark' ? 'bg-slate-800/45 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                      <div className="flex items-center justify-between gap-2 flex-wrap mb-4">
+                        <span className={`text-[10px] font-black uppercase tracking-widest ${getTextMuted()}`}>
+                          Weekday Pattern
+                        </span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${theme === 'dark' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>
+                            Peak: {insightsData.bestDay} ({insightsData.bestDayScore}%)
+                          </span>
+                          {insightsData.weakDay && insightsData.weakDay !== insightsData.bestDay && (
+                            <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${theme === 'dark' ? 'bg-amber-500/15 text-amber-300 border border-amber-500/25' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
+                              Dip: {insightsData.weakDay} ({insightsData.weakDayScore}%)
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <div className={`w-14 h-14 rounded-full flex flex-col items-center justify-center border-4 ${theme === 'dark' ? 'border-purple-500/20 text-purple-400 bg-purple-500/10' : 'border-purple-200 text-purple-600 bg-purple-50'}`}>
-                        <span className="text-sm font-black">{insightsData.bestDayScore}%</span>
+
+                      <div className="grid grid-cols-7 gap-2 items-end h-28 pt-4">
+                        {insightsData.weekdayBreakdown.map((d) => (
+                          <div key={d.label} className="flex flex-col items-center gap-1.5 h-full justify-end" title={`${d.fullLabel}: ${d.pct}% average`}>
+                            <span className={`text-[9px] font-black tabular-nums ${d.isBest
+                              ? 'text-emerald-400'
+                              : d.isWeak
+                                ? 'text-amber-400'
+                                : (d.pct > 0 ? (theme === 'dark' ? 'text-slate-300' : 'text-slate-700') : (theme === 'dark' ? 'text-slate-600' : 'text-slate-400'))
+                              }`}>
+                              {d.pct}%
+                            </span>
+                            <div className={`w-full flex-1 rounded-xl border overflow-hidden flex items-end p-0.5 ${theme === 'dark' ? 'bg-slate-900/70 border-slate-800' : 'bg-white border-slate-200'}`}>
+                              <motion.div
+                                initial={{ height: 0 }}
+                                animate={{ height: `${Math.max(d.pct > 0 ? 8 : 0, d.pct)}%` }}
+                                transition={{ duration: 0.65, ease: 'easeOut' }}
+                                className={`w-full rounded-lg ${d.isBest
+                                  ? 'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.4)]'
+                                  : d.isWeak
+                                    ? 'bg-amber-500/80'
+                                    : (theme === 'dark' ? 'bg-purple-500/65' : 'bg-purple-500/75')
+                                  }`}
+                              />
+                            </div>
+                            <span className={`text-[9px] font-black uppercase tracking-wider ${d.isBest
+                              ? 'text-emerald-400'
+                              : d.isWeak
+                                ? 'text-amber-400'
+                                : getTextMuted()
+                              }`}>
+                              {d.label}
+                            </span>
+                          </div>
+                        ))}
                       </div>
                     </div>
 
-                    {/* Longest Streaks */}
-                    <div className={`p-5 rounded-2xl border ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                      <span className={`text-[10px] font-black uppercase tracking-widest ${getTextMuted()}`}>Top All-Time Streaks</span>
-                      <div className="mt-4 space-y-3">
+                    {/* 3. Strongest vs Needs Focus (Last 30 Days) */}
+                    {(insightsData.topHabit30 || insightsData.focusHabit30) && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {insightsData.topHabit30 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowInsightsModal(false);
+                              setViewingHabitMap(insightsData.topHabit30.habit);
+                            }}
+                            className={`p-4 rounded-2xl border text-left transition-all flex items-center justify-between gap-3 ${theme === 'dark' ? 'bg-emerald-500/10 border-emerald-500/25 hover:border-emerald-400/60' : 'bg-emerald-50/70 border-emerald-200 hover:border-emerald-400'}`}
+                          >
+                            <div className="min-w-0">
+                              <span className={`text-[9px] font-black uppercase tracking-wider block ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-700'}`}>
+                                Strongest (30d)
+                              </span>
+                              <span className={`text-sm font-black truncate block mt-0.5 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                                {insightsData.topHabit30.habit}
+                              </span>
+                            </div>
+                            <span className={`px-2.5 py-1 rounded-xl text-xs font-black tabular-nums shrink-0 ${theme === 'dark' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white text-emerald-700 border border-emerald-200'}`}>
+                              {insightsData.topHabit30.pct}%
+                            </span>
+                          </button>
+                        )}
+
+                        {insightsData.focusHabit30 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowInsightsModal(false);
+                              setViewingHabitMap(insightsData.focusHabit30.habit);
+                            }}
+                            className={`p-4 rounded-2xl border text-left transition-all flex items-center justify-between gap-3 ${theme === 'dark' ? 'bg-amber-500/10 border-amber-500/25 hover:border-amber-400/60' : 'bg-amber-50/70 border-amber-200 hover:border-amber-400'}`}
+                          >
+                            <div className="min-w-0">
+                              <span className={`text-[9px] font-black uppercase tracking-wider block ${theme === 'dark' ? 'text-amber-400' : 'text-amber-700'}`}>
+                                Needs Focus (30d)
+                              </span>
+                              <span className={`text-sm font-black truncate block mt-0.5 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                                {insightsData.focusHabit30.habit}
+                              </span>
+                            </div>
+                            <span className={`px-2.5 py-1 rounded-xl text-xs font-black tabular-nums shrink-0 ${theme === 'dark' ? 'bg-amber-500/20 text-amber-300' : 'bg-white text-amber-700 border border-amber-200'}`}>
+                              {insightsData.focusHabit30.pct}%
+                            </span>
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* 4. Top Habit Streaks Leaderboard (Interactive) */}
+                    <div className={`p-4 md:p-5 rounded-2xl border ${theme === 'dark' ? 'bg-slate-800/45 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                      <div className="flex items-center justify-between mb-3.5">
+                        <span className={`text-[10px] font-black uppercase tracking-widest ${getTextMuted()}`}>
+                          Top Habit Streaks
+                        </span>
+                        <span className={`text-[10px] font-bold ${getTextMuted()}`}>
+                          Tap habit to inspect
+                        </span>
+                      </div>
+
+                      <div className="space-y-2.5">
                         {insightsData.topStreaks.length > 0 ? (
-                          insightsData.topStreaks.map((streakData, i) => (
-                            <div key={streakData.habit} className="flex items-center justify-between">
-                              <span className={`text-sm font-bold uppercase truncate pr-4 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>{i + 1}. {streakData.habit}</span>
-                              <div className="flex gap-2 shrink-0">
-                                {streakData.current > 0 && (
-                                  <div className={`flex flex-col items-center px-2 py-1 rounded-lg ${theme === 'dark' ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-emerald-50 border border-emerald-200'}`} title="Active streak going on right now">
-                                    <span className={`text-[8px] font-black uppercase opacity-70 ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>Current</span>
-                                    <span className={`text-[11px] font-black ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                                      🔥 {streakData.current} {streakData.current === 1 ? 'Day' : 'Days'}
+                          insightsData.topStreaks.map((streakData, i) => {
+                            const maxOverall = Math.max(1, insightsData.topStreaks[0]?.max || 1);
+                            const barPct = Math.round((streakData.max / maxOverall) * 100);
+                            return (
+                              <button
+                                key={streakData.habit}
+                                type="button"
+                                onClick={() => {
+                                  setShowInsightsModal(false);
+                                  setViewingHabitMap(streakData.habit);
+                                }}
+                                className={`w-full text-left p-2.5 rounded-xl border transition-all flex items-center justify-between gap-3 ${theme === 'dark' ? 'bg-slate-900/50 border-slate-800 hover:border-slate-600' : 'bg-white border-slate-200 hover:border-slate-300'}`}
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className={`text-[10px] font-black w-5 shrink-0 ${i === 0 ? 'text-amber-400' : getTextMuted()}`}>
+                                      #{i + 1}
+                                    </span>
+                                    <span className={`text-sm font-bold truncate ${theme === 'dark' ? 'text-slate-200' : 'text-slate-700'}`}>
+                                      {streakData.habit}
                                     </span>
                                   </div>
-                                )}
-                                <div className={`flex flex-col items-center px-2 py-1 rounded-lg ${theme === 'dark' ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-amber-50 border border-amber-200'}`} title="Longest streak you've ever had">
-                                  <span className={`text-[8px] font-black uppercase opacity-70 ${theme === 'dark' ? 'text-amber-400' : 'text-amber-600'}`}>Best</span>
-                                  <span className={`text-[11px] font-black ${theme === 'dark' ? 'text-amber-400' : 'text-amber-600'}`}>
-                                    🏆 {streakData.max} {streakData.max === 1 ? 'Day' : 'Days'}
-                                  </span>
+                                  <div className={`mt-1.5 ml-7 h-1.5 rounded-full overflow-hidden ${theme === 'dark' ? 'bg-slate-800' : 'bg-slate-100'}`}>
+                                    <div
+                                      className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-amber-400 transition-all duration-500"
+                                      style={{ width: `${barPct}%` }}
+                                    />
+                                  </div>
                                 </div>
-                              </div>
-                            </div>
-                          ))
+
+                                <div className="flex gap-1.5 shrink-0">
+                                  {streakData.current > 0 && (
+                                    <div className={`flex flex-col items-center px-2 py-1 rounded-lg ${theme === 'dark' ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-emerald-50 border border-emerald-200'}`} title="Active streak">
+                                      <span className={`text-[7px] font-black uppercase opacity-75 ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>Current</span>
+                                      <span className={`text-[11px] font-black inline-flex items-center gap-1 tabular-nums ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                                        <HeaderFireIcon className="w-3 h-3 text-orange-500 shrink-0" /> {streakData.current}d
+                                      </span>
+                                    </div>
+                                  )}
+                                  <div className={`flex flex-col items-center px-2 py-1 rounded-lg ${theme === 'dark' ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-amber-50 border border-amber-200'}`} title="Best all-time streak">
+                                    <span className={`text-[7px] font-black uppercase opacity-75 ${theme === 'dark' ? 'text-amber-400' : 'text-amber-600'}`}>Best</span>
+                                    <span className={`text-[11px] font-black tabular-nums ${theme === 'dark' ? 'text-amber-400' : 'text-amber-600'}`}>
+                                      🏆 {streakData.max}d
+                                    </span>
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })
                         ) : (
-                          <span className={`text-xs font-bold ${getTextMuted()}`}>No streaks yet. Keep going!</span>
+                          <span className={`text-xs font-bold block py-2 ${getTextMuted()}`}>No streaks yet. Complete habits daily to build momentum!</span>
                         )}
                       </div>
                     </div>
@@ -2881,64 +3706,21 @@ export default function App() {
               </motion.div>
             )}
           </AnimatePresence>
-          {/* Empty State Onboarding — Thanos snap out when first habit is logged */}
-          {(welcomeCardStatus === 'visible' || welcomeCardStatus === 'snapping') && (
-            <ThanosDisintegrate
-              shouldDisintegrate={welcomeCardStatus === 'snapping'}
-              onDone={() => setWelcomeCardStatus('gone')}
-            >
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={`${getCardStyle()} border rounded-[2.5rem] relative overflow-hidden transition-colors`}
-              >
-                <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-blue-500/5 pointer-events-none" />
-                <div className="relative z-10 py-12 px-8 text-center">
-                  <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 border-2 ${theme === 'dark' ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-emerald-50 border-emerald-200'
-                    }`}>
-                    <span className="text-3xl">🌱</span>
-                  </div>
-                  <h3 className={`text-2xl font-black mb-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
-                    Welcome to My Habit Mastery!
-                  </h3>
-                  <p className={`text-sm font-medium mb-6 max-w-sm mx-auto leading-relaxed ${getTextMuted()}`}>
-                    Start tracking your habits by clicking the cells in the table below.
-                    Long-press for partial completion, tap for full completion.
-                  </p>
-                  <div className={`flex items-center justify-center gap-6 text-[10px] font-black uppercase tracking-widest ${getTextMuted()} mb-6`}>
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="w-10 h-10 rounded-2xl bg-emerald-500 text-white flex items-center justify-center text-base shadow-lg shadow-emerald-500/30">✔</div>
-                      <span>Complete</span>
-                    </div>
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center text-xs font-black shadow-lg shadow-blue-500/30">50%</div>
-                      <span>Partial</span>
-                    </div>
-                    <div className="flex flex-col items-center gap-2">
-                      <div className={`w-10 h-10 rounded-2xl border-2 flex items-center justify-center text-red-500 ${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'
-                        }`}>✘</div>
-                      <span>Missed</span>
-                    </div>
-                  </div>
-                  <div className="flex justify-center">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        try { localStorage.setItem('adib_dismissed_welcome', 'true'); } catch { /* ignore */ }
-                        setWelcomeCardStatus('snapping');
-                      }}
-                      className={`text-xs font-bold px-4 py-2 rounded-xl transition-all border ${theme === 'dark'
-                        ? 'bg-slate-800/80 hover:bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
-                        : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-600 hover:text-slate-900'
-                        }`}
-                    >
-                      Got it, dismiss ✨
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            </ThanosDisintegrate>
-          )}
+          {/* Tracking Table Onboarding Tutorial — Thanos snaps on Dismiss */}
+          <TutorialTipCard
+            isVisible={!isHydrating && !dismissedTips.table}
+            isSnapping={!!snappingTips.table}
+            onDismiss={() => triggerTipSnap('table')}
+            onSnapDone={() => finishTipSnap('table')}
+            theme={theme}
+            accent="emerald"
+            icon={<AppLogo className="w-6 h-6" />}
+            eyebrow="Quick Start · Tracking Table"
+            title="How to Log & Navigate"
+            description="Tap any cell to mark 100% done, or press and hold (450ms) to slide partial progress or Goal Steps. Click the blue bubble next to any date to write a reflection, and grab/drag or hold Shift + Scroll to pan smoothly."
+            badges={['Tap = 100% ✔', 'Hold 450ms = Slider / Steps', 'Blue Bubble = Note', 'Shift + Scroll = Pan']}
+            marginBottom="1.25rem"
+          />
           {/* Table Log */}
           <motion.div variants={itemVariants} className={`${getCardStyle()} ${isMobileMode ? 'rounded-2xl' : 'rounded-[2.5rem]'} overflow-hidden mb-8 relative transition-colors`}>
 
@@ -2978,7 +3760,7 @@ export default function App() {
                         </th>
 
                         {/* FILTERED HABITS HEADER */}
-                        {habits.filter(h => !archivedHabits.includes(h)).map((h) => <th key={h} className={`p-2 border-r border-b uppercase text-center font-black transition-colors ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'}`} style={{ fontSize: `${textSizes.table1}px`, minWidth: isMobileMode ? '90px' : 'auto' }}><div className="px-1 leading-tight break-words" title={h}>{h}</div></th>)}
+                        {habits.filter(h => !archivedHabits.includes(h)).map((h) => <th key={h} className={`p-2 border-r border-b text-center font-black transition-colors ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'}`} style={{ fontSize: `${textSizes.table1}px`, minWidth: isMobileMode ? '90px' : 'auto' }}><div className="px-1 leading-tight break-words" title={h}>{h}</div></th>)}
                         <th className={`p-4 font-black text-emerald-600 text-[14px] sticky top-0 right-0 border-l border-b ${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} w-[100px] z-40 text-center`}>Efficiency</th>
                       </tr>
                     </thead>
@@ -3008,7 +3790,7 @@ export default function App() {
                             <td className={`p-2 sticky left-0 z-10 border-r border-b transition-all duration-500 ${rowBgStyle} ${isToday ? 'border-l-4 border-l-emerald-500' : ''} ${theme === 'dark' ? 'border-r-slate-700' : 'border-r-slate-200'}`}>
                               <div className="flex items-center justify-center gap-3">
                                 <div className="tooltip-trigger">
-                                  <motion.button whileTap={{ scale: 0.9 }} onClick={() => setEditingNoteDate(key)} title={dayData.note ? "View/Edit Reflection" : "Add Reflection"} className={`p-2 rounded-xl transition-all ${dayData.note ? 'bg-blue-600 text-white shadow-md' : (theme === 'dark' ? 'bg-slate-800 text-slate-600 hover:bg-slate-700' : 'bg-slate-100 text-slate-300 hover:bg-slate-200')}`}><NoteIcon /></motion.button>
+                                  <motion.button whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.9 }} onClick={() => setEditingNoteDate(key)} title={dayData.note ? "View/Edit Reflection" : "Add Reflection"} className={`p-2 rounded-xl border transition-all ${dayData.note ? 'bg-blue-600 text-white border-blue-400/40 shadow-md shadow-blue-500/25' : (theme === 'dark' ? 'bg-blue-500/10 text-blue-400/80 border-blue-500/25 hover:bg-blue-500/20 hover:text-blue-300 hover:border-blue-400/50' : 'bg-blue-50/80 text-blue-500 border-blue-200/80 hover:bg-blue-100 hover:text-blue-600 hover:border-blue-300')}`}><NoteIcon /></motion.button>
                                   <span className="tooltip-content" style={{ whiteSpace: 'nowrap', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                     {dayData.note ? `“${dayData.note.split('\n')[0].substring(0, 45)}${dayData.note.split('\n')[0].length > 45 ? '…' : ''}”` : 'Add reflection'}
                                   </span>
@@ -3077,10 +3859,11 @@ export default function App() {
                               <div className="flex flex-col items-center gap-1">
                                 <div className="tooltip-trigger flex items-center justify-center">
                                   <motion.button
+                                    whileHover={{ scale: 1.08 }}
                                     whileTap={{ scale: 0.9 }}
                                     onClick={() => setEditingNoteDate(key)}
                                     title={trackerData[key]?.note ? "View/Edit Reflection" : "Add Reflection"}
-                                    className={`p-2 rounded-xl transition-all ${trackerData[key]?.note ? 'bg-blue-600 text-white shadow-md' : (theme === 'dark' ? 'bg-slate-800 text-slate-600 hover:bg-slate-700' : 'bg-slate-100 text-slate-300 hover:bg-slate-200')}`}
+                                    className={`p-2 rounded-xl border transition-all ${trackerData[key]?.note ? 'bg-blue-600 text-white border-blue-400/40 shadow-md shadow-blue-500/25' : (theme === 'dark' ? 'bg-blue-500/10 text-blue-400/80 border-blue-500/25 hover:bg-blue-500/20 hover:text-blue-300 hover:border-blue-400/50' : 'bg-blue-50/80 text-blue-500 border-blue-200/80 hover:bg-blue-100 hover:text-blue-600 hover:border-blue-300')}`}
                                   >
                                     <NoteIcon />
                                   </motion.button>
@@ -3126,7 +3909,7 @@ export default function App() {
                       {/* FILTERED HABITS ROWS */}
                       {habits.filter(h => !archivedHabits.includes(h)).map((habit) => (
                         <tr key={habit} className="h-[68px]">
-                          <td data-no-scroll className={`p-1 font-black uppercase sticky left-0 z-20 border-r border-b text-center transition-colors ${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} text-slate-400 shadow-[4px_0_8px_rgba(0,0,0,0.3)]`} style={{ fontSize: `${textSizes.table2}px` }}>
+                          <td data-no-scroll className={`p-1 font-black sticky left-0 z-20 border-r border-b text-center transition-colors ${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} text-slate-400 shadow-[4px_0_8px_rgba(0,0,0,0.3)]`} style={{ fontSize: `${textSizes.table2}px` }}>
                             <div className="truncate w-full px-1 font-black leading-tight">{habit}</div>
                           </td>
                           {daysInMonth.map(day => {
@@ -3178,10 +3961,11 @@ export default function App() {
           const dayDate = parseLocalDate(selectedHeatmapDay);
           const isShielded = shieldedDates.includes(selectedHeatmapDay);
           const dayData = trackerData[selectedHeatmapDay] || {};
+          const dayHabits = activeHabitsList.filter(h => isHabitActiveOnDate(h, selectedHeatmapDay, archivedHabits, habitConfigs));
           let totalEarnedWeight = 0;
           let totalPossibleWeight = 0;
           let doneCount = 0;
-          activeHabitsList.forEach(h => {
+          dayHabits.forEach(h => {
             const r = dayData[h] ?? 0;
             const v = typeof r === 'number' ? r : (r ? 100 : 0);
             totalEarnedWeight += (v / 100);
@@ -3191,7 +3975,8 @@ export default function App() {
           const dayPct = totalPossibleWeight > 0 ? Math.round((totalEarnedWeight / totalPossibleWeight) * 100) : (isShielded ? 100 : 0);
           const hasNote = Boolean(dayData.note && dayData.note.trim());
           const isFutureDay = new Date(dayDate).setHours(0, 0, 0, 0) > new Date().setHours(0, 0, 0, 0);
-          const canToggleShield = !isFutureDay && (isShielded || shieldStats.availableCount > 0);
+          const isFireDay = dayHabits.length > 0 && doneCount === dayHabits.length;
+          const canToggleShield = !isFutureDay && (isShielded || (!isFireDay && shieldStats.availableCount > 0));
 
           const handleJumpToMonth = () => {
             setCurrentDate(new Date(dayDate.getFullYear(), dayDate.getMonth(), 1));
@@ -3229,13 +4014,27 @@ export default function App() {
                       {dayDate.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })}
                     </h3>
                     <p className={`text-xs font-semibold ${getTextMuted()}`}>
-                      Efficiency: <span className="text-emerald-500 font-black">{dayPct}%</span> ({doneCount}/{activeHabitsList.length} habits done)
+                      Efficiency: <span className="text-emerald-500 font-black">{dayPct}%</span> ({doneCount}/{dayHabits.length} habits done)
                     </p>
                   </div>
                   <button onClick={() => setSelectedHeatmapDay(null)} className={`p-1.5 rounded-xl ${getTextMuted()} hover:text-rose-500 transition-colors`} title="Close (ESC)">
                     <XIcon />
                   </button>
                 </div>
+
+                <TutorialTipCard
+                  isVisible={!dismissedTips.dayInspector}
+                  isSnapping={!!snappingTips.dayInspector}
+                  onDismiss={() => triggerTipSnap('dayInspector')}
+                  onSnapDone={() => finishTipSnap('dayInspector')}
+                  theme={theme}
+                  accent="cyan"
+                  icon={<ShieldIcon className="w-4 h-4" />}
+                  eyebrow="Day Inspector"
+                  title="Quick Edit, Shield & Jump"
+                  description="Tap any habit below to toggle it for this date, activate a Streak Shield to protect missed days, add a note, or jump straight to this day in the table."
+                  marginBottom="0.75rem"
+                />
 
                 {/* Action Controls */}
                 <div className="flex flex-wrap gap-2 mb-4">
@@ -3255,18 +4054,34 @@ export default function App() {
                       ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.3)]'
                       : canToggleShield
                         ? (theme === 'dark' ? 'bg-slate-800/60 border-slate-700 text-slate-300 hover:border-cyan-500/40 hover:text-cyan-400' : 'bg-slate-100 border-slate-200 text-slate-700 hover:border-cyan-500/40 hover:text-cyan-600')
-                        : 'opacity-40 cursor-not-allowed border-slate-800 text-slate-500'
+                        : 'opacity-45 cursor-not-allowed border-slate-800 text-slate-500'
                       }`}
-                    title={canToggleShield ? (isShielded ? 'Remove Streak Shield from this date' : 'Protect this date with a Streak Shield') : 'No streak shields available'}
+                    title={
+                      isShielded
+                        ? 'Remove Streak Shield from this date'
+                        : isFireDay
+                          ? 'Fire day — all habits already completed, no shield needed'
+                          : isFutureDay
+                            ? 'Cannot shield a future date'
+                            : shieldStats.availableCount > 0
+                              ? 'Protect this date with a Streak Shield'
+                              : 'No streak shields available'
+                    }
                   >
                     <ShieldIcon />
-                    <span>{isShielded ? '🛡️ Shield Active' : '🛡️ Use Streak Shield'}</span>
+                    <span>
+                      {isShielded
+                        ? '🛡️ Shield Active'
+                        : isFireDay
+                          ? '🔥 Fire Day (No Shield)'
+                          : '🛡️ Use Streak Shield'}
+                    </span>
                   </button>
                 </div>
 
                 {/* Habits Checklist for that day */}
                 <div className="space-y-1.5 max-h-56 overflow-y-auto custom-scrollbar pr-1 mb-4">
-                  {activeHabitsList.map((h) => {
+                  {dayHabits.map((h) => {
                     const raw = dayData[h] ?? 0;
                     const val = typeof raw === 'number' ? raw : (raw ? 100 : 0);
                     const isDone = val >= 100;
@@ -3279,7 +4094,7 @@ export default function App() {
                           : (theme === 'dark' ? 'bg-slate-800/40 border-slate-800 text-slate-400 hover:bg-slate-800/80' : 'bg-slate-50 border-slate-100 text-slate-500 hover:bg-slate-100')
                           }`}
                       >
-                        <span className="text-xs font-bold uppercase tracking-wide truncate">{h}</span>
+                        <span className="text-xs font-bold tracking-wide truncate">{h}</span>
                         <span className={`text-xs font-black px-2 py-0.5 rounded-md ${isDone ? 'bg-emerald-500 text-white' : (theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-200 text-slate-600')}`}>
                           {(() => {
                             const cfg = habitConfigs[h];
@@ -3351,30 +4166,37 @@ export default function App() {
                   {/* Stats 2x2 Grid */}
                   <div className="grid grid-cols-2 gap-1.5 flex-1">
                     <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} p-1.5 rounded-xl border flex flex-col items-center justify-center text-center`}>
-                      <span className={`text-[8px] uppercase font-black ${getTextMuted()} leading-none mb-0.5`}>Steps</span>
-                      <input
-                        type="number"
-                        value={tempGoalVal}
-                        onChange={(e) => setTempGoalVal(e.target.value)}
-                        onBlur={() => {
-                          let val = parseInt(tempGoalVal);
-                          if (isNaN(val) || val < 1) val = 1;
-                          setTempGoalVal(val);
-                          const nc = {
-                            ...habitConfigs,
-                            [viewingHabitMap]: {
-                              ...(habitConfigs[viewingHabitMap] || { priority: 1, steps: 1 }),
-                              steps: val
-                            }
-                          };
-                          setHabitConfigs(nc);
-                          save(trackerData, habits, nc);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') e.currentTarget.blur();
-                        }}
-                        className="w-full text-center text-xs font-black bg-transparent focus:outline-none focus:text-emerald-500"
-                      />
+                      <span className={`text-[8px] uppercase font-black ${getTextMuted()} leading-none mb-1`}>Steps</span>
+                      <div className="flex items-center justify-center gap-1 w-full">
+                        <button
+                          type="button"
+                          onClick={() => updateViewingHabitSteps((parseInt(tempGoalVal) || 1) - 1)}
+                          disabled={(parseInt(tempGoalVal) || 1) <= 1}
+                          className={`w-5 h-5 rounded-md flex items-center justify-center text-[11px] font-black disabled:opacity-30 ${theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:text-white' : 'bg-slate-100 text-slate-600'}`}
+                        >
+                          −
+                        </button>
+                        <input
+                          type="number"
+                          min="1"
+                          max="99"
+                          value={tempGoalVal}
+                          onChange={(e) => setTempGoalVal(e.target.value)}
+                          onBlur={() => updateViewingHabitSteps(tempGoalVal)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') e.currentTarget.blur();
+                          }}
+                          className="w-8 text-center text-xs font-black tabular-nums bg-transparent focus:outline-none focus:text-emerald-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => updateViewingHabitSteps((parseInt(tempGoalVal) || 1) + 1)}
+                          disabled={(parseInt(tempGoalVal) || 1) >= 99}
+                          className={`w-5 h-5 rounded-md flex items-center justify-center text-[11px] font-black disabled:opacity-30 ${theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:text-white' : 'bg-slate-100 text-slate-600'}`}
+                        >
+                          +
+                        </button>
+                      </div>
                     </div>
 
                     <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} p-1.5 rounded-xl border flex flex-col items-center justify-center text-center`}>
@@ -3408,31 +4230,70 @@ export default function App() {
                   </div>
 
                   {/* Goal Input Desktop */}
-                  <div className={`w-full mb-5 p-3 rounded-xl border ${theme === 'dark' ? 'bg-slate-900/50 border-slate-700' : 'bg-white border-slate-200'} shadow-sm`}>
-                    <label className={`text-[7px] font-black uppercase ${getTextMuted()} block mb-0.5 text-center`}>Goal Steps</label>
-                    <input
-                      type="number"
-                      value={tempGoalVal}
-                      onChange={(e) => setTempGoalVal(e.target.value)}
-                      onBlur={() => {
-                        let val = parseInt(tempGoalVal);
-                        if (isNaN(val) || val < 1) val = 1;
-                        setTempGoalVal(val);
-                        const nc = {
-                          ...habitConfigs,
-                          [viewingHabitMap]: {
-                            ...(habitConfigs[viewingHabitMap] || { priority: 1, steps: 1 }),
-                            steps: val
-                          }
-                        };
-                        setHabitConfigs(nc);
-                        save(trackerData, habits, nc);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') e.currentTarget.blur();
-                      }}
-                      className="w-full text-center text-xl font-black p-1 rounded bg-transparent focus:outline-none focus:text-emerald-500 transition-colors"
-                    />
+                  <div className={`w-full mb-5 p-3 rounded-2xl border ${theme === 'dark' ? 'bg-slate-900/60 border-slate-700/80' : 'bg-white border-slate-200'} shadow-sm`}>
+                    <div className="flex items-center justify-between gap-1.5 mb-2">
+                      <label className={`text-[8px] font-black uppercase tracking-wider ${getTextMuted()}`}>
+                        Goal Steps
+                      </label>
+                      <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${(parseInt(tempGoalVal) || 1) > 1
+                        ? (theme === 'dark' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-emerald-50 text-emerald-700')
+                        : (theme === 'dark' ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-500')
+                        }`}>
+                        {(parseInt(tempGoalVal) || 1) === 1 ? 'Single Check' : `${parseInt(tempGoalVal) || 1} / Day`}
+                      </span>
+                    </div>
+
+                    <div className={`flex items-center h-8 rounded-xl border overflow-hidden mb-2 ${theme === 'dark' ? 'bg-slate-800/70 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                      <button
+                        type="button"
+                        onClick={() => updateViewingHabitSteps((parseInt(tempGoalVal) || 1) - 1)}
+                        disabled={(parseInt(tempGoalVal) || 1) <= 1}
+                        title="Decrease goal steps"
+                        className={`w-8 h-full flex items-center justify-center text-xs font-black transition-colors disabled:opacity-30 ${theme === 'dark' ? 'text-slate-400 hover:text-white hover:bg-slate-700' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200/70'}`}
+                      >
+                        −
+                      </button>
+                      <input
+                        type="number"
+                        min="1"
+                        max="99"
+                        value={tempGoalVal}
+                        onChange={(e) => setTempGoalVal(e.target.value)}
+                        onBlur={() => updateViewingHabitSteps(tempGoalVal)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') e.currentTarget.blur();
+                        }}
+                        className={`flex-1 min-w-0 text-center text-sm font-black tabular-nums bg-transparent focus:outline-none focus:text-emerald-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => updateViewingHabitSteps((parseInt(tempGoalVal) || 1) + 1)}
+                        disabled={(parseInt(tempGoalVal) || 1) >= 99}
+                        title="Increase goal steps"
+                        className={`w-8 h-full flex items-center justify-center text-xs font-black transition-colors disabled:opacity-30 ${theme === 'dark' ? 'text-slate-400 hover:text-white hover:bg-slate-700' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200/70'}`}
+                      >
+                        +
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-1">
+                      {[1, 3, 5, 8].map((n) => {
+                        const active = (parseInt(tempGoalVal) || 1) === n;
+                        return (
+                          <button
+                            key={n}
+                            type="button"
+                            onClick={() => updateViewingHabitSteps(n)}
+                            className={`h-6 rounded-lg text-[9px] font-black transition-all ${active
+                              ? 'bg-emerald-500 text-slate-950 shadow-xs'
+                              : (theme === 'dark' ? 'bg-slate-800/80 text-slate-400 hover:text-white hover:bg-slate-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200')
+                              }`}
+                          >
+                            {n === 1 ? '1×' : n}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   {/* Rank & Streaks Desktop */}
@@ -3459,7 +4320,7 @@ export default function App() {
                     </div>
 
                     <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800 shadow-sm' : 'bg-white border-slate-100 shadow-sm'} p-3 rounded-xl border flex flex-col items-center text-center transition-colors w-full`}>
-                      <div className="text-orange-600 scale-90 mb-1"><FlameIcon /></div>
+                      <div className="text-orange-500 scale-90 mb-1"><HeaderFireIcon className="w-4 h-4" /></div>
                       <div><span className={`text-[9px] block uppercase font-black ${getTextMuted()} leading-none`}>Streak</span><span className={`text-xs font-black ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>{habitInsights.currentStreak}d</span></div>
                     </div>
 
@@ -3484,98 +4345,250 @@ export default function App() {
 
               {/* MAIN CALENDAR SECTION */}
               <div className="flex-1 p-4 md:p-6 flex flex-col md:overflow-y-auto custom-scrollbar">
-                <div className="flex items-start justify-between mb-6 gap-3">
-                  <div className="flex-1 flex flex-col items-center text-center">
-                    <div className="flex flex-col items-center gap-1.5 w-full">
-                      {isEditingTabName ? (
-                        <input autoFocus className={`text-xl font-black bg-transparent focus:outline-none border-b-2 border-emerald-500 text-center w-full max-w-[200px] ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`} value={tempHabitName} onChange={(e) => setTempHabitName(e.target.value)} onBlur={handleTabRename} onKeyDown={(e) => e.key === 'Enter' && handleTabRename()} />
-                      ) : (
-                        <h3 className={`text-lg md:text-xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'} leading-tight cursor-pointer hover:text-emerald-500 transition-colors flex items-center justify-center gap-2 group w-full`} onClick={() => { setIsEditingTabName(true); setTempHabitName(viewingHabitMap); }}>
-                          {viewingHabitMap}
-                          <span className="opacity-0 group-hover:opacity-100 transition-opacity"><EditIcon /></span>
-                        </h3>
-                      )}
+                {/* Centered Habit Header with Integrated Prev/Next Arrows + Top-Right ESC */}
+                {(() => {
+                  const total = modalNavigableHabits.length;
+                  const curIdx = modalNavigableHabits.indexOf(viewingHabitMap);
+                  const canStep = total > 1 && curIdx !== -1;
+                  const prevName = canStep ? modalNavigableHabits[(curIdx - 1 + total) % total] : '';
+                  const nextName = canStep ? modalNavigableHabits[(curIdx + 1) % total] : '';
 
-                      <select
-                        value={habitConfigs[viewingHabitMap]?.category || 'all'}
-                        onChange={(e) => {
-                          const newConfigs = {
-                            ...habitConfigs,
-                            [viewingHabitMap]: { ...(habitConfigs[viewingHabitMap] || { steps: 1 }), category: e.target.value }
-                          };
-                          setHabitConfigs(newConfigs);
-                          save(trackerData, habits, newConfigs);
-                        }}
-                        className={`px-3 py-1 rounded-full text-[8px] md:text-[9px] font-black uppercase tracking-widest border transition-all cursor-pointer focus:outline-none appearance-none text-center
-                            ${theme === 'dark' ? 'bg-slate-800 text-emerald-400 border-slate-700 hover:border-emerald-500' : 'bg-slate-100 text-emerald-600 border-slate-200 hover:border-emerald-400'}`}
+                  return (
+                    <div className={`relative pb-4 mb-5 border-b ${theme === 'dark' ? 'border-slate-800/80' : 'border-slate-200/80'}`}>
+                      <button
+                        onClick={() => { setViewingHabitMap(null); setIsEditingTabName(false); }}
+                        className={`absolute top-0 right-0 flex flex-col items-center gap-0.5 p-2 transition-all ${getTextMuted()} hover:text-rose-500`}
+                        title="Close (ESC)"
                       >
-                        <option value="all">Add to category</option>
-                        {categories.filter(cat => cat !== 'all').map(cat => (
-                          <option key={cat} value={cat}>{cat}</option>
-                        ))}
-                      </select>
-                    </div>
+                        <XIcon />
+                        <span className="text-[6px] font-mono opacity-50">ESC</span>
+                      </button>
 
-                    <div className={`flex items-center justify-center gap-1 mt-2 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
-                      <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} title="Previous month" className="p-1 hover:text-emerald-500 transition-colors"><ChevronLeftIcon /></button>
-                      <span className="text-[10px] font-black uppercase tracking-widest min-w-[80px] text-center">{currentDate.toLocaleString('default', { month: 'short', year: 'numeric' })}</span>
-                      <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} title="Next month" className="p-1 hover:text-emerald-500 transition-colors"><ChevronRightIcon /></button>
-                    </div>
-                  </div>
-                  <button onClick={() => { setViewingHabitMap(null); setIsEditingTabName(false); }} className={`flex flex-col items-center gap-0.5 p-3 transition-all ${getTextMuted()} hover:text-rose-500 shrink-0`} title="Close (ESC)"><XIcon /><span className="text-[6px] font-mono opacity-50">ESC</span></button>
-                </div>
+                      <div className="px-9 flex flex-col items-center text-center">
+                        <div className="flex items-center justify-center gap-2.5 w-full max-w-full">
+                          <button
+                            type="button"
+                            onClick={() => stepViewingHabit(-1)}
+                            disabled={!canStep}
+                            title={canStep ? `Previous habit: ${prevName} (←)` : 'No other habits'}
+                            className={`w-8 h-8 rounded-xl border flex items-center justify-center shrink-0 transition-all disabled:opacity-25 disabled:cursor-not-allowed ${theme === 'dark'
+                              ? 'bg-slate-800/70 border-slate-700/80 text-slate-300 hover:text-emerald-400 hover:border-emerald-500/50 hover:bg-slate-800'
+                              : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-emerald-600 hover:border-emerald-400 hover:bg-emerald-50'
+                              }`}
+                          >
+                            <ChevronLeftIcon />
+                          </button>
 
-                {/* Relocated Super Compact Priority Slider */}
-                <div className={`mb-6 p-2 px-4 rounded-2xl border ${theme === 'dark' ? 'bg-slate-800/40 border-slate-700' : 'bg-slate-50 border-slate-200'} flex items-center gap-4`}>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <label className={`text-[8px] font-black uppercase ${getTextMuted()} tracking-widest`}>Priority</label>
-                    <span className="text-[11px] font-black text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20">{habitConfigs[viewingHabitMap]?.priority || 1}x</span>
-                  </div>
-                  <input
-                    type="range" min="1" max="10" step="1"
-                    value={habitConfigs[viewingHabitMap]?.priority || 1}
-                    onChange={(e) => {
-                      const val = parseInt(e.target.value);
-                      const nc = {
-                        ...habitConfigs,
-                        [viewingHabitMap]: { ...(habitConfigs[viewingHabitMap] || { steps: 1 }), priority: val }
-                      };
-                      setHabitConfigs(nc);
-                      save(trackerData, habits, nc);
-                    }}
-                    className="flex-1 h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500 transition-all"
-                  />
-                </div>
+                          {isEditingTabName ? (
+                            <div className="inline-flex items-center gap-1.5 flex-1 min-w-0 max-w-[260px] justify-center">
+                              <input
+                                autoFocus
+                                className={`text-base md:text-lg font-black px-2.5 py-1 rounded-xl border-2 focus:outline-none text-center w-full min-w-0 ${theme === 'dark'
+                                  ? 'bg-slate-800/90 border-emerald-500 text-white'
+                                  : 'bg-slate-50 border-emerald-500 text-slate-800'
+                                  }`}
+                                value={tempHabitName}
+                                onChange={(e) => setTempHabitName(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleTabRename();
+                                  } else if (e.key === 'Escape') {
+                                    e.stopPropagation();
+                                    setIsEditingTabName(false);
+                                  }
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={handleTabRename}
+                                title="Save habit name"
+                                className="w-7 h-7 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 flex items-center justify-center shrink-0 transition-colors"
+                              >
+                                <CheckIcon className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setIsEditingTabName(false)}
+                                title="Cancel rename"
+                                className={`w-7 h-7 rounded-lg border flex items-center justify-center shrink-0 transition-colors ${theme === 'dark' ? 'border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800' : 'border-slate-200 text-slate-500 hover:bg-slate-100'}`}
+                              >
+                                <XIcon />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="inline-flex items-center justify-center gap-1.5 min-w-0 max-w-[250px]">
+                              <h3
+                                className={`text-lg md:text-xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'} leading-tight cursor-pointer hover:text-emerald-500 transition-colors truncate`}
+                                onClick={() => { setIsEditingTabName(true); setTempHabitName(viewingHabitMap); }}
+                                title={`Rename "${viewingHabitMap}"`}
+                              >
+                                {viewingHabitMap}
+                              </h3>
+                              <button
+                                type="button"
+                                onClick={() => { setIsEditingTabName(true); setTempHabitName(viewingHabitMap); }}
+                                title={`Edit habit name (${viewingHabitMap})`}
+                                className={`w-6 h-6 rounded-lg border flex items-center justify-center shrink-0 transition-all ${theme === 'dark'
+                                  ? 'bg-slate-800/70 border-slate-700/80 text-slate-400 hover:text-emerald-400 hover:border-emerald-500/50'
+                                  : 'bg-slate-50 border-slate-200 text-slate-400 hover:text-emerald-600 hover:border-emerald-400'
+                                  }`}
+                              >
+                                <EditIcon />
+                              </button>
+                            </div>
+                          )}
 
-                {/* Last 7 Days Activity Bar */}
-                <div className="mb-10">
-                  <div className="flex items-center gap-2 mb-4">
-                    <ActivityIcon className="w-4 h-4 text-slate-400" />
-                    <p className={`text-[10px] font-black ${getTextMuted()} uppercase tracking-widest`}>Last 7 Days Activity</p>
-                  </div>
-                  <div className="grid grid-cols-7 gap-3">
-                    {habitInsights.last7Days.map((day, i) => {
-                      const isLiveDragging = activeSlider?.dateKey === day.key && activeSlider?.habit === viewingHabitMap;
-                      const displayPct = isLiveDragging ? activeSlider.value : day.pct;
-
-                      return (
-                        <div key={i} className="flex flex-col items-center gap-2">
-                          <div className={`w-full aspect-square rounded-2xl border-2 overflow-hidden relative ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                            <motion.div
-                              id={`bar-fill-${day.key}`} // This allows direct DOM updates
-                              initial={{ height: 0 }}
-                              animate={{ height: `${displayPct}%` }}
-                              // Matches the duration-700 ease style from v12.6
-                              transition={{ duration: 0.7, ease: "easeInOut" }}
-                              className={`absolute bottom-0 w-full ${displayPct >= 100 ? 'bg-emerald-500' : 'bg-blue-600'}`}
-                            />
-                          </div>
-                          <span className={`text-[10px] font-black ${day.isToday ? 'text-emerald-500' : (theme === 'dark' ? 'text-slate-500' : 'text-slate-400')}`}>
-                            {day.label}
-                          </span>
+                          <button
+                            type="button"
+                            onClick={() => stepViewingHabit(1)}
+                            disabled={!canStep}
+                            title={canStep ? `Next habit: ${nextName} (→)` : 'No other habits'}
+                            className={`w-8 h-8 rounded-xl border flex items-center justify-center shrink-0 transition-all disabled:opacity-25 disabled:cursor-not-allowed ${theme === 'dark'
+                              ? 'bg-slate-800/70 border-slate-700/80 text-slate-300 hover:text-emerald-400 hover:border-emerald-500/50 hover:bg-slate-800'
+                              : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-emerald-600 hover:border-emerald-400 hover:bg-emerald-50'
+                              }`}
+                          >
+                            <ChevronRightIcon />
+                          </button>
                         </div>
-                      );
-                    })}
+
+                        <div className="flex items-center justify-center gap-2 mt-2.5 flex-wrap">
+                          <FilterDropdown
+                            value={habitConfigs[viewingHabitMap]?.category || 'all'}
+                            onChange={(val) => {
+                              const newConfigs = {
+                                ...habitConfigs,
+                                [viewingHabitMap]: { ...(habitConfigs[viewingHabitMap] || { steps: 1 }), category: val }
+                              };
+                              setHabitConfigs(newConfigs);
+                              save(trackerData, habits, newConfigs);
+                            }}
+                            theme={theme}
+                            variant="subtle"
+                            maxWidthClass="max-w-[150px]"
+                            options={[
+                              { value: 'all', label: 'No category' },
+                              ...categories.filter(cat => cat !== 'all').map(cat => ({ value: cat, label: cat })),
+                            ]}
+                          />
+                          {total > 1 && (
+                            <span className={`h-6 px-2 rounded-lg border inline-flex items-center text-[10px] font-black tabular-nums ${theme === 'dark' ? 'bg-slate-800/60 border-slate-700/80 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-500'}`}>
+                              {curIdx >= 0 ? `${curIdx + 1} / ${total}` : `1 / ${total}`}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                <TutorialTipCard
+                  isVisible={!dismissedTips.habitDetail}
+                  isSnapping={!!snappingTips.habitDetail}
+                  onDismiss={() => triggerTipSnap('habitDetail')}
+                  onSnapDone={() => finishTipSnap('habitDetail')}
+                  theme={theme}
+                  accent="emerald"
+                  icon={<HeaderFireIcon className="w-4 h-4 text-emerald-500" />}
+                  eyebrow="Habit Controls"
+                  title="Goal Steps, Priority & Calendar"
+                  description="Set Goal Steps (for countable habits), adjust Priority (1x–10x XP), click the title to rename, or tap/hold any day in the calendar below. Green fire days mean every active habit was completed."
+                  marginBottom="1rem"
+                />
+
+                {/* Upgraded Priority Multiplier Control */}
+                {(() => {
+                  const currentPriority = habitConfigs[viewingHabitMap]?.priority || 1;
+                  return (
+                    <div className={`mb-6 p-3.5 rounded-2xl border ${theme === 'dark' ? 'bg-slate-800/40 border-slate-700/80' : 'bg-slate-50 border-slate-200'}`}>
+                      <div className="flex items-center justify-between gap-2 mb-2.5">
+                        <div className="flex items-center gap-2">
+                          <label className={`text-[10px] font-black uppercase tracking-wider ${getTextMuted()}`}>
+                            Priority Multiplier
+                          </label>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${currentPriority > 1
+                          ? (theme === 'dark' ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-emerald-50 text-emerald-700 border border-emerald-200')
+                          : (theme === 'dark' ? 'bg-slate-800 text-slate-400 border border-slate-700' : 'bg-white text-slate-500 border border-slate-200')
+                          }`}>
+                          {currentPriority * 10} XP / day · {currentPriority}x
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2">
+                        <div className={`flex items-center gap-1 p-1 rounded-xl border flex-1 ${theme === 'dark' ? 'bg-slate-900/70 border-slate-800' : 'bg-white border-slate-200'}`}>
+                          {[1, 2, 3, 5, 10].map((p) => {
+                            const active = currentPriority === p;
+                            return (
+                              <button
+                                key={p}
+                                type="button"
+                                onClick={() => updateViewingHabitPriority(p)}
+                                className={`flex-1 h-7 rounded-lg text-[10px] font-black transition-all ${active
+                                  ? 'bg-emerald-500 text-slate-950 shadow-xs'
+                                  : (theme === 'dark' ? 'text-slate-400 hover:text-white hover:bg-slate-800/80' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100')
+                                  }`}
+                              >
+                                {p}x
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        <div className={`inline-flex items-center h-9 rounded-xl border overflow-hidden shrink-0 ${theme === 'dark' ? 'bg-slate-900/80 border-slate-700/80' : 'bg-white border-slate-200'}`}>
+                          <button
+                            type="button"
+                            onClick={() => updateViewingHabitPriority(currentPriority - 1)}
+                            disabled={currentPriority <= 1}
+                            title="Decrease priority"
+                            className={`w-7 h-full flex items-center justify-center text-xs font-black transition-colors disabled:opacity-30 ${theme === 'dark' ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'}`}
+                          >
+                            −
+                          </button>
+                          <span className={`w-8 text-center text-[11px] font-black tabular-nums ${currentPriority > 1 ? 'text-emerald-400' : (theme === 'dark' ? 'text-slate-300' : 'text-slate-700')}`}>
+                            {currentPriority}x
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => updateViewingHabitPriority(currentPriority + 1)}
+                            disabled={currentPriority >= 10}
+                            title="Increase priority"
+                            className={`w-7 h-full flex items-center justify-center text-xs font-black transition-colors disabled:opacity-30 ${theme === 'dark' ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'}`}
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Month Switcher Anchored to Calendar */}
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <span className={`text-[10px] font-black uppercase tracking-widest ${getTextMuted()}`}>
+                    Monthly Log
+                  </span>
+                  <div className={`inline-flex items-center gap-1 p-0.5 rounded-xl border ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700/80 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))}
+                      title="Previous month"
+                      className="p-1 rounded-lg hover:text-emerald-500 transition-colors"
+                    >
+                      <ChevronLeftIcon />
+                    </button>
+                    <span className="text-[10px] font-black uppercase tracking-widest min-w-[82px] text-center">
+                      {currentDate.toLocaleString('default', { month: 'short', year: 'numeric' })}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))}
+                      title="Next month"
+                      className="p-1 rounded-lg hover:text-emerald-500 transition-colors"
+                    >
+                      <ChevronRightIcon />
+                    </button>
                   </div>
                 </div>
 
@@ -3589,16 +4602,33 @@ export default function App() {
                     const isPassedCell = new Date(day).setHours(0, 0, 0, 0) < new Date().setHours(0, 0, 0, 0);
                     const config = habitConfigs[viewingHabitMap];
                     const stepVal = config?.steps > 1 ? Math.round((v / 100) * config.steps) : null;
+                    const dayHabits = activeHabitsList.filter(h => isHabitActiveOnDate(h, key, archivedHabits, habitConfigs));
+                    const isAllHabitsDone = dayHabits.length > 0 && dayHabits.every(h => {
+                      const raw = trackerData[key]?.[h] ?? 0;
+                      const val = typeof raw === 'number' ? raw : (raw ? 100 : 0);
+                      return Math.round(val) >= 100;
+                    });
 
                     return (
                       <motion.div key={idx} whileTap={{ scale: 0.9 }}
                         onPointerDown={(e) => handleHabitPressStart(e, key, viewingHabitMap, v)}
                         onPointerUp={(e) => handleHabitPressEnd(e, key, viewingHabitMap, v)}
-                        className={`aspect-square rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all border-2 touch-none select-none ${getButtonStyles(v, key)} ${isTodayCell ? 'ring-2 ring-emerald-400 ring-offset-2' : ''} ${isOtherMonth ? 'opacity-30 pointer-events-none' : ''}`}>
-                        <span className={`text-[8px] font-black pointer-events-none ${v > 0 ? 'text-white/60' : (theme === 'dark' ? 'text-slate-600' : 'text-slate-400')}`}>{day.getDate()}</span>
-                        <span className={`text-xs font-black pointer-events-none ${v > 0 ? 'text-white' : (isPassedCell ? 'text-red-500' : 'text-white [text-shadow:_-1px_-1px_0_#000,1px_-1px_0_#000,-1px_1px_0_#000,1px_1px_0_#000]')} ${v > 0 && v < 100 ? 'text-[9px]' : ''}`}>
-                          {stepVal !== null ? stepVal : (v === 100 ? '✔' : (v > 0 ? `${Math.round(v)}%` : '✘'))}
-                        </span>
+                        title={isAllHabitsDone ? 'All habits completed! 🔥' : undefined}
+                        className={`aspect-square rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all border-2 touch-none select-none ${
+                          isAllHabitsDone
+                            ? (theme === 'dark'
+                                ? 'bg-emerald-800 border-emerald-400/75 text-white shadow-[0_0_12px_rgba(52,245,168,0.35)]'
+                                : 'bg-emerald-600 border-emerald-400 text-white shadow-[0_0_12px_rgba(16,185,129,0.35)]')
+                            : getButtonStyles(v, key)
+                        } ${isTodayCell ? 'ring-2 ring-emerald-400 ring-offset-2' : ''} ${isOtherMonth ? 'opacity-30 pointer-events-none' : ''}`}>
+                        <span className={`text-[8px] font-black pointer-events-none ${(v > 0 || isAllHabitsDone) ? 'text-white/75' : (theme === 'dark' ? 'text-slate-600' : 'text-slate-400')}`}>{day.getDate()}</span>
+                        {isAllHabitsDone ? (
+                          <HeaderFireIcon className="w-4 h-4 text-emerald-200 drop-shadow-[0_0_6px_rgba(110,231,183,0.65)] pointer-events-none mt-0.5" />
+                        ) : (
+                          <span className={`text-xs font-black pointer-events-none ${v > 0 ? 'text-white' : (isPassedCell ? 'text-red-500' : 'text-white [text-shadow:_-1px_-1px_0_#000,1px_-1px_0_#000,-1px_1px_0_#000,1px_1px_0_#000]')} ${v > 0 && v < 100 ? 'text-[9px]' : ''}`}>
+                            {stepVal !== null ? stepVal : (v === 100 ? '✔' : (v > 0 ? `${Math.round(v)}%` : '✘'))}
+                          </span>
+                        )}
                       </motion.div>
                     );
                   })}
@@ -3663,7 +4693,7 @@ export default function App() {
                 }
               }}
             >
-              <p className="absolute -top-12 text-white font-black uppercase text-xs tracking-widest whitespace-nowrap drop-shadow-xl z-10">{activeSlider.habit}</p>
+              <p className="absolute -top-12 text-white font-black text-xs tracking-wider whitespace-nowrap drop-shadow-xl z-10">{activeSlider.habit}</p>
               <div id="mastery-slider-track" className="relative w-24 h-64 bg-white/10 rounded-[2.5rem] border-4 border-white/30 overflow-hidden shadow-2xl backdrop-blur-3xl ring-8 ring-white/5 cursor-ns-resize">
                 <div
                   id="mastery-slider-fill"
@@ -3691,11 +4721,13 @@ export default function App() {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[500] flex items-center justify-center bg-black/80 backdrop-blur-xl p-4">
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} border p-8 rounded-[2rem] max-w-sm w-full shadow-2xl text-center`}>
               <div className="bg-rose-500/20 text-rose-500 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6"><TrashIcon /></div>
-              <h4 className="text-xl font-black mb-2">Delete Habit?</h4>
-              <p className={`text-sm ${getTextMuted()} mb-8 font-medium`}>This will permanently delete data for <span className="text-rose-500 font-bold">"{habitToDelete}"</span>.</p>
+              <h4 className="text-xl font-black mb-2">Move Habit to Trash?</h4>
+              <p className={`text-sm ${getTextMuted()} mb-8 font-medium`}>
+                <span className="text-rose-500 font-bold">"{habitToDelete}"</span> and its records will stay in Trash for {TRASH_RETENTION_DAYS} days before automatic permanent removal.
+              </p>
               <div className="flex gap-4">
-                <button onClick={() => { setShowDeleteConfirm(false); setHabitToDelete(null); }} title="Cancel delete" className={`flex-1 py-4 rounded-2xl font-black uppercase text-xs tracking-widest ${theme === 'dark' ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>Cancel</button>
-                <button onClick={() => deleteHabit(habitToDelete)} title="Confirm delete" className="flex-1 py-4 rounded-2xl font-black uppercase text-xs tracking-widest bg-rose-500 text-white shadow-lg shadow-rose-500/20">Delete</button>
+                <button onClick={() => { setShowDeleteConfirm(false); setHabitToDelete(null); }} title="Cancel" className={`flex-1 py-4 rounded-2xl font-black uppercase text-xs tracking-widest ${theme === 'dark' ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>Cancel</button>
+                <button onClick={() => deleteHabit(habitToDelete)} title="Move to Trash" className="flex-1 py-4 rounded-2xl font-black uppercase text-xs tracking-widest bg-rose-500 text-white shadow-lg shadow-rose-500/20">Move to Trash</button>
               </div>
             </motion.div>
           </motion.div>
@@ -3728,41 +4760,28 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Habits Management Pro-Tip Banner */}
-              {!seenManageTip && (
-                <div className={`mb-4 p-3 rounded-2xl border transition-all ${theme === 'dark' ? 'bg-amber-500/10 border-amber-500/30' : 'bg-amber-50 border-amber-200'} flex items-center justify-between gap-3`}>
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="text-base shrink-0">💡</span>
-                    <div className="min-w-0">
-                      <p className={`text-[10px] font-black uppercase tracking-wider ${theme === 'dark' ? 'text-amber-400' : 'text-amber-700'}`}>
-                        Pro-Tip: Archive vs Delete
-                      </p>
-                      <p className={`text-[11px] font-medium leading-tight ${getTextMuted()}`}>
-                        Archive paused habits to hide them while keeping all streaks, history, and XP safe!
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setSeenManageTip(true);
-                      try { localStorage.setItem('adib_seen_manage_tip', 'true'); } catch { /* ignore storage errors */ }
-                    }}
-                    className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider shrink-0 border transition-all ${theme === 'dark'
-                      ? 'bg-amber-500/20 hover:bg-amber-500/30 border-amber-500/40 text-amber-300'
-                      : 'bg-amber-100 hover:bg-amber-200 border-amber-300 text-amber-800'
-                      }`}
-                  >
-                    Got It
-                  </button>
-                </div>
-              )}
+              {/* Habits Management Tutorial Banner */}
+              <TutorialTipCard
+                isVisible={!dismissedTips.manage}
+                isSnapping={!!snappingTips.manage}
+                onDismiss={() => triggerTipSnap('manage')}
+                onSnapDone={() => finishTipSnap('manage')}
+                theme={theme}
+                accent="amber"
+                icon={<ArchiveIcon className="w-4 h-4" />}
+                eyebrow="Manager Guide"
+                title="Archive vs Delete & Reorder"
+                description="Use Archive to pause a habit while keeping all XP and history safe—archived days won’t count against your heatmap even if you restore it later. Use the arrows to reorder."
+                badges={['Archive = Safe Pause', 'Delete = 30-Day Trash']}
+                marginBottom="0.75rem"
+              />
 
               {manageModalTab === 'habits' ? (
                 <div className="flex flex-col flex-1 min-h-0">
                   <div className="flex gap-2 mb-4 shrink-0">
                     <input
                       type="text"
-                      placeholder="New habit..."
+                      placeholder={selectedCategory === 'all' ? 'New habit...' : `New habit in ${selectedCategory}...`}
                       value={newHabitInput}
                       onChange={(e) => {
                         setNewHabitInput(e.target.value);
@@ -3813,7 +4832,7 @@ export default function App() {
                             {editingHabitName === habit ? (
                               <input
                                 autoFocus
-                                className={`text-sm font-black uppercase w-full bg-transparent focus:outline-none border-b border-emerald-500 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}
+                                className={`text-sm font-black w-full bg-transparent focus:outline-none border-b border-emerald-500 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}
                                 value={tempHabitName}
                                 onChange={(e) => setTempHabitName(e.target.value)}
                                 onKeyDown={(e) => {
@@ -3824,13 +4843,33 @@ export default function App() {
                                 }}
                               />
                             ) : (
-                              <span className={`text-sm font-black uppercase truncate ${archivedHabits.includes(habit) ? 'opacity-40 line-through' : ''} ${theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>
+                              <span className={`text-sm font-black truncate ${archivedHabits.includes(habit) ? 'opacity-40 line-through' : ''} ${theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>
                                 {habit}
                               </span>
                             )}
                           </div>
 
                           <div className="flex items-center gap-1 shrink-0">
+                            <FilterDropdown
+                              value={habitConfigs[habit]?.category || 'all'}
+                              onChange={(val) => {
+                                const newConfigs = {
+                                  ...habitConfigs,
+                                  [habit]: { ...(habitConfigs[habit] || { steps: 1 }), category: val }
+                                };
+                                setHabitConfigs(newConfigs);
+                                save(trackerData, habits, newConfigs);
+                              }}
+                              theme={theme}
+                              variant="subtle"
+                              align="right"
+                              maxWidthClass="max-w-[96px]"
+                              options={[
+                                { value: 'all', label: 'No category' },
+                                ...categories.filter(cat => cat !== 'all').map(cat => ({ value: cat, label: cat })),
+                              ]}
+                            />
+
                             {/* EDIT / SAVE BUTTON - Back to reliable onClick */}
                             <button
                               onClick={(e) => {
@@ -3944,26 +4983,87 @@ export default function App() {
                     </p>
                   )}
 
+                  <div className="flex items-center justify-between px-1 mb-2.5 shrink-0">
+                    <span className={`text-[10px] font-black uppercase tracking-widest ${getTextMuted()}`}>
+                      {categories.length} {categories.length === 1 ? 'Category' : 'Categories'}
+                    </span>
+                    <span className={`text-[10px] font-bold ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                      {activeHabitsList.length} active {activeHabitsList.length === 1 ? 'habit' : 'habits'} total
+                    </span>
+                  </div>
+
                   <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-2">
-                    {categories.map((cat, index) => (
-                      <div key={cat} className={`flex items-center justify-between p-3 rounded-xl border ${theme === 'dark' ? 'bg-slate-800/40 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                    {categories.map((cat, index) => {
+                      const pct = categoryProgress[cat] || 0;
+                      const count = categoryCounts[cat] ?? 0;
+                      const isCurrentFilter = selectedCategory === cat;
 
-                        {editingCat?.name === cat ? (
-                          <input
-                            autoFocus
-                            type="text"
-                            value={editingCat.temp}
-                            onChange={(e) => setEditingCat({ ...editingCat, temp: e.target.value })}
-                            onBlur={() => handleCategoryRename(cat, editingCat.temp)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleCategoryRename(cat, editingCat.temp)}
-                            className={`w-full bg-transparent font-black uppercase text-[10px] focus:outline-none border-b border-emerald-500 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}
-                          />
-                        ) : (
-                          <span className={`text-[10px] font-black uppercase ${theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>{cat}</span>
-                        )}
+                      return (
+                        <div
+                          key={cat}
+                          className={`relative overflow-hidden p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 ${isCurrentFilter
+                            ? (theme === 'dark' ? 'bg-emerald-500/10 border-emerald-500/40' : 'bg-emerald-50/70 border-emerald-300')
+                            : (theme === 'dark' ? 'bg-slate-800/45 border-slate-700/80 hover:border-slate-600' : 'bg-slate-50 border-slate-200 hover:border-slate-300')
+                            }`}
+                        >
+                          <div
+                            onClick={() => {
+                              if (editingCat?.name === cat) return;
+                              selectDashboardCategory(cat);
+                              setShowManageModal(false);
+                            }}
+                            title={editingCat?.name === cat ? undefined : `Filter dashboard by ${cat}`}
+                            className={`flex-1 min-w-0 ${editingCat?.name === cat ? '' : 'cursor-pointer'}`}
+                          >
+                            {editingCat?.name === cat ? (
+                              <input
+                                autoFocus
+                                type="text"
+                                value={editingCat.temp}
+                                onChange={(e) => setEditingCat({ ...editingCat, temp: e.target.value })}
+                                onBlur={() => handleCategoryRename(cat, editingCat.temp)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleCategoryRename(cat, editingCat.temp);
+                                  if (e.key === 'Escape') setEditingCat(null);
+                                }}
+                                className={`w-full bg-transparent font-black uppercase text-xs tracking-wider focus:outline-none border-b border-emerald-500 pb-0.5 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}
+                              />
+                            ) : (
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span
+                                  className={`w-2 h-2 rounded-full shrink-0 ${isCurrentFilter
+                                    ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.75)]'
+                                    : (pct > 0 ? 'bg-emerald-500/60' : (theme === 'dark' ? 'bg-slate-600' : 'bg-slate-300'))
+                                    }`}
+                                />
+                                <span className={`text-xs font-black uppercase tracking-wider truncate ${theme === 'dark' ? 'text-slate-100' : 'text-slate-800'}`}>
+                                  {cat}
+                                </span>
+                                <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-extrabold tabular-nums shrink-0 ${theme === 'dark' ? 'bg-slate-800 text-slate-300' : 'bg-white text-slate-600 border border-slate-200'}`}>
+                                  {count} {count === 1 ? 'habit' : 'habits'}
+                                </span>
+                              </div>
+                            )}
 
-                        <div className="flex items-center gap-1">
-                          {cat !== 'all' && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <div className={`flex-1 max-w-[140px] h-1.5 rounded-full overflow-hidden ${theme === 'dark' ? 'bg-slate-800' : 'bg-slate-200'}`}>
+                                <div
+                                  className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                              <span className={`text-[10px] font-black tabular-nums ${pct > 0 ? 'text-emerald-500' : (theme === 'dark' ? 'text-slate-500' : 'text-slate-400')}`}>
+                                {pct}%
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1 shrink-0">
+                            {cat === 'all' ? (
+                              <span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider ${theme === 'dark' ? 'bg-slate-800 text-slate-400 border border-slate-700' : 'bg-white text-slate-500 border border-slate-200'}`}>
+                                Default
+                              </span>
+                            ) : (
                             <>
                               <button
                                 onClick={() => moveCategoryUp(index)}
@@ -3984,14 +5084,14 @@ export default function App() {
                               <button
                                 onClick={() => setEditingCat({ name: cat, temp: cat })}
                                 title="Edit category name"
-                                className={`p-1.5 rounded-lg transition-all ${theme === 'dark' ? 'text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10' : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'}`}
+                                className={`p-1.5 rounded-lg transition-all ${theme === 'dark' ? 'text-slate-400 hover:text-blue-400 hover:bg-blue-500/10' : 'text-slate-500 hover:text-blue-600 hover:bg-blue-50'}`}
                               >
                                 <EditIcon />
                               </button>
                               <button
                                 onClick={() => deleteCategory(cat)}
                                 title="Delete category"
-                                className={`p-1.5 rounded-lg transition-all ${theme === 'dark' ? 'text-slate-500 hover:text-rose-400 hover:bg-rose-500/10' : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'}`}
+                                className={`p-1.5 rounded-lg transition-all ${theme === 'dark' ? 'text-slate-400 hover:text-rose-400 hover:bg-rose-500/10' : 'text-slate-500 hover:text-rose-600 hover:bg-rose-50'}`}
                               >
                                 <TrashIcon />
                               </button>
@@ -3999,7 +5099,8 @@ export default function App() {
                           )}
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -4007,38 +5108,433 @@ export default function App() {
           </motion.div>
         )}
 
-        {/* --- ARCHIVE MODAL --- */}
+        {/* --- QUICK ADD HABIT MODAL --- */}
+        {showQuickAddHabitModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[320] flex items-center justify-center bg-black/70 backdrop-blur-md p-4"
+            onClick={() => setShowQuickAddHabitModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.94, y: 16 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.94, y: 16 }}
+              transition={{ duration: 0.16, ease: 'easeOut' }}
+              className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} border rounded-[2rem] w-full max-w-md p-6 md:p-7 shadow-2xl relative`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={() => setShowQuickAddHabitModal(false)}
+                className={`absolute top-5 right-5 flex flex-col items-center gap-0.5 p-2 ${getTextMuted()} hover:text-rose-500 transition-all`}
+                title="Close (ESC)"
+              >
+                <XIcon />
+                <span className="text-[6px] font-mono opacity-50">ESC</span>
+              </button>
+
+              <div className="mb-5 pr-8">
+                <p className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em] mb-1">Quick Create</p>
+                <h3 className={`text-2xl font-black tracking-tight ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                  New Habit
+                </h3>
+              </div>
+
+              {/* 1. Habit Name */}
+              <div className="mb-4">
+                <label className={`block text-[10px] font-black uppercase tracking-wider mb-1.5 ${getTextMuted()}`}>
+                  Habit Name
+                </label>
+                <input
+                  autoFocus
+                  type="text"
+                  placeholder="e.g. Morning Run, Read 20 Pages..."
+                  value={quickHabitDraft.name}
+                  onChange={(e) => {
+                    setQuickHabitDraft((prev) => ({ ...prev, name: e.target.value }));
+                    if (quickHabitError) setQuickHabitError('');
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      if (
+                        createHabitInCategory(
+                          quickHabitDraft.name,
+                          quickHabitDraft.category,
+                          setQuickHabitError,
+                          { steps: quickHabitDraft.steps, priority: quickHabitDraft.priority }
+                        )
+                      ) {
+                        setShowQuickAddHabitModal(false);
+                      }
+                    }
+                  }}
+                  className={`w-full px-4 py-3 rounded-xl text-sm font-bold focus:outline-none border-2 transition-all ${quickHabitError
+                    ? 'border-rose-500/70 focus:border-rose-500'
+                    : (theme === 'dark'
+                      ? 'bg-slate-800/80 border-slate-700 focus:border-emerald-500 text-white placeholder:text-slate-500'
+                      : 'bg-slate-50 border-slate-200 focus:border-emerald-500 text-slate-800 placeholder:text-slate-400')
+                    }`}
+                />
+                {quickHabitError && (
+                  <p className="text-[11px] font-bold text-rose-500 mt-1.5 px-1">
+                    {quickHabitError}
+                  </p>
+                )}
+              </div>
+
+              {/* 2. Category Selector Pills */}
+              <div className="mb-4">
+                <label className={`block text-[10px] font-black uppercase tracking-wider mb-2 ${getTextMuted()}`}>
+                  Category
+                </label>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {categories.map((cat) => {
+                    const isPicked = quickHabitDraft.category === cat;
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setQuickHabitDraft((prev) => ({ ...prev, category: cat }))}
+                        className={`h-7 px-2.5 rounded-lg border text-[10px] font-black uppercase tracking-wider transition-all ${isPicked
+                          ? (theme === 'dark'
+                            ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
+                            : 'bg-emerald-50 border-emerald-500 text-emerald-700')
+                          : (theme === 'dark'
+                            ? 'bg-slate-800/70 border-slate-700/80 text-slate-400 hover:text-white hover:border-slate-500'
+                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300')
+                          }`}
+                      >
+                        {cat === 'all' ? 'General (All)' : cat}
+                      </button>
+                    );
+                  })}
+
+                  {isAddingModalCat ? (
+                    <div className={`h-7 flex items-center gap-1 px-2 rounded-lg border ${theme === 'dark' ? 'bg-slate-800 border-emerald-500' : 'bg-white border-emerald-500'}`}>
+                      <input
+                        autoFocus
+                        type="text"
+                        value={modalNewCatInput}
+                        onChange={(e) => setModalNewCatInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const created = createCategoryByName(modalNewCatInput, setQuickHabitError);
+                            if (created) {
+                              setQuickHabitDraft((prev) => ({ ...prev, category: created }));
+                              setModalNewCatInput('');
+                              setIsAddingModalCat(false);
+                              setQuickHabitError('');
+                            }
+                          } else if (e.key === 'Escape') {
+                            e.stopPropagation();
+                            setIsAddingModalCat(false);
+                            setModalNewCatInput('');
+                          }
+                        }}
+                        placeholder="Category..."
+                        className={`w-24 bg-transparent text-[10px] font-black uppercase focus:outline-none ${theme === 'dark' ? 'text-white placeholder:text-slate-500' : 'text-slate-800 placeholder:text-slate-400'}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const created = createCategoryByName(modalNewCatInput, setQuickHabitError);
+                          if (created) {
+                            setQuickHabitDraft((prev) => ({ ...prev, category: created }));
+                            setModalNewCatInput('');
+                            setIsAddingModalCat(false);
+                            setQuickHabitError('');
+                          }
+                        }}
+                        className="text-[10px] font-black uppercase text-emerald-500 hover:text-emerald-400"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingModalCat(true)}
+                      className={`h-7 px-2.5 rounded-lg border border-dashed text-[10px] font-black uppercase tracking-wider transition-all inline-flex items-center gap-1 ${theme === 'dark'
+                        ? 'border-slate-700 text-slate-400 hover:text-emerald-400 hover:border-emerald-500/60'
+                        : 'border-slate-300 text-slate-500 hover:text-emerald-600 hover:border-emerald-400'
+                        }`}
+                    >
+                      <span>+</span>
+                      <span>New</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* 3. Optional Goal Steps & Priority */}
+              <div className={`space-y-3.5 p-3.5 rounded-2xl border mb-5 ${theme === 'dark' ? 'bg-slate-800/35 border-slate-800' : 'bg-slate-50/80 border-slate-200/80'}`}>
+                {/* Daily Goal Steps Row */}
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <label className={`text-[10px] font-black uppercase tracking-wider ${getTextMuted()}`}>
+                      Daily Goal Steps
+                    </label>
+                    <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${quickHabitDraft.steps > 1
+                      ? (theme === 'dark' ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-emerald-50 text-emerald-700 border border-emerald-200')
+                      : (theme === 'dark' ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 border border-slate-200')
+                      }`}>
+                      {quickHabitDraft.steps === 1 ? 'Single Check' : `${quickHabitDraft.steps} Steps / Day`}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2">
+                    {/* Preset Step Pills */}
+                    <div className={`flex items-center gap-1 p-1 rounded-xl border flex-1 ${theme === 'dark' ? 'bg-slate-900/70 border-slate-800' : 'bg-white border-slate-200'}`}>
+                      {[1, 2, 3, 5, 8].map((n) => {
+                        const active = quickHabitDraft.steps === n;
+                        return (
+                          <button
+                            key={n}
+                            type="button"
+                            onClick={() => setQuickHabitDraft((prev) => ({ ...prev, steps: n }))}
+                            className={`flex-1 h-7 rounded-lg text-[10px] font-black transition-all ${active
+                              ? 'bg-emerald-500 text-slate-950 shadow-xs'
+                              : (theme === 'dark' ? 'text-slate-400 hover:text-white hover:bg-slate-800/80' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100')
+                              }`}
+                          >
+                            {n === 1 ? '1×' : n}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Clean Custom Stepper (- | input | +) */}
+                    <div className={`inline-flex items-center h-9 rounded-xl border overflow-hidden shrink-0 ${theme === 'dark' ? 'bg-slate-900/80 border-slate-700/80' : 'bg-white border-slate-200'}`}>
+                      <button
+                        type="button"
+                        onClick={() => setQuickHabitDraft((prev) => ({ ...prev, steps: Math.max(1, prev.steps - 1) }))}
+                        disabled={quickHabitDraft.steps <= 1}
+                        title="Decrease steps"
+                        className={`w-7 h-full flex items-center justify-center text-xs font-black transition-colors disabled:opacity-30 ${theme === 'dark' ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'}`}
+                      >
+                        −
+                      </button>
+                      <input
+                        type="number"
+                        min="1"
+                        max="99"
+                        value={quickHabitDraft.steps}
+                        onChange={(e) => setQuickHabitDraft((prev) => ({ ...prev, steps: Math.max(1, Math.min(99, parseInt(e.target.value) || 1)) }))}
+                        title="Custom goal steps"
+                        className={`w-9 h-full text-center text-xs font-black tabular-nums bg-transparent focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setQuickHabitDraft((prev) => ({ ...prev, steps: Math.min(99, prev.steps + 1) }))}
+                        disabled={quickHabitDraft.steps >= 99}
+                        title="Increase steps"
+                        className={`w-7 h-full flex items-center justify-center text-xs font-black transition-colors disabled:opacity-30 ${theme === 'dark' ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'}`}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Priority Multiplier Row */}
+                <div className={`pt-3 border-t ${theme === 'dark' ? 'border-slate-800/80' : 'border-slate-200/70'}`}>
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <label className={`text-[10px] font-black uppercase tracking-wider ${getTextMuted()}`}>
+                      Priority Multiplier
+                    </label>
+                    <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${quickHabitDraft.priority > 1
+                      ? (theme === 'dark' ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-emerald-50 text-emerald-700 border border-emerald-200')
+                      : (theme === 'dark' ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 border border-slate-200')
+                      }`}>
+                      {quickHabitDraft.priority * 10} XP / day
+                    </span>
+                  </div>
+
+                  <div className={`flex items-center gap-1 p-1 rounded-xl border ${theme === 'dark' ? 'bg-slate-900/70 border-slate-800' : 'bg-white border-slate-200'}`}>
+                    {[1, 2, 3, 5, 10].map((p) => {
+                      const active = quickHabitDraft.priority === p;
+                      return (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => setQuickHabitDraft((prev) => ({ ...prev, priority: p }))}
+                          className={`flex-1 h-7 rounded-lg text-[10px] font-black transition-all ${active
+                            ? 'bg-emerald-500 text-slate-950 shadow-xs'
+                            : (theme === 'dark' ? 'text-slate-400 hover:text-white hover:bg-slate-800/80' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100')
+                            }`}
+                        >
+                          {p}x
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Footer */}
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowQuickAddHabitModal(false)}
+                  className={`px-4 py-2.5 rounded-xl border text-xs font-black uppercase tracking-wider transition-all ${theme === 'dark' ? 'border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800' : 'border-slate-200 text-slate-500 hover:bg-slate-100'}`}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={!quickHabitDraft.name.trim()}
+                  onClick={() => {
+                    if (
+                      createHabitInCategory(
+                        quickHabitDraft.name,
+                        quickHabitDraft.category,
+                        setQuickHabitError,
+                        { steps: quickHabitDraft.steps, priority: quickHabitDraft.priority }
+                      )
+                    ) {
+                      setShowQuickAddHabitModal(false);
+                    }
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-45 disabled:hover:bg-emerald-500 text-slate-950 text-xs font-black uppercase tracking-wider transition-all shadow-lg shadow-emerald-500/20"
+                >
+                  Create Habit
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* --- ARCHIVE & 30-DAY TRASH MODAL --- */}
         {showArchiveModal && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[350] flex items-center justify-center bg-black/70 backdrop-blur-md p-4" onClick={() => setShowArchiveModal(false)}>
             <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} border rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl relative flex flex-col max-h-[85vh]`} onClick={e => e.stopPropagation()}>
               <button onClick={() => setShowArchiveModal(false)} title="Close (ESC)" className={`absolute top-6 right-6 p-2 ${getTextMuted()} hover:text-rose-500 transition-all`}><XIcon /></button>
 
-              <div className="mb-6 shrink-0">
-                <p className={`text-[10px] font-black ${getTextMuted()} uppercase tracking-[0.2em] mb-1`}>Hidden Habits</p>
-                <h3 className={`text-3xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Archived List</h3>
+              <div className="mb-4 shrink-0">
+                <p className={`text-[10px] font-black ${getTextMuted()} uppercase tracking-[0.2em] mb-1`}>
+                  {archiveModalTab === 'trash' ? `${TRASH_RETENTION_DAYS}-Day Recovery Bin` : 'Hidden Habits'}
+                </p>
+                <h3 className={`text-3xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                  {archiveModalTab === 'trash' ? 'Trash' : 'Archived List'}
+                </h3>
               </div>
 
-              <div className="overflow-y-auto custom-scrollbar pr-2 space-y-3">
-                {archivedHabits.length > 0 ? (
-                  archivedHabits.map(habit => (
-                    <div key={habit} className={`p-4 rounded-2xl border flex items-center justify-between ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                      <span className={`text-sm font-black uppercase ${theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>{habit}</span>
-                      <button
-                        onClick={() => toggleArchiveHabit(habit)}
-                        title="Unarchive habit"
-                        className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${theme === 'dark' ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-white border border-emerald-500/20' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white border border-emerald-200'}`}
-                      >
-                        Restore
-                      </button>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center py-12 opacity-30 flex flex-col items-center">
-                    <div className="scale-150 mb-4 grayscale opacity-50"><TrophyIcon /></div>
-                    <p className="font-black uppercase text-xs">No archived habits</p>
-                  </div>
-                )}
+              {/* Segmented Tab Bar: Archived | Trash */}
+              <div className={`flex p-1 rounded-2xl border mb-4 shrink-0 ${theme === 'dark' ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
+                <button
+                  type="button"
+                  onClick={() => setArchiveModalTab('archive')}
+                  className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${archiveModalTab === 'archive'
+                    ? 'bg-amber-500 text-slate-950 shadow-sm'
+                    : (theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-800')
+                    }`}
+                >
+                  Archived ({archivedHabits.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setArchiveModalTab('trash')}
+                  className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${archiveModalTab === 'trash'
+                    ? 'bg-rose-500 text-white shadow-sm'
+                    : (theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-800')
+                    }`}
+                >
+                  Trash ({activeTrashedHabits.length})
+                </button>
               </div>
+
+              {archiveModalTab === 'archive' ? (
+                <>
+                  <TutorialTipCard
+                    isVisible={!dismissedTips.archive}
+                    isSnapping={!!snappingTips.archive}
+                    onDismiss={() => triggerTipSnap('archive')}
+                    onSnapDone={() => finishTipSnap('archive')}
+                    theme={theme}
+                    accent="amber"
+                    icon={<ArchiveIcon className="w-4 h-4" />}
+                    eyebrow="Archive Guide"
+                    title="Paused Without Losing History"
+                    description="Archived habits keep all XP and past logs safe. Restoring one resumes tracking from today while keeping its paused days excluded from the heatmap."
+                    marginBottom="0.75rem"
+                  />
+
+                  <div className="overflow-y-auto custom-scrollbar pr-2 space-y-3">
+                    {archivedHabits.length > 0 ? (
+                      archivedHabits.map(habit => (
+                        <div key={habit} className={`p-4 rounded-2xl border flex items-center justify-between gap-2 ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                          <span className={`text-sm font-black truncate ${theme === 'dark' ? 'text-slate-200' : 'text-slate-700'}`}>{habit}</span>
+                          <button
+                            onClick={() => toggleArchiveHabit(habit)}
+                            title="Unarchive habit"
+                            className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all shrink-0 ${theme === 'dark' ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-white border border-emerald-500/20' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white border border-emerald-200'}`}
+                          >
+                            Restore
+                          </button>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-12 opacity-30 flex flex-col items-center">
+                        <div className="scale-150 mb-4 grayscale opacity-50"><TrophyIcon /></div>
+                        <p className="font-black uppercase text-xs">No archived habits</p>
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className={`mb-3 p-3 rounded-2xl border text-[11px] font-medium leading-relaxed shrink-0 ${theme === 'dark' ? 'bg-rose-500/10 border-rose-500/20 text-rose-200/80' : 'bg-rose-50 border-rose-200 text-rose-800'}`}>
+                    Deleted habits and all their saved records stay in Trash for <strong>{TRASH_RETENTION_DAYS} days</strong> before automatic permanent deletion. You cannot permanently delete items early.
+                  </div>
+
+                  <div className="overflow-y-auto custom-scrollbar pr-2 space-y-3">
+                    {activeTrashedHabits.length > 0 ? (
+                      activeTrashedHabits.map((entry) => {
+                        const expiresAt = (Number(entry.deletedAt) || Date.now()) + TRASH_RETENTION_MS;
+                        const msLeft = Math.max(0, expiresAt - Date.now());
+                        const daysLeft = Math.max(1, Math.ceil(msLeft / (24 * 60 * 60 * 1000)));
+                        const recordCount = entry.records ? Object.keys(entry.records).length : 0;
+
+                        return (
+                          <div key={`${entry.name}-${entry.deletedAt}`} className={`p-4 rounded-2xl border flex items-center justify-between gap-3 ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                            <div className="min-w-0 flex-1">
+                              <div className={`text-sm font-black truncate ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>
+                                {entry.name}
+                              </div>
+                              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                <span className={`text-[10px] font-bold ${theme === 'dark' ? 'text-rose-400' : 'text-rose-600'}`}>
+                                  {daysLeft} {daysLeft === 1 ? 'day' : 'days'} left
+                                </span>
+                                <span className={`text-[10px] font-semibold ${getTextMuted()}`}>
+                                  · {recordCount} {recordCount === 1 ? 'record' : 'records'}
+                                </span>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => restoreHabitFromTrash(entry.name)}
+                              title={`Undo delete for "${entry.name}" and restore all records`}
+                              className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all shrink-0 ${theme === 'dark'
+                                ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500 hover:text-slate-950 border border-emerald-500/30'
+                                : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white border border-emerald-200'
+                                }`}
+                            >
+                              Undo Delete
+                            </button>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="text-center py-12 opacity-40 flex flex-col items-center">
+                        <div className="scale-125 mb-3"><TrashIcon /></div>
+                        <p className="font-black uppercase text-xs">Trash is empty</p>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </motion.div>
           </motion.div>
         )}
@@ -4097,10 +5593,24 @@ export default function App() {
             >
               <button onClick={() => setShowLevelDetailsModal(false)} title="Close (ESC)" className={`absolute top-6 right-6 p-2 ${getTextMuted()} hover:text-rose-500 transition-all`}><XIcon /></button>
 
-              <div className="mb-8 shrink-0">
+              <div className="mb-6 shrink-0">
                 <p className={`text-[10px] font-black ${getTextMuted()} uppercase tracking-[0.2em] mb-1`}>Mastery Engine</p>
                 <h3 className={`text-2xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Level Details</h3>
               </div>
+
+              <TutorialTipCard
+                isVisible={!dismissedTips.level}
+                isSnapping={!!snappingTips.level}
+                onDismiss={() => triggerTipSnap('level')}
+                onSnapDone={() => finishTipSnap('level')}
+                theme={theme}
+                accent="emerald"
+                icon={<TrophyIcon className="w-4 h-4" />}
+                eyebrow="XP Guide"
+                title="How Levels & XP Work"
+                description="Every completed habit grants 10 × Priority (1x–10x) XP. Each new level you reach also awards +1 Streak Shield."
+                marginBottom="1.25rem"
+              />
 
               <div className="flex flex-col items-center mb-8">
                 <div className={`w-24 h-24 rounded-full flex items-center justify-center mb-4 border-4 shadow-xl ${getLevelBadgeStyle(xpStats.level)}`}>
@@ -4178,18 +5688,20 @@ export default function App() {
                 <h3 className={`text-2xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Win Milestones</h3>
               </div>
 
-              {/* Win Milestones Onboarding Guide */}
-              {analytics.totalDone === 0 && (
-                <div className={`mb-6 p-3.5 rounded-2xl border ${theme === 'dark' ? 'bg-yellow-500/10 border-yellow-500/30' : 'bg-yellow-50 border-yellow-200'} flex items-center gap-3`}>
-                  <div className="w-8 h-8 rounded-xl bg-yellow-500/20 text-yellow-500 flex items-center justify-center shrink-0 text-base">
-                    🏆
-                  </div>
-                  <div>
-                    <p className={`text-[10px] font-black uppercase tracking-wider ${theme === 'dark' ? 'text-yellow-400' : 'text-yellow-700'}`}>Win Milestones Roadmap</p>
-                    <p className={`text-xs font-medium leading-relaxed ${getTextMuted()}`}>Every completed habit this month increases your win count. Hit Milestone 1 (5 wins) and climb the monthly leaderboard!</p>
-                  </div>
-                </div>
-              )}
+              {/* Win Milestones Tutorial */}
+              <TutorialTipCard
+                isVisible={!dismissedTips.milestones}
+                isSnapping={!!snappingTips.milestones}
+                onDismiss={() => triggerTipSnap('milestones')}
+                onSnapDone={() => finishTipSnap('milestones')}
+                theme={theme}
+                accent="amber"
+                icon={<TrophyIcon className="w-4 h-4" />}
+                eyebrow="Milestones Guide"
+                title="Monthly Habit Wins"
+                description="Every 100%-completed habit this month adds +1 win toward targets from 5 up to 1,000."
+                marginBottom="1rem"
+              />
 
               <div className="flex flex-col items-center mb-8">
                 <div className={`w-24 h-24 rounded-full flex items-center justify-center mb-4 border-4 shadow-xl bg-yellow-500/10 border-yellow-500/40 text-yellow-500`}>
@@ -4268,18 +5780,40 @@ export default function App() {
           </motion.div>
         )}
 
+        {/* --- HELP GUIDE MODAL --- */}
+        <HelpGuideModal
+          isOpen={showHelpModal}
+          onClose={() => setShowHelpModal(false)}
+          theme={theme}
+          onResetTutorials={resetAllTutorials}
+        />
+
         {/* --- TEXT SIZE MODAL --- */}
         {showTextSizeModal && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[400] flex items-center justify-center bg-black/80 backdrop-blur-md p-4" onClick={() => setShowTextSizeModal(false)}>
             <motion.div initial={{ scale: 0.95, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0 }} className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} border rounded-[2rem] w-full max-w-sm p-6 shadow-2xl overflow-hidden`} onClick={e => e.stopPropagation()}>
 
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-3">
                   <div className={`p-2 rounded-xl ${theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-50 text-emerald-600'}`}><TextSizeIcon /></div>
-                  <h3 className={`text-xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Display Settings</h3>
+                  <h3 className={`text-xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Adjust Sizes</h3>
                 </div>
                 <button onClick={() => setShowTextSizeModal(false)} title="Close (ESC)" className={`p-2 rounded-full ${theme === 'dark' ? 'hover:bg-slate-800 text-slate-500' : 'hover:bg-slate-100 text-slate-400'}`}><XIcon /></button>
               </div>
+
+              <TutorialTipCard
+                isVisible={!dismissedTips.sizes}
+                isSnapping={!!snappingTips.sizes}
+                onDismiss={() => triggerTipSnap('sizes')}
+                onSnapDone={() => finishTipSnap('sizes')}
+                theme={theme}
+                accent="blue"
+                icon={<TextSizeIcon />}
+                eyebrow="Layout Guide"
+                title="Resize & Mobile View"
+                description="Tune habit circle size and table text sizes, toggle Mobile View On/Off for compact spacing, or Restore Defaults anytime."
+                marginBottom="1.25rem"
+              />
 
               <div className="space-y-6">
                 {/* Habit Card Size */}
@@ -4319,17 +5853,34 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Restore Defaults Button */}
-              <div className={`mt-8 pt-6 border-t ${theme === 'dark' ? 'border-slate-800' : 'border-slate-100'}`}>
+              {/* Mobile View & Restore Defaults */}
+              <div className={`mt-8 pt-6 border-t grid grid-cols-2 gap-2.5 ${theme === 'dark' ? 'border-slate-800' : 'border-slate-100'}`}>
+                <button
+                  onClick={toggleMobileMode}
+                  title="Toggle Mobile Compatibility Mode"
+                  className={`py-3 px-2 rounded-xl flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-wider border transition-all active:scale-95 ${
+                    isMobileMode
+                      ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.25)]'
+                      : (theme === 'dark'
+                        ? 'bg-slate-800/50 border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-800')
+                  }`}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+                    <line x1="12" y1="18" x2="12.01" y2="18" />
+                  </svg>
+                  <span>{isMobileMode ? 'Mobile View On' : 'Mobile View Off'}</span>
+                </button>
                 <button
                   onClick={() => {
                     const defaults = { habit: 14, table1: 12, table2: 11, tabSize: 110 };
                     setTextSizes(defaults); // setTextSizes already calls savePartialToIDB which persists to IDB + Firebase
                   }}
                   title="Reset text sizes to default"
-                  className={`w-full py-3 rounded-xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all ${theme === 'dark' ? 'bg-slate-800/50 text-slate-400 hover:bg-slate-800 hover:text-white' : 'bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-800'}`}
+                  className={`py-3 px-2 rounded-xl flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 ${theme === 'dark' ? 'bg-slate-800/50 text-slate-400 hover:bg-slate-800 hover:text-white' : 'bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-800'}`}
                 >
-                  <RefreshIcon /> Restore Defaults
+                  <RefreshIcon /> <span>Restore Defaults</span>
                 </button>
               </div>
 

@@ -11,6 +11,8 @@
 .rolling-digit-container { perspective: 1000px; transform-style: preserve-3d; }
 
 .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
 .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
 tr[id^="row-"] { scroll-margin-top: 150px; scroll-margin-bottom: 150px; }

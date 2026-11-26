@@ -4,7 +4,7 @@ import { auth, db } from '../firebase.config';
 import { onAuthStateChanged } from 'firebase/auth';
 import { signOutCrossPlatform } from '../platform/nativeAuth';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
-import { loadConfettiScript } from '../utils';
+import { loadConfettiScript, purgeExpiredTrash, isHabitActiveOnDate } from '../utils';
 
 let _unsubAuthState = null;
 let _unsubSnapshot = null;
@@ -20,7 +20,7 @@ const UI_ONLY_FIELDS = [
 
 const PROFILE_SCOPED_KEYS = [
   'trackerData', 'dayUpdatedAt', 'habits', 'habitConfigs', 'categories',
-  'archivedHabits', 'shieldedDates', 'savedLevel',
+  'archivedHabits', 'trashedHabits', 'shieldedDates', 'savedLevel',
   'manualXPOffset', 'manualStreakOffset',
 ];
 
@@ -82,6 +82,7 @@ const extractProfileSnapshot = (source, fallbackName = 'Main Profile', id = 'mai
     habitConfigs: source?.habitConfigs && typeof source.habitConfigs === 'object' ? source.habitConfigs : defaults.habitConfigs,
     categories: Array.isArray(source?.categories) ? source.categories : defaults.categories,
     archivedHabits: Array.isArray(source?.archivedHabits) ? source.archivedHabits : [],
+    trashedHabits: purgeExpiredTrash(source?.trashedHabits),
     shieldedDates: Array.isArray(source?.shieldedDates) ? source.shieldedDates : [],
     savedLevel: Number(source?.savedLevel) || 1,
     manualXPOffset: Number(source?.manualXPOffset) || 0,
@@ -117,6 +118,7 @@ const toPersistedData = (state) => {
     habitConfigs: state.habitConfigs || defaults.habitConfigs,
     categories: Array.isArray(state.categories) ? state.categories : defaults.categories,
     archivedHabits: Array.isArray(state.archivedHabits) ? state.archivedHabits : [],
+    trashedHabits: purgeExpiredTrash(state.trashedHabits),
     shieldedDates: Array.isArray(state.shieldedDates) ? state.shieldedDates : [],
     theme: state.theme || 'dark',
     tableOrientation: state.tableOrientation || 'horizontal',
@@ -231,6 +233,19 @@ const mergeProfileSnapshots = (localSnap, remoteSnap) => {
 
   const mergedShields = Array.from(new Set([...(remoteSnap.shieldedDates || []), ...(localSnap.shieldedDates || [])]));
 
+  const trashMap = new Map();
+  [...(remoteSnap.trashedHabits || []), ...(localSnap.trashedHabits || [])].forEach((entry) => {
+    const validList = purgeExpiredTrash([entry]);
+    if (validList.length === 0) return;
+    const valid = validList[0];
+    if (mergedHabits.some((h) => h.toLowerCase() === valid.name.toLowerCase())) return;
+    const prev = trashMap.get(valid.name);
+    if (!prev || (Number(valid.deletedAt) || 0) >= (Number(prev.deletedAt) || 0)) {
+      trashMap.set(valid.name, valid);
+    }
+  });
+  const mergedTrash = Array.from(trashMap.values());
+
   return {
     ...(localNewer ? remoteSnap : localSnap),
     ...(localNewer ? localSnap : remoteSnap),
@@ -239,6 +254,7 @@ const mergeProfileSnapshots = (localSnap, remoteSnap) => {
     habits: mergedHabits,
     categories: mergedCats,
     habitConfigs: mergedConfigs,
+    trashedHabits: mergedTrash,
     shieldedDates: mergedShields,
     savedLevel: Math.max(Number(localSnap.savedLevel) || 1, Number(remoteSnap.savedLevel) || 1),
     updatedAt: Math.max(localUpdated, remoteUpdated, Date.now()),
@@ -267,6 +283,7 @@ export const useHabitStore = create((setStore, getStore) => ({
   habitConfigs: DEFAULT_CONFIGS,
   categories: DEFAULT_CATEGORIES,
   archivedHabits: [],
+  trashedHabits: [],
   shieldedDates: [],
 
   // App Settings
@@ -320,6 +337,7 @@ export const useHabitStore = create((setStore, getStore) => ({
       habitConfigs: defaults.habitConfigs,
       categories: defaults.categories,
       archivedHabits: [],
+      trashedHabits: [],
       shieldedDates: [],
       theme: current.theme || 'dark',
       tableOrientation: current.tableOrientation || 'horizontal',
@@ -424,7 +442,12 @@ export const useHabitStore = create((setStore, getStore) => ({
         data.currentDate = Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
         if (!Array.isArray(data.habits)) data.habits = defaults.habits;
         if (!Array.isArray(data.archivedHabits)) data.archivedHabits = [];
+        const rawTrashCount = Array.isArray(data.trashedHabits) ? data.trashedHabits.length : 0;
+        data.trashedHabits = purgeExpiredTrash(data.trashedHabits);
         if (!Array.isArray(data.shieldedDates)) data.shieldedDates = [];
+        if (rawTrashCount !== data.trashedHabits.length) {
+          await set('adib_habit_data', data);
+        }
         if (!Array.isArray(data.categories)) data.categories = defaults.categories;
         if (!data.trackerData || typeof data.trackerData !== 'object') data.trackerData = {};
         if (!data.dayUpdatedAt || typeof data.dayUpdatedAt !== 'object') data.dayUpdatedAt = {};
@@ -542,6 +565,7 @@ export const useHabitStore = create((setStore, getStore) => ({
                       habitConfigs: activeSnap.habitConfigs || fbDefaults.habitConfigs,
                       categories: Array.isArray(activeSnap.categories) ? activeSnap.categories : fbDefaults.categories,
                       archivedHabits: Array.isArray(activeSnap.archivedHabits) ? activeSnap.archivedHabits : [],
+                      trashedHabits: purgeExpiredTrash(activeSnap.trashedHabits),
                       shieldedDates: Array.isArray(activeSnap.shieldedDates) ? activeSnap.shieldedDates : [],
                       savedLevel: Number(activeSnap.savedLevel) || 1,
                       manualXPOffset: Number(activeSnap.manualXPOffset) || 0,
@@ -601,6 +625,7 @@ export const useHabitStore = create((setStore, getStore) => ({
                       habitConfigs: activeSnap.habitConfigs || fbDefaults.habitConfigs,
                       categories: Array.isArray(activeSnap.categories) ? activeSnap.categories : fbDefaults.categories,
                       archivedHabits: Array.isArray(activeSnap.archivedHabits) ? activeSnap.archivedHabits : [],
+                      trashedHabits: purgeExpiredTrash(activeSnap.trashedHabits),
                       shieldedDates: Array.isArray(activeSnap.shieldedDates) ? activeSnap.shieldedDates : [],
                       savedLevel: Number(activeSnap.savedLevel) || 1,
                       manualXPOffset: Number(activeSnap.manualXPOffset) || 0,
@@ -648,6 +673,7 @@ export const useHabitStore = create((setStore, getStore) => ({
                     habitConfigs: seedSource.habitConfigs,
                     categories: seedSource.categories,
                     archivedHabits: [],
+                    trashedHabits: [],
                     shieldedDates: [],
                     savedLevel: 1,
                     manualXPOffset: 0,
@@ -751,6 +777,7 @@ export const useHabitStore = create((setStore, getStore) => ({
       habitConfigs: defaults.habitConfigs,
       categories: defaults.categories,
       archivedHabits: [],
+      trashedHabits: [],
       shieldedDates: [],
       savedLevel: 1,
       manualXPOffset: 0,
@@ -768,6 +795,7 @@ export const useHabitStore = create((setStore, getStore) => ({
       habitConfigs: freshProfile.habitConfigs,
       categories: freshProfile.categories,
       archivedHabits: freshProfile.archivedHabits,
+      trashedHabits: freshProfile.trashedHabits,
       shieldedDates: freshProfile.shieldedDates,
       savedLevel: freshProfile.savedLevel,
       manualXPOffset: freshProfile.manualXPOffset,
@@ -816,6 +844,7 @@ export const useHabitStore = create((setStore, getStore) => ({
       habitConfigs: target.habitConfigs || defaults.habitConfigs,
       categories: Array.isArray(target.categories) ? target.categories : defaults.categories,
       archivedHabits: Array.isArray(target.archivedHabits) ? target.archivedHabits : [],
+      trashedHabits: purgeExpiredTrash(target.trashedHabits),
       shieldedDates: Array.isArray(target.shieldedDates) ? target.shieldedDates : [],
       savedLevel: Number(target.savedLevel) || 1,
       manualXPOffset: Number(target.manualXPOffset) || 0,
@@ -871,6 +900,7 @@ export const useHabitStore = create((setStore, getStore) => ({
         habitConfigs: mainProf.habitConfigs || defaults.habitConfigs,
         categories: Array.isArray(mainProf.categories) ? mainProf.categories : defaults.categories,
         archivedHabits: Array.isArray(mainProf.archivedHabits) ? mainProf.archivedHabits : [],
+        trashedHabits: purgeExpiredTrash(mainProf.trashedHabits),
         shieldedDates: Array.isArray(mainProf.shieldedDates) ? mainProf.shieldedDates : [],
         savedLevel: Number(mainProf.savedLevel) || 1,
         manualXPOffset: Number(mainProf.manualXPOffset) || 0,
@@ -894,6 +924,7 @@ export const useHabitStore = create((setStore, getStore) => ({
     let newHabitConfigs = { ...state.habitConfigs };
     let newCategories = [...state.categories];
     let newArchivedHabits = [...state.archivedHabits];
+    let newTrashedHabits = purgeExpiredTrash(state.trashedHabits);
     let newShieldedDates = [...(state.shieldedDates || [])];
 
     if (strategy === 'overwrite') {
@@ -902,6 +933,7 @@ export const useHabitStore = create((setStore, getStore) => ({
       newHabitConfigs = incomingPayload.habitConfigs || {};
       if (Array.isArray(incomingPayload.categories)) newCategories = incomingPayload.categories;
       if (Array.isArray(incomingPayload.archivedHabits)) newArchivedHabits = incomingPayload.archivedHabits;
+      newTrashedHabits = purgeExpiredTrash(incomingPayload.trashedHabits);
       if (Array.isArray(incomingPayload.shieldedDates)) newShieldedDates = incomingPayload.shieldedDates;
     } else if (strategy === 'merge') {
       const incomingHabits = incomingPayload.habits || [];
@@ -946,6 +978,7 @@ export const useHabitStore = create((setStore, getStore) => ({
       habitConfigs: newHabitConfigs,
       categories: newCategories,
       archivedHabits: newArchivedHabits,
+      trashedHabits: newTrashedHabits,
       shieldedDates: newShieldedDates,
       lastUpdated: timestamp,
       ...(strategy === 'overwrite' ? {
@@ -1086,6 +1119,26 @@ export const useHabitStore = create((setStore, getStore) => ({
     const state = getStore();
     const current = Array.isArray(state.shieldedDates) ? state.shieldedDates : [];
     const exists = current.includes(dateKey);
+    if (!exists) {
+      const dayHabits = (state.habits || []).filter((h) =>
+        isHabitActiveOnDate(h, dateKey, state.archivedHabits || [], state.habitConfigs || {})
+      );
+      const isFireDay =
+        dayHabits.length > 0 &&
+        dayHabits.every((h) => {
+          const r = state.trackerData?.[dateKey]?.[h] ?? 0;
+          const v = typeof r === 'number' ? r : (r ? 100 : 0);
+          return Math.round(v) >= 100;
+        });
+      if (isFireDay) {
+        getStore().triggerActionToast({
+          type: 'info',
+          title: 'Fire Day — No Shield Needed',
+          subtitle: 'Every active habit is already 100% completed on this day.',
+        }, 3000);
+        return;
+      }
+    }
     const next = exists ? current.filter((d) => d !== dateKey) : [...current, dateKey];
     await state.saveToIDB({ shieldedDates: next });
   },
@@ -1114,6 +1167,7 @@ export const useHabitStore = create((setStore, getStore) => ({
       habitConfigs: state.habitConfigs,
       categories: state.categories,
       archivedHabits: state.archivedHabits,
+      trashedHabits: state.trashedHabits,
       shieldedDates: state.shieldedDates,
       activeProfileId: state.activeProfileId,
       cloudProfiles: state.cloudProfiles,
@@ -1156,6 +1210,7 @@ export const useHabitStore = create((setStore, getStore) => ({
       habitConfigs: chosenSnap.habitConfigs || defaults.habitConfigs,
       categories: chosenSnap.categories || defaults.categories,
       archivedHabits: chosenSnap.archivedHabits || [],
+      trashedHabits: purgeExpiredTrash(chosenSnap.trashedHabits),
       shieldedDates: chosenSnap.shieldedDates || [],
       theme: targetTheme,
       tableOrientation: targetUser.tableOrientation || 'horizontal',
@@ -1233,6 +1288,7 @@ export const useHabitStore = create((setStore, getStore) => ({
       habitConfigs: defaults.habitConfigs,
       categories: defaults.categories,
       archivedHabits: [],
+      trashedHabits: [],
       shieldedDates: [],
       activeProfileId: 'main',
       cloudProfiles: {
@@ -1333,6 +1389,7 @@ export const useHabitStore = create((setStore, getStore) => ({
     const data = { ...account.data };
     if (!Array.isArray(data.habits)) data.habits = defaults.habits;
     if (!Array.isArray(data.archivedHabits)) data.archivedHabits = [];
+    data.trashedHabits = purgeExpiredTrash(data.trashedHabits);
     if (!Array.isArray(data.shieldedDates)) data.shieldedDates = [];
     if (!data.trackerData) data.trackerData = {};
     if (!data.dayUpdatedAt) data.dayUpdatedAt = {};

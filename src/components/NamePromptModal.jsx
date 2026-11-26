@@ -5,6 +5,7 @@ import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfi
 import { auth, googleProvider } from '../firebase.config';
 import { useHabitStore, serializeUser } from '../store/useHabitStore';
 import { signInWithGoogleCrossPlatform } from '../platform/nativeAuth';
+import AppLogo from './AppLogo';
 
 const GoogleIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -306,12 +307,8 @@ export default function NamePromptModal({ isOpen, onClose, initialMode = 'home' 
             )}
 
             <div className="text-center mb-6 relative z-10">
-              <div className={`w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg transition-transform hover:scale-105 ${
-                dk
-                  ? 'bg-gradient-to-br from-emerald-500/20 to-teal-500/10 text-emerald-400 border border-emerald-500/30 shadow-emerald-500/10'
-                  : 'bg-gradient-to-br from-emerald-100 to-teal-50 text-emerald-600 border border-emerald-200 shadow-emerald-200/50'
-              }`}>
-                <SparklesIcon/>
+              <div className="mx-auto mb-4 flex justify-center transition-transform hover:scale-105">
+                <AppLogo className="w-16 h-16 drop-shadow-lg" />
               </div>
 
               <h2 className="text-2xl sm:text-3xl font-black tracking-tight leading-tight">
@@ -579,10 +576,36 @@ export default function NamePromptModal({ isOpen, onClose, initialMode = 'home' 
 
                 <button
                   type="submit"
-                  disabled={emailLoading}
+                  disabled={isBusy}
                   className="w-full py-3.5 rounded-xl font-black text-sm uppercase tracking-wider bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/25 transition-all active:scale-[0.98] disabled:opacity-60"
                 >
                   {emailLoading ? 'Processing...' : viewMode === 'login' ? 'Log In' : 'Sign Up'}
+                </button>
+
+                <div className="flex items-center gap-3 my-0.5">
+                  <div className={`flex-1 h-px ${dk ? 'bg-slate-800' : 'bg-slate-200'}`} />
+                  <span className={`text-[10px] font-black uppercase tracking-widest ${dk ? 'text-slate-500' : 'text-slate-400'}`}>or</span>
+                  <div className={`flex-1 h-px ${dk ? 'bg-slate-800' : 'bg-slate-200'}`} />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleGoogleSignIn}
+                  disabled={isBusy}
+                  className={`flex items-center justify-center gap-2.5 w-full py-3 px-4 rounded-xl border font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-60 ${
+                    dk
+                      ? 'bg-slate-800/80 hover:bg-slate-800 border-slate-700 hover:border-emerald-500/50 text-white'
+                      : 'bg-white hover:bg-slate-50 border-slate-200 hover:border-emerald-500/40 text-slate-800 shadow-sm'
+                  }`}
+                >
+                  <GoogleIcon />
+                  <span>
+                    {googleLoading
+                      ? 'Connecting...'
+                      : viewMode === 'login'
+                        ? 'Log in with Google'
+                        : 'Sign up with Google'}
+                  </span>
                 </button>
 
                 <p className={`text-center text-xs font-semibold ${dk ? 'text-slate-500' : 'text-slate-400'}`}>
